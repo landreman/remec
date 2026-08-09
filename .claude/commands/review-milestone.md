@@ -12,6 +12,12 @@ Read the diff, then `docs/DESIGN.md` §25 for this milestone's acceptance criter
 §5 for the invariants, §26 for the MUST NOT list, and the note sections the PR body
 names. Read the note yourself; do not take the PR body's characterization of it.
 
+The milestone's `docs/STATUS.md` row MUST be changed to `[x]` in its implementation PR
+once the PR satisfies its definition of done. Here `[x]` means complete in the submitted
+PR (or merged), not previously merged. Do not report that marker as a finding merely
+because the PR is unmerged; instead, report a finding only if the PR fails the documented
+definition of done or if an unrelated milestone's state is changed.
+
 Answer these, in order, each with a verdict and the evidence you checked:
 
 **1. Does the test actually constrain the physics?**

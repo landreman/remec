@@ -47,7 +47,9 @@ If a command does not exist yet, you are in Phase 0 — create it.
 ## Definition of done for a milestone
 
 A milestone is complete only when **all** of the following hold. Do not open a PR before
-they do, and do not mark STATUS.md complete before they do.
+they do. In that same PR, change the milestone's `docs/STATUS.md` marker to `[x]`; `[x]`
+means complete in the submitted PR (or merged), not already merged. Do not leave a
+review-ready or submitted milestone as `[~]`.
 
 1. `make check` passes from a clean environment.
 2. The specific acceptance criterion for this milestone in `docs/DESIGN.md` §25 is
@@ -57,8 +59,9 @@ they do, and do not mark STATUS.md complete before they do.
 4. Convergence claims are backed by a measured rate table checked into
    `tests/manufactured/` and referenced in `docs/verification.md`. A residual that got
    small is not a convergence result (`docs/DESIGN.md` §26).
-5. `docs/STATUS.md` is updated: mark the row, record the measured numbers, and note
-   anything the next milestone should know.
+5. `docs/STATUS.md` is updated in the PR: mark the row `[x]`, record the measured
+   numbers, and note anything the next milestone should know. Use `[~]` only while the
+   work is genuinely incomplete and not ready for review.
 6. Any NGSolve API surprise is appended to `docs/dev_notes.md`.
 
 ## Test-first, and tests that can fail
