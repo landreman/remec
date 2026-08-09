@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from math import hypot, isfinite
 from typing import Any
 
 from remec.common.threads import configure_threads
@@ -19,6 +20,71 @@ class _IsotropicPoissonSolution:
     polynomial_order: int
     free_dof_residual_norm: float
     free_dof_relative_residual_norm: float
+    energy_diagnostics: _EnergyDiagnostics
+
+
+@dataclass(frozen=True, slots=True)
+class _EnergyDiagnostics:
+    """Separate M4a weak-form energies and their positive total."""
+
+    parallel: float
+    perpendicular: float
+    total: float
+
+
+@dataclass(frozen=True, slots=True)
+class ObliqueConductivity:
+    """Constant positive-definite 2D tensor K for the M4a verification kernel.
+
+    The tensor is ``K = κ_perp I + (κ_parallel - κ_perp) b⊗b``. It has
+    eigenvalue ``κ_parallel`` along the unit direction ``b`` and
+    ``κ_perp`` in its transverse direction.
+    """
+
+    parallel: float
+    perpendicular: float
+    direction: tuple[float, float]
+
+    def __post_init__(self) -> None:
+        if not all(
+            isfinite(value) and value > 0.0 for value in (self.parallel, self.perpendicular)
+        ):
+            raise ValueError("conductivities must be finite and positive")
+        direction_norm = hypot(*self.direction)
+        if not isfinite(direction_norm) or direction_norm == 0.0:
+            raise ValueError("direction must be finite and nonzero")
+        object.__setattr__(
+            self,
+            "direction",
+            (self.direction[0] / direction_norm, self.direction[1] / direction_norm),
+        )
+
+    @property
+    def components(self) -> tuple[float, float, float]:
+        """Return the symmetric ``(K_xx, K_xy, K_yy)`` tensor components."""
+        bx, by = self.direction
+        contrast = self.parallel - self.perpendicular
+        return (
+            self.perpendicular + contrast * bx * bx,
+            contrast * bx * by,
+            self.perpendicular + contrast * by * by,
+        )
+
+    def apply(self, vector: tuple[float, float]) -> tuple[float, float]:
+        """Return the tensor action on a plain two-component vector."""
+        k_xx, k_xy, k_yy = self.components
+        return (k_xx * vector[0] + k_xy * vector[1], k_xy * vector[0] + k_yy * vector[1])
+
+    def quadratic_form(self, gradient: Any) -> Any:
+        """Return ``∇χ·K∇χ`` for an NGSolve vector coefficient function."""
+        import ngsolve as ng  # type: ignore[import-untyped]
+
+        direction = ng.CoefficientFunction(self.direction)
+        parallel_gradient = ng.InnerProduct(direction, gradient)
+        transverse_gradient = gradient - direction * parallel_gradient
+        return self.parallel * parallel_gradient**2 + self.perpendicular * ng.InnerProduct(
+            transverse_gradient, transverse_gradient
+        )
 
 
 def solve_isotropic_poisson(
@@ -26,14 +92,16 @@ def solve_isotropic_poisson(
     *,
     polynomial_order: int,
     source: Any,
+    conductivity: ObliqueConductivity | None = None,
     runtime: RuntimeOptions | None = None,
 ) -> _IsotropicPoissonSolution:
-    """Solve the verification-only isotropic weak form of note equation (M4a).
+    """Solve the verification weak form of note equation (M4a).
 
-    For ``κ_parallel = κ_perp = 1``, (M4a) is ``-Δχ = S_ref``. This
-    assembles ``∫_Ω ∇v·∇χ dV = ∫_Ω v S_ref dV`` on ``H¹_0(Ω)`` with
-    homogeneous Dirichlet data. It is not the future production anisotropic-M4a
-    solver; that path starts with milestone 1.2.
+    For ``conductivity is None``, the isotropic reduction is ``-Δχ = S_ref``.
+    Otherwise it assembles the M4a form
+    ``∫_Ω κ_parallel(b·∇χ)(b·∇v) + κ_perp∇_perpχ·∇_perpv dV = ∫_Ω vS_ref dV``
+    on ``H¹_0(Ω)`` with homogeneous Dirichlet data. This remains a
+    verification-only kernel, not the future production solver interface.
     """
     if polynomial_order < 1:
         raise ValueError("polynomial_order must be at least one")
@@ -42,14 +110,25 @@ def solve_isotropic_poisson(
 
     resolved_runtime = RuntimeOptions() if runtime is None else runtime
 
-    import ngsolve as ng  # type: ignore[import-untyped]
+    import ngsolve as ng
 
     mesh = slab.build_mesh()._mesh
     space = ng.H1(mesh, order=polynomial_order, dirichlet="bottom|right|top|left")
     trial, test = space.TnT()
     quadrature = ng.dx(bonus_intorder=4)
     bilinear_form = ng.BilinearForm(space)
-    bilinear_form += ng.grad(trial) * ng.grad(test) * quadrature
+    if conductivity is None:
+        bilinear_form += ng.grad(trial) * ng.grad(test) * quadrature
+    else:
+        direction = ng.CoefficientFunction(conductivity.direction)
+        parallel_trial = ng.InnerProduct(direction, ng.grad(trial))
+        parallel_test = ng.InnerProduct(direction, ng.grad(test))
+        perpendicular_trial = ng.grad(trial) - direction * parallel_trial
+        perpendicular_test = ng.grad(test) - direction * parallel_test
+        bilinear_form += (
+            conductivity.parallel * parallel_trial * parallel_test
+            + conductivity.perpendicular * ng.InnerProduct(perpendicular_trial, perpendicular_test)
+        ) * quadrature
     linear_form = ng.LinearForm(space)
     linear_form += source * test * quadrature
     free_dofs = space.FreeDofs()
@@ -70,6 +149,36 @@ def solve_isotropic_poisson(
         free_dof_relative_residual_norm = free_dof_residual_norm / max(
             1.0, float(ng.Norm(source_on_free_dofs))
         )
+        if conductivity is None:
+            total_energy = float(
+                ng.Integrate(ng.InnerProduct(ng.grad(field), ng.grad(field)), mesh, order=8)
+            )
+            energy_diagnostics = _EnergyDiagnostics(
+                parallel=total_energy,
+                perpendicular=0.0,
+                total=total_energy,
+            )
+        else:
+            gradient = ng.grad(field)
+            direction = ng.CoefficientFunction(conductivity.direction)
+            parallel_gradient = ng.InnerProduct(direction, gradient)
+            perpendicular_gradient = gradient - direction * parallel_gradient
+            parallel_energy = float(
+                ng.Integrate(conductivity.parallel * parallel_gradient**2, mesh, order=8)
+            )
+            perpendicular_energy = float(
+                ng.Integrate(
+                    conductivity.perpendicular
+                    * ng.InnerProduct(perpendicular_gradient, perpendicular_gradient),
+                    mesh,
+                    order=8,
+                )
+            )
+            energy_diagnostics = _EnergyDiagnostics(
+                parallel=parallel_energy,
+                perpendicular=perpendicular_energy,
+                total=parallel_energy + perpendicular_energy,
+            )
 
     if free_dof_relative_residual_norm > 1.0e-11:
         raise RuntimeError(
@@ -82,4 +191,5 @@ def solve_isotropic_poisson(
         polynomial_order=polynomial_order,
         free_dof_residual_norm=free_dof_residual_norm,
         free_dof_relative_residual_norm=free_dof_relative_residual_norm,
+        energy_diagnostics=energy_diagnostics,
     )

@@ -1,5 +1,24 @@
 # Verification records
 
+## Milestone 1.2 — oblique anisotropic K
+
+The manufactured solution is χ=sin(πx)sin(πy) with homogeneous Dirichlet
+data and the constant oblique conductivity
+\(\mathbf K=2\mathbf I+5\mathbf b\otimes\mathbf b\),
+\(\mathbf b=(3/5,4/5)\).  The source is evaluated analytically as
+\(-\nabla\cdot(\mathbf K\nablaχ)\).  The automated test
+`test_oblique_anisotropic_manufactured_convergence` reads the machine-readable error
+table in `tests/manufactured/oblique_anisotropic_rates.csv`, requires L² rate at least
+\(p+0.8\) and K-energy rate at least \(p-0.2\) on the finest refinement
+pair, and checks each recorded error within 5%.  `test_oblique_solution_reports_separate_parallel_and_perpendicular_energy`
+checks that both M4a contributions are reported separately and sum to the total.
+
+| Degree \(p\) | Elements (coarse → fine) | L² rate | K-energy rate |
+| --- | ---: | ---: | ---: |
+| 1 | 72 → 288 | 1.887 | 0.965 |
+| 2 | 72 → 288 | 3.054 | 1.968 |
+| 3 | 72 → 288 | 4.089 | 3.008 |
+
 ## Milestone 1.1 — isotropic Poisson on `Slab2D`
 
 The manufactured solution is \(\chi=\sin(\pi x)\sin(\pi y)\) with homogeneous

@@ -31,16 +31,23 @@ A milestone may only start when every milestone in the previous phase is `[x]`
 
 ## Phase 1 — anisotropic scalar kernel
 
-- [~] **1.1** Isotropic Poisson on `Slab2D` — `DESIGN.md` §8.1, §16.2 · note: §4
+- [x] **1.1** Isotropic Poisson on `Slab2D` — `DESIGN.md` §8.1, §16.2 · note: §4
   <br>Acceptance: manufactured convergence at the expected order in L² and energy norms.
-  <br>Measured: macOS / CPython 3.12.2 / NGSolve 6.2.2606 — finest-pair degree 1:
+  <br>Measured: merged PR #6; macOS / CPython 3.12.2 / NGSolve 6.2.2606 — finest-pair degree 1:
   L² 1.955, energy 0.981; degree 2: L² 2.992, energy 1.978; degree 3: L² 4.053,
   energy 3.005 (72 → 288 elements; deterministic structured triangles).
   See `tests/manufactured/isotropic_poisson_rates.csv` and `docs/verification.md`.
   <br>Next: milestone 1.2 extends this named-boundary slab to periodic and oblique-anisotropy cases.
-- [ ] **1.2** Oblique anisotropic K — `DESIGN.md` §8.1, §8.2 · note: §4
+- [~] **1.2** Oblique anisotropic K — `DESIGN.md` §8.1, §8.2 · note: §4
   <br>Acceptance: parallel/perpendicular diagnostics; order scans.
-  <br>Measured: —
+  <br>Measured: macOS / CPython 3.12.2 / NGSolve 6.2.2606 — constant oblique
+  `K = 2I + 5bbᵀ`, `b = (3/5, 4/5)`; finest-pair degree 1: L² 1.887, K-energy
+  0.965; degree 2: L² 3.054, K-energy 1.968; degree 3: L² 4.089, K-energy 3.008
+  (72 → 288 elements). The solver separately reports positive parallel and
+  perpendicular M4a energies. See `tests/manufactured/oblique_anisotropic_rates.csv`
+  and `docs/verification.md`.
+  <br>Next: the verification kernel remains internal; 1.5 owns the public
+  `AnisotropicDiffusionSolver` interface extraction.
 - [ ] **1.3** Pollution benchmark — `DESIGN.md` §8.3 · note: §4
   <br>**Phase gate.** Acceptance: machine-readable table; measured pollution decreases systematically with order *and* refinement. No coupled work proceeds until this holds.
   <br>Measured: —
