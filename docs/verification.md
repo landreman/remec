@@ -1,5 +1,37 @@
 # Verification records
 
+## Milestone 1.3 — Sovinec numerical-pollution regression
+
+The benchmark is the translated unit-square form of the `DESIGN.md` §8.3 test:
+\(\psi=\sin(\pi x)\sin(\pi y)
+=\cos(\pi(x-1/2))\cos(\pi(y-1/2))\),
+\(\mathbf b=(\partial_y\psi,-\partial_x\psi)/|\nabla\psi|\),
+\(Q=Q_0\psi\), \(\kappa_\parallel=1\), and \(\kappa_\perp=0\).
+Thus the field is tangent to closed contours of the source. With homogeneous
+Dirichlet data, the discrete central amplitude defines
+\(\kappa_{\perp,\mathrm{num}}=Q_0/(2\pi^2\chi_h(1/2,1/2))\).
+
+`test_sovinec_pollution_decreases_with_order_and_refinement` reads all nine rows
+of `tests/manufactured/sovinec_pollution.csv`, recomputes them within 5%, and
+requires strict decreases at each adjacent order and refinement. The finest-pair
+rates use \(\log_2(\kappa_{\perp,\mathrm{num}}(h)/
+\kappa_{\perp,\mathrm{num}}(h/2))\). The algebraic diagnostic is the free-DOF
+Euclidean residual divided by the larger of one and the free-DOF source norm; all
+runs must remain at or below \(10^{-6}\). This residual tolerance only validates
+the direct solve and is not used as evidence of low pollution.
+
+| Degree \(p\) | Elements | \(h=1/4\) | \(h=1/8\) | \(h=1/16\) | Finest-pair rate |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 1 | 32 → 128 → 512 | 7.351e-2 | 1.967e-2 | 5.002e-3 | 1.975 |
+| 2 | 32 → 128 → 512 | 1.627e-3 | 1.101e-4 | 7.193e-6 | 3.936 |
+| 3 | 32 → 128 → 512 | 8.805e-6 | 1.622e-7 | 2.761e-9 | 5.877 |
+
+At fixed mesh, raising \(p\) from 1→2 reduces pollution by factors 45.2,
+178.7, and 695.4 from coarse to fine; raising \(p\) from 2→3 gives factors
+184.8, 678.5, and 2605.2. Mutation checks confirmed that rotating the field
+from tangent to normal and omitting normalization of \(\mathbf b\) both make
+the regression fail.
+
 ## Milestone 1.2 — oblique anisotropic K
 
 The manufactured solution is χ=sin(πx)sin(πy) with homogeneous Dirichlet

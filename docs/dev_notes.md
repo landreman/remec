@@ -18,3 +18,10 @@
   repeatable triangular slab mesh with the boundary order `bottom`, `right`, `top`,
   `left`. Prefer it to Netgen's unconstrained mesher for cross-platform manufactured
   error-constant regression tests.
+
+- Milestone 1.3 (NGSolve 6.2.2606): a `GridFunction` can be evaluated at a physical
+  point with `field(mesh(x, y))`, and `mesh.ne` provides the element count used in
+  machine-readable scan tables. In the κ⊥ = 0 Sovinec solve, the free-DOF residual
+  degrades as the measured pollution approaches roundoff (9.31e-8 for p=3 on 512
+  elements here), despite a successful sparse Cholesky solve; record that residual
+  separately from the pollution metric.
