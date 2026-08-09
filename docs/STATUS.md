@@ -13,7 +13,7 @@ A milestone may only start when every milestone in the previous phase is `[x]`
 
 ## Phase 0 — repository and conventions
 
-- [~] **0.1** Package skeleton — `DESIGN.md` §20, §23 · note: n/a
+- [x] **0.1** Package skeleton — `DESIGN.md` §20, §23 · note: n/a
   <br>Acceptance: `pip install -e .` + `pytest` in a clean env, no compiler, no MPI, on Linux and macOS.
   <br>Measured: local macOS / CPython 3.12.2 / NGSolve 6.2.2606 — `make check`,
   `make smoke`, and `make wheel-smoke` pass. Additional review hardening is in progress
