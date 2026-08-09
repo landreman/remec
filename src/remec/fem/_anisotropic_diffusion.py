@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import hypot, isfinite
+from math import hypot, isfinite, pi
 from typing import Any
 
 from remec.common.threads import configure_threads
@@ -30,6 +30,19 @@ class _EnergyDiagnostics:
     parallel: float
     perpendicular: float
     total: float
+
+
+@dataclass(frozen=True, slots=True)
+class PollutionDiagnostic:
+    """Measured effective perpendicular diffusion in the Sovinec M4a test."""
+
+    polynomial_order: int
+    maxh: float
+    elements: int
+    central_amplitude: float
+    numerical_perpendicular_diffusivity: float
+    numerical_to_parallel_ratio: float
+    free_dof_relative_residual_norm: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -178,4 +191,89 @@ def solve_anisotropic_diffusion(
         free_dof_residual_norm=free_dof_residual_norm,
         free_dof_relative_residual_norm=free_dof_relative_residual_norm,
         energy_diagnostics=energy_diagnostics,
+    )
+
+
+def measure_sovinec_pollution(
+    slab: Slab2D,
+    *,
+    polynomial_order: int,
+    parallel_conductivity: float = 1.0,
+    source_amplitude: float = 1.0,
+    runtime: RuntimeOptions | None = None,
+) -> PollutionDiagnostic:
+    """Measure numerical perpendicular diffusion for note equation (M4a).
+
+    The benchmark uses ``kappa_perp = 0`` and the field tangent to
+    ``psi = sin(pi*x) sin(pi*y)``.  For source ``Q = Q0*psi``, the central
+    response defines ``kappa_perp,num = Q0 / (2*pi**2*chi(1/2, 1/2))``.
+    """
+    if polynomial_order < 1:
+        raise ValueError("polynomial_order must be at least one")
+    if not isfinite(parallel_conductivity) or parallel_conductivity <= 0.0:
+        raise ValueError("parallel_conductivity must be finite and positive")
+    if not isfinite(source_amplitude) or source_amplitude <= 0.0:
+        raise ValueError("source_amplitude must be finite and positive")
+    if slab.lower != (0.0, 0.0) or slab.upper != (1.0, 1.0):
+        raise ValueError("the Sovinec benchmark currently supports the unit square only")
+
+    resolved_runtime = RuntimeOptions() if runtime is None else runtime
+
+    import ngsolve as ng
+
+    mesh = slab.build_mesh()._mesh
+    space = ng.H1(mesh, order=polynomial_order, dirichlet="bottom|right|top|left")
+    trial, test = space.TnT()
+    quadrature = ng.dx(bonus_intorder=6)
+
+    psi = ng.sin(ng.pi * ng.x) * ng.sin(ng.pi * ng.y)
+    dpsi_dx = ng.pi * ng.cos(ng.pi * ng.x) * ng.sin(ng.pi * ng.y)
+    dpsi_dy = ng.pi * ng.sin(ng.pi * ng.x) * ng.cos(ng.pi * ng.y)
+    tangent_norm = ng.sqrt(dpsi_dx**2 + dpsi_dy**2)
+    tangent = ng.CoefficientFunction((dpsi_dy / tangent_norm, -dpsi_dx / tangent_norm))
+
+    parallel_trial = ng.InnerProduct(tangent, ng.grad(trial))
+    parallel_test = ng.InnerProduct(tangent, ng.grad(test))
+    bilinear_form = ng.BilinearForm(space)
+    bilinear_form += parallel_conductivity * parallel_trial * parallel_test * quadrature
+    linear_form = ng.LinearForm(space)
+    linear_form += source_amplitude * psi * test * quadrature
+    free_dofs = space.FreeDofs()
+
+    configure_threads(resolved_runtime.threads)
+    with ng.TaskManager():
+        bilinear_form.Assemble()
+        linear_form.Assemble()
+        field = ng.GridFunction(space)
+        field.vec.data = (
+            bilinear_form.mat.Inverse(free_dofs, inverse="sparsecholesky") * linear_form.vec
+        )
+        residual = linear_form.vec.CreateVector()
+        residual.data = bilinear_form.mat * field.vec - linear_form.vec
+        free_residual = ng.Projector(free_dofs, True) * residual
+        source_on_free_dofs = ng.Projector(free_dofs, True) * linear_form.vec
+        relative_residual = float(ng.Norm(free_residual)) / max(
+            1.0, float(ng.Norm(source_on_free_dofs))
+        )
+        central_amplitude = float(field(mesh(0.5, 0.5)))
+
+    if relative_residual > 1.0e-6:
+        raise RuntimeError(
+            "Sovinec pollution solve failed: free-DOF relative residual "
+            f"{relative_residual:.3e} exceeds 1e-6"
+        )
+    if not isfinite(central_amplitude) or central_amplitude <= 0.0:
+        raise RuntimeError(
+            "Sovinec pollution solve produced a non-positive or non-finite central amplitude"
+        )
+
+    numerical_perpendicular_diffusivity = source_amplitude / (2.0 * pi**2 * central_amplitude)
+    return PollutionDiagnostic(
+        polynomial_order=polynomial_order,
+        maxh=slab.maxh,
+        elements=int(mesh.ne),
+        central_amplitude=central_amplitude,
+        numerical_perpendicular_diffusivity=numerical_perpendicular_diffusivity,
+        numerical_to_parallel_ratio=(numerical_perpendicular_diffusivity / parallel_conductivity),
+        free_dof_relative_residual_norm=relative_residual,
     )
