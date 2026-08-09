@@ -20,11 +20,14 @@ A milestone may only start when every milestone in the previous phase is `[x]`
   before the PR is merged.
   <br>Next: use the project `.venv` (isolated CPython 3.12); the supplied Conda Python
   interpreters segfault during pytest collection in this terminal environment.
-- [x] **0.2** Common utilities — `DESIGN.md` §6, §21, §24 · note: §2 (normalization)
+- [~] **0.2** Common utilities — `DESIGN.md` §6, §21, §24 · note: n/a (normalization is `DESIGN.md` §6)
   <br>Acceptance: block norms, structured logging, timing context, deterministic config serialization, thread config, checkpoint metadata; round-trip tested.
-  <br>Measured: 5 Phase-0.2 contract tests pass: block norms (5, 12; combined 13),
-  canonical configuration serialization/digest, JSON event/timing records, validated
-  NGSolve thread configuration, and byte-identical checkpoint-metadata round-trip.
+  <br>Measured: 10 Phase-0.2 contract tests pass: physically scaled block norms;
+  canonical configuration serialization/digest and rejection guards; JSON event/timing
+  records; validated NGSolve thread configuration; and byte-identical, versioned
+  checkpoint-metadata round-trip. Awaiting PR merge and CI.
+  <br>Next: provide the human-console log adapter at a solver run entry point; this
+  milestone supplies the machine-JSON event stream only.
 
 ## Phase 1 — anisotropic scalar kernel
 
