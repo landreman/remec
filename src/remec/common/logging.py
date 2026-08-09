@@ -30,7 +30,7 @@ class JsonEventLogger:
 @contextmanager
 def timed(logger: JsonEventLogger, event_name: str, **fields: Any) -> Iterator[None]:
     """Log elapsed wall time plus an explicit success/failure outcome."""
-    if collision := _TIMING_FIELDS.intersection(fields):
+    if collision := (_RESERVED_FIELDS | _TIMING_FIELDS).intersection(fields):
         raise ValueError(f"reserved timing field(s): {', '.join(sorted(collision))}")
     start = perf_counter()
     try:

@@ -13,7 +13,7 @@ Required fields are:
 | `schema_version` | integer (`1`) | Compatibility gate |
 | `configuration` | object | Canonical normalization and runtime configuration |
 | `state_names` | array of strings | Names of state vectors carried by a later payload |
-| `git_commit` | string | Source revision, or `unknown` when unavailable |
+| `git_commit` | string | Checked-out source revision; CI SHA or `unknown` only when Git is unavailable |
 | `platform` | string | Platform identifier |
 | `remec_version` | string | Installed REMEC package version |
 | `ngsolve_version` | string | Installed NGSolve version |

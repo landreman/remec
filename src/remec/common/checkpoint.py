@@ -5,8 +5,10 @@ from __future__ import annotations
 import json
 import os
 import platform as platform_module
+import subprocess
 from collections.abc import Mapping
 from dataclasses import dataclass
+from pathlib import Path
 from types import MappingProxyType
 from typing import Any
 
@@ -30,6 +32,25 @@ def _freeze_json(value: Any) -> Any:
     return value
 
 
+def _default_git_commit() -> str:
+    """Prefer the checked-out source revision, then CI provenance, then ``unknown``."""
+    repository = Path(__file__).resolve().parents[3]
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(repository), "rev-parse", "HEAD"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except OSError:
+        result = None
+    if result is not None and result.returncode == 0:
+        commit = result.stdout.strip()
+        if commit:
+            return commit
+    return os.environ.get("GITHUB_SHA", "unknown")
+
+
 @dataclass(frozen=True, slots=True)
 class CheckpointMetadata:
     """Portable restart metadata with an explicit, validated schema version."""
@@ -48,7 +69,7 @@ class CheckpointMetadata:
         *,
         normalization: Normalization,
         runtime: RuntimeOptions,
-        state_names: tuple[str, ...],
+        state_names: tuple[str, ...] | list[str],
         git_commit: str | None = None,
         platform: str | None = None,
     ) -> CheckpointMetadata:
@@ -57,14 +78,17 @@ class CheckpointMetadata:
 
         from remec import __version__ as remec_version
 
+        if not all(isinstance(name, str) for name in state_names):
+            raise CheckpointVersionError("state_names must contain only strings")
+        normalized_state_names = tuple(state_names)
         configuration = _freeze_json(
             json.loads(canonical_json({"normalization": normalization, "runtime": runtime}))
         )
         return cls(
             schema_version=_SCHEMA_VERSION,
             configuration=configuration,
-            state_names=state_names,
-            git_commit=git_commit or os.environ.get("GITHUB_SHA", "unknown"),
+            state_names=normalized_state_names,
+            git_commit=git_commit or _default_git_commit(),
             platform=platform or platform_module.platform(),
             remec_version=remec_version,
             ngsolve_version=ngsolve_version,
@@ -94,7 +118,7 @@ class CheckpointMetadata:
         if not isinstance(payload, dict):
             raise CheckpointVersionError("invalid checkpoint metadata: expected an object")
         version = payload.get("schema_version")
-        if version != _SCHEMA_VERSION:
+        if not isinstance(version, int) or isinstance(version, bool) or version != _SCHEMA_VERSION:
             raise CheckpointVersionError(f"unsupported checkpoint schema version: {version!r}")
         try:
             configuration = payload["configuration"]

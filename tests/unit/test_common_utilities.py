@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import io
 import json
+import sys
 from dataclasses import dataclass
+from subprocess import CompletedProcess, run
 
 import pytest
 
@@ -84,6 +86,12 @@ def test_structured_events_and_timer_emit_machine_readable_json() -> None:
     with pytest.raises(ValueError, match="reserved"), timed(logger, "bad", seconds=1.0):
         pass
 
+    body_ran = False
+    with pytest.raises(ValueError, match="reserved"), timed(logger, "bad", event="overwritten"):
+        body_ran = True
+        raise RuntimeError("the body must not run")
+    assert not body_ran
+
     with pytest.raises(RuntimeError, match="failed"), timed(logger, "failed_work"):
         raise RuntimeError("failed")
     assert json.loads(stream.getvalue().splitlines()[-1]) == {
@@ -123,14 +131,22 @@ def test_thread_configuration_validates_before_calling_ngsolve(
     assert calls == [3]
 
 
-def test_thread_configuration_executes_the_ngsolve_api() -> None:
-    """The installed NGSolve API exposes and executes the thread setter used by REMEC."""
+def test_thread_configuration_executes_the_ngsolve_api_in_a_subprocess() -> None:
+    """The NGSolve setter is exercised without changing this pytest process's thread count."""
     import ngsolve
 
-    from remec.common.threads import configure_threads
-
     assert callable(ngsolve.SetNumThreads)
-    assert configure_threads(1) == 1
+    result = run(
+        [
+            sys.executable,
+            "-c",
+            "from remec.common.threads import configure_threads; assert configure_threads(1) == 1",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
 
 
 def test_checkpoint_metadata_round_trips_normalization_and_runtime_configuration() -> None:
@@ -159,5 +175,34 @@ def test_checkpoint_metadata_round_trips_normalization_and_runtime_configuration
     with pytest.raises(CheckpointVersionError, match="unsupported"):
         CheckpointMetadata.from_json(json.dumps(future))
 
+    for invalid_version in (True, 1.0):
+        future["schema_version"] = invalid_version
+        with pytest.raises(CheckpointVersionError, match="unsupported"):
+            CheckpointMetadata.from_json(json.dumps(future))
+
     with pytest.raises(CheckpointVersionError, match="invalid"):
         CheckpointMetadata.from_json("[]")
+
+
+def test_checkpoint_metadata_canonicalizes_state_names_and_prefers_local_git(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Creation canonicalizes state names and uses the checkout commit before CI metadata."""
+    from remec import Normalization, RuntimeOptions
+    from remec.common.checkpoint import CheckpointMetadata
+
+    commit = "a" * 40
+    monkeypatch.setenv("GITHUB_SHA", "b" * 40)
+    monkeypatch.setattr(
+        "remec.common.checkpoint.subprocess.run",
+        lambda *args, **kwargs: CompletedProcess(args=args, returncode=0, stdout=f"{commit}\n"),
+    )
+    metadata = CheckpointMetadata.create(
+        normalization=Normalization(reference_length=1.0, reference_field=1.0),
+        runtime=RuntimeOptions(),
+        state_names=["chi"],
+        platform="test-platform",
+    )
+
+    assert metadata.state_names == ("chi",)
+    assert metadata.git_commit == commit
