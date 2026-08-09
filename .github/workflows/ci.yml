@@ -13,14 +13,14 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-        python: ["3.11", "3.12"]
+        python: ["3.10", "3.11", "3.12"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
       - uses: astral-sh/setup-uv@v6
-      - run: uv sync --all-extras
+      - run: uv sync --locked --all-extras
       - run: uv run make check
       - run: uv run make smoke
       - run: uv run make wheel-smoke

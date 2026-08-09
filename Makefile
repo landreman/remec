@@ -1,6 +1,8 @@
 # List available recipes when you type `make`
+.PHONY: default test test-full lint check smoke wheel-smoke
+
 default:
-	@make --list
+	@grep -E '^[A-Za-z][A-Za-z0-9_-]*:' $(MAKEFILE_LIST) | cut -d: -f1
 
 # PR-CI subset: fast tests only
 test:
@@ -19,7 +21,7 @@ lint:
 # The gate. This is what "done" means.
 check: lint test
 
-# Clean-environment install check (Phase 0 acceptance criterion)
+# Clean-environment import check; CI separately exercises editable install plus pytest.
 smoke:
 	rm -rf /tmp/remec-smoke
 	python -m venv /tmp/remec-smoke
@@ -32,4 +34,4 @@ wheel-smoke:
 	python -m build --wheel --outdir /tmp/remec-dist
 	python -m venv /tmp/remec-wheel
 	/tmp/remec-wheel/bin/python -m pip install -q /tmp/remec-dist/*.whl
-	/tmp/remec-wheel/bin/python -c "import remec, ngsolve; print(remec.__version__, ngsolve.__version__)"
+	/tmp/remec-wheel/bin/python -c "import remec, ngsolve; from pathlib import Path; assert Path(remec.__file__).with_name('py.typed').is_file(); print(remec.__version__, ngsolve.__version__)"
