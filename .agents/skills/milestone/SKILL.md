@@ -60,7 +60,12 @@ mutations you checked; this goes in the PR body.
 
 Re-run `make check` from a clean venv if you touched packaging.
 
-## 6. Record
+## 6. Run GitHub Actions CI
+
+Push the branch to github and let the CI run. Check to make sure it passes.
+If anything fails, fix the issue, push again, and iterate until the CI is green.
+
+## 7. Record
 
 Update `docs/STATUS.md`: mark the row, paste the measured numbers (convergence rates,
 pollution values, residuals — whatever the acceptance criterion names), and add a line
@@ -69,7 +74,7 @@ for anything the next milestone needs to know.
 Append any NGSolve API discoveries to `docs/dev_notes.md`. Update
 `docs/verification.md` with the new rate table.
 
-## 7. Open the PR
+## 8. Open the PR
 
 ```bash
 gh pr create --fill
