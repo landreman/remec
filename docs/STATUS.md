@@ -31,9 +31,13 @@ A milestone may only start when every milestone in the previous phase is `[x]`
 
 ## Phase 1 — anisotropic scalar kernel
 
-- [ ] **1.1** Isotropic Poisson on `Slab2D` — `DESIGN.md` §8.1, §16.2 · note: §4
+- [~] **1.1** Isotropic Poisson on `Slab2D` — `DESIGN.md` §8.1, §16.2 · note: §4
   <br>Acceptance: manufactured convergence at the expected order in L² and energy norms.
-  <br>Measured: —
+  <br>Measured: macOS / CPython 3.12.2 / NGSolve 6.2.2606 — finest-pair degree 1:
+  L² 1.955, energy 0.981; degree 2: L² 2.992, energy 1.978; degree 3: L² 4.053,
+  energy 3.005 (72 → 288 elements; deterministic structured triangles).
+  See `tests/manufactured/isotropic_poisson_rates.csv` and `docs/verification.md`.
+  <br>Next: milestone 1.2 extends this named-boundary slab to periodic and oblique-anisotropy cases.
 - [ ] **1.2** Oblique anisotropic K — `DESIGN.md` §8.1, §8.2 · note: §4
   <br>Acceptance: parallel/perpendicular diagnostics; order scans.
   <br>Measured: —

@@ -1,5 +1,22 @@
 # Verification records
 
+## Milestone 1.1 — isotropic Poisson on `Slab2D`
+
+The manufactured solution is \(\chi=\sin(\pi x)\sin(\pi y)\) with homogeneous
+Dirichlet data and \(S_{\rm ref}=2\pi^2\chi\).  This is the isotropic unit-conductivity
+reduction of note equation (M4a), \(-\Delta\chi=S_{\rm ref}\).  The automated test
+`test_isotropic_poisson_manufactured_convergence` reads the machine-readable error table,
+requires L² rate at least \(p+0.8\) and energy rate at least \(p-0.2\) on its finest
+refinement pair, and checks each error against the recorded value within 5%; the results are in
+`tests/manufactured/isotropic_poisson_rates.csv`. It also checks the homogeneous boundary
+trace and the free-DOF direct-solve residual at roundoff.
+
+| Degree \(p\) | Elements (coarse → fine) | L² rate | Energy rate |
+| --- | ---: | ---: | ---: |
+| 1 | 72 → 288 | 1.955 | 0.981 |
+| 2 | 72 → 288 | 2.992 | 1.978 |
+| 3 | 72 → 288 | 4.053 | 3.005 |
+
 ## Milestone 0.2 — common utilities
 
 | Contract | Measured result | Automated test |
