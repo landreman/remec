@@ -23,8 +23,9 @@ the whole `.tex` note; read the cited section.
 ## Environment
 
 ```bash
-uv venv && source .venv/bin/activate
-uv pip install -e ".[dev]"
+python3 -m venv .venv  # Python 3.10 or newer
+source .venv/bin/activate
+python -m pip install -e ".[dev]"
 ```
 
 - NGSolve ships as a binary wheel. Never build it from source, never add a compiler

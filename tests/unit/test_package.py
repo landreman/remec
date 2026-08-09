@@ -67,9 +67,11 @@ def test_make_default_lists_recipes() -> None:
     assert "wheel-smoke" in result.stdout
 
 
-def test_ci_locks_dependencies_and_covers_the_supported_python_floor() -> None:
-    """CI installs the committed lock and tests every declared Python version."""
+def test_ci_uses_pip_and_covers_the_supported_python_floor() -> None:
+    """CI installs project extras with pip on every supported Python version."""
     workflow = (Path(__file__).parents[2] / ".github/workflows/ci.yml").read_text()
 
     assert 'python: ["3.10", "3.11", "3.12"]' in workflow
-    assert "uv sync --locked --all-extras" in workflow
+    assert 'python -m pip install -e ".[dev]"' in workflow
+    assert "setup-uv" not in workflow
+    assert "uv " not in workflow

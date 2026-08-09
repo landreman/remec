@@ -171,8 +171,10 @@ The app handles worktree creation. If you're doing it by hand:
 
 ```bash
 git worktree add ../remec-7.1 -b milestone/7.1-ap-prototype
-cd ../remec-7.1 && uv venv && uv pip install -e ".[dev]"
+cd ../remec-7.1 && python3 -m venv .venv && .venv/bin/python -m pip install -e ".[dev]"
 ```
+
+Use a Python 3.10-or-newer `python3` interpreter, matching the supported project range.
 
 **The gotcha:** each worktree needs its own venv. `pip install -e .` records an absolute
 path, so a shared venv will silently point every worktree at whichever directory
