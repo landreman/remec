@@ -95,8 +95,10 @@ or drop the Action and run `claude` locally on the branch before merging.
 or `/milestone 4.2` to pick one. That is the whole prompt. Everything else lives in
 `AGENTS.md`, the skill, and `STATUS.md`.
 
-**Codex:** branches, writes tests, implements, verifies mutations, updates `STATUS.md`,
-opens a PR. Or stops and drafts an ADR.
+**Codex:** branches, writes tests, implements, verifies mutations, updates the completed
+milestone's `STATUS.md` row to `[x]` in that same PR, and opens a PR. `[x]` means the
+milestone is complete in the submitted PR (or merged), so it is not changed again after
+merge. Or stops and drafts an ADR.
 
 **CI:** runs `make check` on Linux and macOS.
 

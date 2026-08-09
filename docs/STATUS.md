@@ -4,10 +4,14 @@ Single source of truth for what is done and what is next. Agents read this first
 update it as the last step of every milestone. Authoritative milestone definitions and
 acceptance criteria live in `DESIGN.md` §25; this file tracks state and measurements.
 
-Legend: `[ ]` not started · `[~]` in progress (branch open) · `[x]` merged and green in CI
+Legend: `[ ]` not started · `[~]` in progress (not ready for review) · `[x]` complete in
+the submitted PR (or merged), with its required checks green.  The milestone's `[x]`
+change is part of its implementation PR; merging that PR requires no follow-up ledger
+edit.
 
-A milestone may only start when every milestone in the previous phase is `[x]`
-(`DESIGN.md` §25). Phase 7 may run in parallel with Phase 8.
+A milestone may only start when every milestone in the previous phase is `[x]` on the
+target integration branch (`DESIGN.md` §25). A `[x]` on an unmerged PR does not satisfy
+that dependency. Phase 7 may run in parallel with Phase 8.
 
 ---
 
@@ -38,7 +42,7 @@ A milestone may only start when every milestone in the previous phase is `[x]`
   energy 3.005 (72 → 288 elements; deterministic structured triangles).
   See `tests/manufactured/isotropic_poisson_rates.csv` and `docs/verification.md`.
   <br>Next: milestone 1.2 extends this named-boundary slab to oblique anisotropy.
-- [~] **1.2** Oblique anisotropic K — `DESIGN.md` §8.1, §8.2 · note: §4
+- [x] **1.2** Oblique anisotropic K — `DESIGN.md` §8.1, §8.2 · note: §4
   <br>Acceptance: parallel/perpendicular diagnostics; order scans.
   <br>Measured: macOS / CPython 3.12.2 / NGSolve 6.2.2606 — constant oblique
   `K = 2I + 5bbᵀ`, `b = (3/5, 4/5)`; finest-pair degree 1: L² 1.887, K-energy
