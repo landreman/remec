@@ -1,0 +1,38 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "remec"
+version = "0.1.0.dev0"
+description = "Regularized MHD Equilibrium Code"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "REMEC contributors" }]
+dependencies = [
+    "ngsolve>=6.2.2606,<6.3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "build>=1.3,<2",
+    "mypy>=1.18,<2",
+    "pytest>=9,<10",
+    "ruff>=0.14,<1",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "slow: long-running verification or benchmark test",
+]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+files = ["src/remec"]

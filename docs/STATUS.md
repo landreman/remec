@@ -13,9 +13,13 @@ A milestone may only start when every milestone in the previous phase is `[x]`
 
 ## Phase 0 — repository and conventions
 
-- [ ] **0.1** Package skeleton — `DESIGN.md` §20, §23 · note: n/a
+- [~] **0.1** Package skeleton — `DESIGN.md` §20, §23 · note: n/a
   <br>Acceptance: `pip install -e .` + `pytest` in a clean env, no compiler, no MPI, on Linux and macOS.
-  <br>Measured: —
+  <br>Measured: local macOS / CPython 3.12.2 / NGSolve 6.2.2606 — `make check`,
+  `make smoke`, and `make wheel-smoke` pass. GitHub Actions verification on Linux and
+  macOS remains pending.
+  <br>Next: use the project `.venv` (isolated CPython 3.12); the supplied Conda Python
+  interpreters segfault during pytest collection in this terminal environment.
 - [ ] **0.2** Common utilities — `DESIGN.md` §6, §21, §24 · note: §2 (normalization)
   <br>Acceptance: block norms, structured logging, timing context, deterministic config serialization, thread config, checkpoint metadata; round-trip tested.
   <br>Measured: —
