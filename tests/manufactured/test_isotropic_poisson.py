@@ -9,11 +9,12 @@ from pathlib import Path
 import ngsolve as ng
 import pytest
 
-from remec.fem._isotropic_poisson import solve_isotropic_poisson
+from remec.fem._isotropic_poisson import ObliqueConductivity, solve_isotropic_poisson
 from remec.geometry.slab import Slab2D
 
 _MESH_SIZES = (0.35, 0.175, 0.0875)
 _RATE_TABLE = Path(__file__).with_name("isotropic_poisson_rates.csv")
+_ISOTROPIC_CONDUCTIVITY = ObliqueConductivity(1.0, 1.0, (1.0, 0.0))
 
 
 def _recorded_errors() -> dict[tuple[int, float], tuple[float, float]]:
@@ -64,6 +65,7 @@ def test_isotropic_poisson_manufactured_convergence(polynomial_order: int) -> No
             Slab2D.unit_square(maxh=maxh),
             polynomial_order=polynomial_order,
             source=source,
+            conductivity=_ISOTROPIC_CONDUCTIVITY,
         )
         l2_error = ng.sqrt(ng.Integrate((solution._field - exact) ** 2, solution._mesh, order=8))
         energy_error = ng.sqrt(

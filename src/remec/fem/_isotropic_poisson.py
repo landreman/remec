@@ -92,13 +92,12 @@ def solve_isotropic_poisson(
     *,
     polynomial_order: int,
     source: Any,
-    conductivity: ObliqueConductivity | None = None,
+    conductivity: ObliqueConductivity,
     runtime: RuntimeOptions | None = None,
 ) -> _IsotropicPoissonSolution:
     """Solve the verification weak form of note equation (M4a).
 
-    For ``conductivity is None``, the isotropic reduction is ``-Δχ = S_ref``.
-    Otherwise it assembles the M4a form
+    It assembles the M4a form
     ``∫_Ω κ_parallel(b·∇χ)(b·∇v) + κ_perp∇_perpχ·∇_perpv dV = ∫_Ω vS_ref dV``
     on ``H¹_0(Ω)`` with homogeneous Dirichlet data. This remains a
     verification-only kernel, not the future production solver interface.
@@ -117,18 +116,15 @@ def solve_isotropic_poisson(
     trial, test = space.TnT()
     quadrature = ng.dx(bonus_intorder=4)
     bilinear_form = ng.BilinearForm(space)
-    if conductivity is None:
-        bilinear_form += ng.grad(trial) * ng.grad(test) * quadrature
-    else:
-        direction = ng.CoefficientFunction(conductivity.direction)
-        parallel_trial = ng.InnerProduct(direction, ng.grad(trial))
-        parallel_test = ng.InnerProduct(direction, ng.grad(test))
-        perpendicular_trial = ng.grad(trial) - direction * parallel_trial
-        perpendicular_test = ng.grad(test) - direction * parallel_test
-        bilinear_form += (
-            conductivity.parallel * parallel_trial * parallel_test
-            + conductivity.perpendicular * ng.InnerProduct(perpendicular_trial, perpendicular_test)
-        ) * quadrature
+    direction = ng.CoefficientFunction(conductivity.direction)
+    parallel_trial = ng.InnerProduct(direction, ng.grad(trial))
+    parallel_test = ng.InnerProduct(direction, ng.grad(test))
+    perpendicular_trial = ng.grad(trial) - direction * parallel_trial
+    perpendicular_test = ng.grad(test) - direction * parallel_test
+    bilinear_form += (
+        conductivity.parallel * parallel_trial * parallel_test
+        + conductivity.perpendicular * ng.InnerProduct(perpendicular_trial, perpendicular_test)
+    ) * quadrature
     linear_form = ng.LinearForm(space)
     linear_form += source * test * quadrature
     free_dofs = space.FreeDofs()
@@ -149,40 +145,30 @@ def solve_isotropic_poisson(
         free_dof_relative_residual_norm = free_dof_residual_norm / max(
             1.0, float(ng.Norm(source_on_free_dofs))
         )
-        if conductivity is None:
-            total_energy = float(
-                ng.Integrate(ng.InnerProduct(ng.grad(field), ng.grad(field)), mesh, order=8)
+        gradient = ng.grad(field)
+        direction = ng.CoefficientFunction(conductivity.direction)
+        parallel_gradient = ng.InnerProduct(direction, gradient)
+        perpendicular_gradient = gradient - direction * parallel_gradient
+        parallel_energy = float(
+            ng.Integrate(conductivity.parallel * parallel_gradient**2, mesh, order=8)
+        )
+        perpendicular_energy = float(
+            ng.Integrate(
+                conductivity.perpendicular
+                * ng.InnerProduct(perpendicular_gradient, perpendicular_gradient),
+                mesh,
+                order=8,
             )
-            energy_diagnostics = _EnergyDiagnostics(
-                parallel=total_energy,
-                perpendicular=0.0,
-                total=total_energy,
-            )
-        else:
-            gradient = ng.grad(field)
-            direction = ng.CoefficientFunction(conductivity.direction)
-            parallel_gradient = ng.InnerProduct(direction, gradient)
-            perpendicular_gradient = gradient - direction * parallel_gradient
-            parallel_energy = float(
-                ng.Integrate(conductivity.parallel * parallel_gradient**2, mesh, order=8)
-            )
-            perpendicular_energy = float(
-                ng.Integrate(
-                    conductivity.perpendicular
-                    * ng.InnerProduct(perpendicular_gradient, perpendicular_gradient),
-                    mesh,
-                    order=8,
-                )
-            )
-            energy_diagnostics = _EnergyDiagnostics(
-                parallel=parallel_energy,
-                perpendicular=perpendicular_energy,
-                total=parallel_energy + perpendicular_energy,
-            )
+        )
+        energy_diagnostics = _EnergyDiagnostics(
+            parallel=parallel_energy,
+            perpendicular=perpendicular_energy,
+            total=parallel_energy + perpendicular_energy,
+        )
 
     if free_dof_relative_residual_norm > 1.0e-11:
         raise RuntimeError(
-            "isotropic Poisson direct solve failed: free-DOF relative residual "
+            "anisotropic diffusion direct solve failed: free-DOF relative residual "
             f"{free_dof_relative_residual_norm:.3e} exceeds 1e-11"
         )
     return _IsotropicPoissonSolution(

@@ -12,6 +12,12 @@ table in `tests/manufactured/oblique_anisotropic_rates.csv`, requires L² rate a
 \(p+0.8\) and K-energy rate at least \(p-0.2\) on the finest refinement
 pair, and checks each recorded error within 5%.  `test_oblique_solution_reports_separate_parallel_and_perpendicular_energy`
 checks that both M4a contributions are reported separately and sum to the total.
+The diagnostic uses a second, direction-sensitive manufactured field
+\(\chi=\sin(\pi x)\sin(2\pi y)\) and checks each analytic contribution, so swapped
+labels or a missing transverse projection fail.  This linear verification source changes
+sign near the boundary and is not intended as an admissible non-negative reference source.
+The conductivity ratio \(\kappa_\parallel/\kappa_\perp=3.5\) is deliberately mild;
+these rates make no extreme-anisotropy or pollution claim.
 
 | Degree \(p\) | Elements (coarse → fine) | L² rate | K-energy rate |
 | --- | ---: | ---: | ---: |

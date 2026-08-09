@@ -51,6 +51,16 @@ def _manufactured_data() -> tuple[
     return exact, exact_gradient, source
 
 
+def _diagnostic_data() -> tuple[ng.CoefficientFunction, ng.CoefficientFunction]:
+    """Return a direction-sensitive solution and source for the M4a diagnostics."""
+    exact = ng.sin(ng.pi * ng.x) * ng.sin(2.0 * ng.pi * ng.y)
+    k_xx, k_xy, k_yy = _CONDUCTIVITY.components
+    source = ng.pi**2 * (k_xx + 4.0 * k_yy) * exact - 4.0 * ng.pi**2 * k_xy * ng.cos(
+        ng.pi * ng.x
+    ) * ng.cos(2.0 * ng.pi * ng.y)
+    return exact, source
+
+
 def test_oblique_conductivity_has_parallel_and_perpendicular_eigenpairs() -> None:
     """K has eigenvalues κ∥ along b and κ⊥ in the transverse direction."""
     assert _CONDUCTIVITY.apply(_CONDUCTIVITY.direction) == pytest.approx(
@@ -87,6 +97,15 @@ def test_oblique_anisotropic_manufactured_convergence(polynomial_order: int) -> 
         assert observed[0] == pytest.approx(expected[0], rel=0.05, abs=1.0e-12)
         assert observed[1] == pytest.approx(expected[1], rel=0.05, abs=1.0e-12)
         assert solution.free_dof_residual_norm < 1.0e-10
+        boundary_trace_norm_squared = sum(
+            ng.Integrate(
+                solution._field**2,
+                solution._mesh,
+                definedon=solution._mesh.Boundaries(boundary_name),
+            )
+            for boundary_name in Slab2D.unit_square(maxh=maxh).boundary_regions()
+        )
+        assert boundary_trace_norm_squared < 1.0e-24
         errors.append(observed)
 
     l2_rate = log(errors[-2][0] / errors[-1][0]) / log(_MESH_SIZES[-2] / _MESH_SIZES[-1])
@@ -97,10 +116,10 @@ def test_oblique_anisotropic_manufactured_convergence(polynomial_order: int) -> 
 
 def test_oblique_solution_reports_separate_parallel_and_perpendicular_energy() -> None:
     """The M4a diagnostics retain both positive contributions to the weak form."""
-    exact, _, source = _manufactured_data()
+    exact, source = _diagnostic_data()
     solution = solve_isotropic_poisson(
         Slab2D.unit_square(maxh=0.0875),
-        polynomial_order=3,
+        polynomial_order=4,
         source=source,
         conductivity=_CONDUCTIVITY,
     )
@@ -109,4 +128,11 @@ def test_oblique_solution_reports_separate_parallel_and_perpendicular_energy() -
     assert diagnostics.parallel > 0.0
     assert diagnostics.perpendicular > 0.0
     assert diagnostics.total == pytest.approx(diagnostics.parallel + diagnostics.perpendicular)
-    assert ng.sqrt(ng.Integrate((solution._field - exact) ** 2, solution._mesh, order=8)) < 1.0e-5
+    bx, by = _CONDUCTIVITY.direction
+    expected_parallel = _CONDUCTIVITY.parallel * ng.pi**2 * (bx**2 / 4.0 + by**2)
+    expected_perpendicular = (
+        _CONDUCTIVITY.perpendicular * ng.pi**2 * (5.0 / 4.0 - bx**2 / 4.0 - by**2)
+    )
+    assert diagnostics.parallel == pytest.approx(expected_parallel, rel=1.0e-5)
+    assert diagnostics.perpendicular == pytest.approx(expected_perpendicular, rel=1.0e-5)
+    assert ng.sqrt(ng.Integrate((solution._field - exact) ** 2, solution._mesh, order=8)) < 2.0e-5
