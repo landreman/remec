@@ -5,14 +5,17 @@
 The manufactured solution is \(\chi=\sin(\pi x)\sin(\pi y)\) with homogeneous
 Dirichlet data and \(S_{\rm ref}=2\pi^2\chi\).  This is the isotropic unit-conductivity
 reduction of note equation (M4a), \(-\Delta\chi=S_{\rm ref}\).  The automated test
-`test_isotropic_poisson_manufactured_convergence` requires L² rate at least \(p+0.8\)
-and energy rate at least \(p-0.2\); the machine-readable results are in
-`tests/manufactured/isotropic_poisson_rates.csv`.
+`test_isotropic_poisson_manufactured_convergence` reads the machine-readable error table,
+requires L² rate at least \(p+0.8\) and energy rate at least \(p-0.2\) on its finest
+refinement pair, and checks each error against the recorded value within 5%; the results are in
+`tests/manufactured/isotropic_poisson_rates.csv`. It also checks the homogeneous boundary
+trace and the free-DOF direct-solve residual at roundoff.
 
 | Degree \(p\) | Elements (coarse → fine) | L² rate | Energy rate |
 | --- | ---: | ---: | ---: |
-| 1 | 18 → 80 | 2.250 | 1.116 |
-| 2 | 18 → 80 | 3.205 | 2.214 |
+| 1 | 80 → 296 | 2.063 | 1.021 |
+| 2 | 80 → 296 | 2.883 | 1.922 |
+| 3 | 80 → 296 | 4.075 | 3.088 |
 
 ## Milestone 0.2 — common utilities
 

@@ -4,19 +4,74 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from math import isfinite
+from typing import Any
+
+
+@dataclass(frozen=True, slots=True)
+class _MeshBundle:
+    """Internal mesh carrier returned by a geometry construction.
+
+    The NGSolve mesh remains private so future public geometry consumers depend on
+    named regions and metadata rather than backend-specific mesh operations.
+    """
+
+    _mesh: Any
+    boundary_names: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
 class Slab2D:
-    """A rectangular two-dimensional domain with a target element size."""
+    """A rectangular two-dimensional domain with named boundary regions."""
 
     maxh: float
+    lower: tuple[float, float] = (0.0, 0.0)
+    upper: tuple[float, float] = (1.0, 1.0)
 
     def __post_init__(self) -> None:
         if not isfinite(self.maxh) or self.maxh <= 0.0:
             raise ValueError("maxh must be finite and positive")
+        if not all(isfinite(value) for value in (*self.lower, *self.upper)):
+            raise ValueError("slab bounds must be finite")
+        if self.lower[0] >= self.upper[0] or self.lower[1] >= self.upper[1]:
+            raise ValueError("slab lower bounds must be strictly below upper bounds")
 
     @classmethod
     def unit_square(cls, *, maxh: float) -> Slab2D:
         """Return the unit-square slab used by early kernel verification."""
         return cls(maxh=maxh)
+
+    def build_mesh(self) -> _MeshBundle:
+        """Build the slab mesh with its cyclically ordered boundary names."""
+        import ngsolve as ng  # type: ignore[import-untyped]
+        from netgen.geom2d import SplineGeometry  # type: ignore[import-untyped]
+
+        boundary_names = ("bottom", "right", "top", "left")
+        geometry = SplineGeometry()
+        geometry.AddRectangle(self.lower, self.upper, bcs=boundary_names)
+        return _MeshBundle(
+            _mesh=ng.Mesh(geometry.GenerateMesh(maxh=self.maxh)),
+            boundary_names=boundary_names,
+        )
+
+    def boundary_regions(self) -> dict[str, str]:
+        """Return named regions for the slab's four exterior sides."""
+        return {name: name for name in ("bottom", "right", "top", "left")}
+
+    def characteristic_length(self) -> float:
+        """Return the largest side length used to nondimensionalize the slab."""
+        return max(self.upper[0] - self.lower[0], self.upper[1] - self.lower[1])
+
+    def harmonic_basis(self, mesh_bundle: _MeshBundle) -> list[object]:
+        """Return no harmonic flux fields: a simply connected slab has none."""
+        del mesh_bundle
+        return []
+
+    def metadata(self) -> dict[str, object]:
+        """Return reproducible geometry metadata without exposing backend objects."""
+        return {
+            "geometry": "Slab2D",
+            "lower": self.lower,
+            "upper": self.upper,
+            "maxh": self.maxh,
+            "boundary_regions": self.boundary_regions(),
+        }
