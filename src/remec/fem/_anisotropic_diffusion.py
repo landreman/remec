@@ -1,4 +1,4 @@
-"""Internal verification kernel for the isotropic reference-potential equation."""
+"""Internal verification kernel for the anisotropic reference-potential equation."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from remec.options import RuntimeOptions
 
 
 @dataclass(frozen=True, slots=True)
-class _IsotropicPoissonSolution:
+class _AnisotropicDiffusionSolution:
     """Internal discrete result with a free-DOF algebraic residual diagnostic."""
 
     _mesh: Any
@@ -33,7 +33,7 @@ class _EnergyDiagnostics:
 
 
 @dataclass(frozen=True, slots=True)
-class ObliqueConductivity:
+class DirectionalConductivity:
     """Constant positive-definite 2D tensor K for the M4a verification kernel.
 
     The tensor is ``K = κ_perp I + (κ_parallel - κ_perp) b⊗b``. It has
@@ -87,14 +87,14 @@ class ObliqueConductivity:
         )
 
 
-def solve_isotropic_poisson(
+def solve_anisotropic_diffusion(
     slab: Slab2D,
     *,
     polynomial_order: int,
     source: Any,
-    conductivity: ObliqueConductivity,
+    conductivity: DirectionalConductivity,
     runtime: RuntimeOptions | None = None,
-) -> _IsotropicPoissonSolution:
+) -> _AnisotropicDiffusionSolution:
     """Solve the verification weak form of note equation (M4a).
 
     It assembles the M4a form
@@ -171,7 +171,7 @@ def solve_isotropic_poisson(
             "anisotropic diffusion direct solve failed: free-DOF relative residual "
             f"{free_dof_relative_residual_norm:.3e} exceeds 1e-11"
         )
-    return _IsotropicPoissonSolution(
+    return _AnisotropicDiffusionSolution(
         _mesh=mesh,
         _field=field,
         polynomial_order=polynomial_order,

@@ -9,12 +9,15 @@ from pathlib import Path
 import ngsolve as ng
 import pytest
 
-from remec.fem._isotropic_poisson import ObliqueConductivity, solve_isotropic_poisson
+from remec.fem._anisotropic_diffusion import (
+    DirectionalConductivity,
+    solve_anisotropic_diffusion,
+)
 from remec.geometry.slab import Slab2D
 
 _MESH_SIZES = (0.35, 0.175, 0.0875)
 _RATE_TABLE = Path(__file__).with_name("oblique_anisotropic_rates.csv")
-_CONDUCTIVITY = ObliqueConductivity(
+_CONDUCTIVITY = DirectionalConductivity(
     parallel=7.0,
     perpendicular=2.0,
     direction=(3.0 / 5.0, 4.0 / 5.0),
@@ -61,7 +64,7 @@ def _diagnostic_data() -> tuple[ng.CoefficientFunction, ng.CoefficientFunction]:
     return exact, source
 
 
-def test_oblique_conductivity_has_parallel_and_perpendicular_eigenpairs() -> None:
+def test_directional_conductivity_has_parallel_and_perpendicular_eigenpairs() -> None:
     """K has eigenvalues κ∥ along b and κ⊥ in the transverse direction."""
     assert _CONDUCTIVITY.apply(_CONDUCTIVITY.direction) == pytest.approx(
         tuple(_CONDUCTIVITY.parallel * component for component in _CONDUCTIVITY.direction)
@@ -81,7 +84,7 @@ def test_oblique_anisotropic_manufactured_convergence(polynomial_order: int) -> 
     recorded_errors = _recorded_errors()
 
     for maxh in _MESH_SIZES:
-        solution = solve_isotropic_poisson(
+        solution = solve_anisotropic_diffusion(
             Slab2D.unit_square(maxh=maxh),
             polynomial_order=polynomial_order,
             source=source,
@@ -117,7 +120,7 @@ def test_oblique_anisotropic_manufactured_convergence(polynomial_order: int) -> 
 def test_oblique_solution_reports_separate_parallel_and_perpendicular_energy() -> None:
     """The M4a diagnostics retain both positive contributions to the weak form."""
     exact, source = _diagnostic_data()
-    solution = solve_isotropic_poisson(
+    solution = solve_anisotropic_diffusion(
         Slab2D.unit_square(maxh=0.0875),
         polynomial_order=4,
         source=source,
