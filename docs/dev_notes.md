@@ -13,3 +13,8 @@
 - Milestone 1.1 (NGSolve 6.2.2606): a direct H¹ solve leaves nonzero residual entries
   on constrained Dirichlet rows. Compute the algebraic residual norm on free DOFs with
   `ngsolve.Projector(fes.FreeDofs(), True) * residual`, not on the full vector.
+
+- Milestone 1.1 (NGSolve 6.2.2606): `ngsolve.meshes.MakeStructured2DMesh` produces a
+  repeatable triangular slab mesh with the boundary order `bottom`, `right`, `top`,
+  `left`. Prefer it to Netgen's unconstrained mesher for cross-platform manufactured
+  error-constant regression tests.

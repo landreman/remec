@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import isfinite
+from math import ceil, isfinite
 from typing import Any
 
 
@@ -41,15 +41,20 @@ class Slab2D:
         return cls(maxh=maxh)
 
     def build_mesh(self) -> _MeshBundle:
-        """Build the slab mesh with its cyclically ordered boundary names."""
-        import ngsolve as ng  # type: ignore[import-untyped]
-        from netgen.geom2d import SplineGeometry  # type: ignore[import-untyped]
+        """Build a deterministic structured slab mesh with named boundaries."""
+        from ngsolve.meshes import MakeStructured2DMesh  # type: ignore[import-untyped]
 
         boundary_names = ("bottom", "right", "top", "left")
-        geometry = SplineGeometry()
-        geometry.AddRectangle(self.lower, self.upper, bcs=boundary_names)
+        width = self.upper[0] - self.lower[0]
+        height = self.upper[1] - self.lower[1]
+        mesh = MakeStructured2DMesh(
+            quads=False,
+            nx=max(1, ceil(width / self.maxh)),
+            ny=max(1, ceil(height / self.maxh)),
+            mapping=lambda x, y: (self.lower[0] + width * x, self.lower[1] + height * y),
+        )
         return _MeshBundle(
-            _mesh=ng.Mesh(geometry.GenerateMesh(maxh=self.maxh)),
+            _mesh=mesh,
             boundary_names=boundary_names,
         )
 

@@ -13,9 +13,9 @@ trace and the free-DOF direct-solve residual at roundoff.
 
 | Degree \(p\) | Elements (coarse → fine) | L² rate | Energy rate |
 | --- | ---: | ---: | ---: |
-| 1 | 80 → 296 | 2.063 | 1.021 |
-| 2 | 80 → 296 | 2.883 | 1.922 |
-| 3 | 80 → 296 | 4.075 | 3.088 |
+| 1 | 72 → 288 | 1.955 | 0.981 |
+| 2 | 72 → 288 | 2.992 | 1.978 |
+| 3 | 72 → 288 | 4.053 | 3.005 |
 
 ## Milestone 0.2 — common utilities
 
