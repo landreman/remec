@@ -6,9 +6,11 @@ The public `AnisotropicDiffusionSolver` is the Phase-1 `StandardCG` strategy for
 note equation (M4a),
 
 \[
-\int_\Omega \kappa_\parallel(\mathbf b\mathbin\cdot\nabla\chi)
-(\mathbf b\mathbin\cdot\nabla v)+\kappa_\perp
-\nabla_\perp\chi\mathbin\cdot\nabla_\perp v\,dV
+=\int_\Omega vS_{\rm ref}\,dV.
+\int_\Omega \nabla v\mathbin\cdot
+\left[\kappa_\perp I+(\kappa_\parallel-\kappa_\perp)
+\mathbf b_{\rm safe}\mathbf b_{\rm safe}^{T}\right]\nabla\chi\,dV
+=\int_\Omega vS_{\rm ref}\,dV.
 =\int_\Omega vS_{\rm ref}\,dV.
 \]
 
@@ -19,6 +21,12 @@ where applicable; the rank-one path retains its historical quadrature and
 machine-readable pollution table. The public result contains only scalar
 diagnostics, including a direct sparse-Cholesky inverse identity defect below
 1e-11, not NGSolve meshes, fields, or matrices.
+
+For a unit direction, this is algebraically the note's projected M4a form. At
+an active smooth floor it intentionally retains the displayed tensor: applying a
+second perpendicular projection with \(|\mathbf b_{\rm safe}|<1\) would not be
+idempotent and would implement a different operator. ADR 0002 approves the
+regenerated Sovinec baseline for this unified path.
 
 For production safety, `assess_pollution` implements `DESIGN.md` §8.3's default
 criterion \(\kappa_{\perp,\rm num}<0.1\kappa_\perp\): it emits

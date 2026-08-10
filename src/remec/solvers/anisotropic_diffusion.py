@@ -11,6 +11,7 @@ from remec.fem._anisotropic_diffusion import (
     DirectionalConductivity,
     PollutionDiagnostic,
     measure_sovinec_pollution,
+    preconditioner_identity_defect,
     solve_anisotropic_diffusion,
     solve_frozen_field_anisotropic_diffusion,
 )
@@ -67,9 +68,9 @@ class FloorSensitivityDiagnostic:
 class SpatialAnisotropicConductivity:
     """Frozen M4a coefficients ``K=κ⊥I+(κ∥-κ⊥)b_safe⊗b_safe``.
 
-    ``raw_field`` is evaluated only inside ``remec.fem``.  The configuration
-    permits ``κ⊥=0`` for the rank-one Sovinec regression; positive production
-    transport remains protected by :meth:`AnisotropicDiffusionSolver.assess_pollution`.
+    ``raw_field`` is evaluated only inside ``remec.fem``. The public solve
+    remains uniformly elliptic; rank-one Sovinec diagnostics use their dedicated
+    :meth:`AnisotropicDiffusionSolver.measure_sovinec_pollution` entry point.
     """
 
     parallel: float
@@ -80,12 +81,12 @@ class SpatialAnisotropicConductivity:
     def __post_init__(self) -> None:
         if not isfinite(self.parallel) or self.parallel <= 0.0:
             raise ValueError("parallel conductivity must be finite and positive")
-        if not isfinite(self.perpendicular) or self.perpendicular < 0.0:
-            raise ValueError("perpendicular conductivity must be finite and non-negative")
+        if not isfinite(self.perpendicular) or self.perpendicular <= 0.0:
+            raise ValueError("perpendicular conductivity must be finite and positive")
         if self.parallel < self.perpendicular:
             raise ValueError("parallel conductivity must not be below perpendicular conductivity")
-        if not isfinite(self.field_floor) or self.field_floor < 0.0:
-            raise ValueError("field_floor must be finite and non-negative")
+        if not isfinite(self.field_floor) or self.field_floor <= 0.0:
+            raise ValueError("field_floor must be finite and positive")
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,6 +129,7 @@ class AnisotropicDiffusionSolver:
         self.floor_sensitivity_tolerance = floor_sensitivity_tolerance
         self._operator: Any = None
         self._preconditioner: Any = None
+        self._internal_solution: Any = None
         self._last_diagnostics: dict[str, float] | None = None
 
     def solve(
@@ -153,10 +155,7 @@ class AnisotropicDiffusionSolver:
                 conductivity=coefficients,
                 runtime=self.runtime,
             )
-            floor_activity = 0.0
         elif isinstance(coefficients, SpatialAnisotropicConductivity):
-            if coefficients.perpendicular == 0.0:
-                raise ValueError("use measure_sovinec_pollution for rank-one diagnostics")
             internal = solve_frozen_field_anisotropic_diffusion(
                 field,
                 polynomial_order=self.polynomial_order,
@@ -167,7 +166,6 @@ class AnisotropicDiffusionSolver:
                 field_floor=coefficients.field_floor,
                 runtime=self.runtime,
             )
-            floor_activity = internal.field_direction_diagnostics.floor_activity_l2_squared
         else:
             raise TypeError("unsupported anisotropic conductivity")
         energy = EnergyDiagnostics(
@@ -181,12 +179,12 @@ class AnisotropicDiffusionSolver:
             "parallel_energy": energy.parallel,
             "perpendicular_energy": energy.perpendicular,
             "total_energy": energy.total,
-            "floor_activity_l2_squared": floor_activity,
+            "floor_activity_l2_squared": internal.field_direction_diagnostics.floor_activity_l2_squared,
             "central_amplitude": float(internal._field(internal._mesh(0.5, 0.5))),
-            "preconditioner_identity_defect": internal.preconditioner_identity_defect,
         }
         self._operator = internal.operator
         self._preconditioner = internal.preconditioner
+        self._internal_solution = internal
         self._last_diagnostics = diagnostics
         return AnisotropicDiffusionResult(
             self.polynomial_order,
@@ -224,6 +222,14 @@ class AnisotropicDiffusionSolver:
             raise RuntimeError("solve must be called before diagnostics")
         return dict(self._last_diagnostics)
 
+    def preconditioner_identity_defect(self) -> float:
+        """Verify the public ``P(Ax)≈x`` preconditioner contract for M4a."""
+        if self._internal_solution is None:
+            raise RuntimeError("solve must be called before preconditioner verification")
+        return preconditioner_identity_defect(
+            self._internal_solution, self.apply, self.build_preconditioner()
+        )
+
     def assess_pollution_diagnostic(
         self, diagnostic: PollutionDiagnostic, *, strict: bool = False
     ) -> PollutionSafetyDiagnostic:
@@ -253,7 +259,10 @@ class AnisotropicDiffusionSolver:
         ):
             raise ValueError("physical perpendicular diffusivity must be finite and non-negative")
         ratio = (
-            float("inf")
+            0.0
+            if numerical_perpendicular_diffusivity == 0.0
+            and physical_perpendicular_diffusivity == 0.0
+            else float("inf")
             if physical_perpendicular_diffusivity == 0.0
             else numerical_perpendicular_diffusivity / physical_perpendicular_diffusivity
         )

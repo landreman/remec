@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from math import hypot, isfinite
 from typing import Any
@@ -9,21 +10,6 @@ from typing import Any
 from remec.common.threads import configure_threads
 from remec.geometry.slab import Slab2D
 from remec.options import RuntimeOptions
-
-
-@dataclass(frozen=True, slots=True)
-class _AnisotropicDiffusionSolution:
-    """Internal discrete result with a free-DOF algebraic residual diagnostic."""
-
-    _mesh: Any
-    _field: Any
-    polynomial_order: int
-    free_dof_residual_norm: float
-    free_dof_relative_residual_norm: float
-    energy_diagnostics: _EnergyDiagnostics
-    operator: Any
-    preconditioner: Any
-    preconditioner_identity_defect: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,7 +42,19 @@ class _FrozenFieldDiffusionSolution:
     field_direction_diagnostics: _FieldDirectionDiagnostics
     operator: Any
     preconditioner: Any
-    preconditioner_identity_defect: float
+
+
+def preconditioner_identity_defect(
+    solution: _FrozenFieldDiffusionSolution, operator: Callable[[Any], Any], preconditioner: Any
+) -> float:
+    """Return ``||P(Ax)-x||/max(1,||x||)`` for an assembled M4a probe state."""
+    import ngsolve as ng  # type: ignore[import-untyped]
+
+    probe = solution._field.vec
+    recovered = probe.CreateVector()
+    recovered.data = preconditioner * operator(probe)
+    recovered.data -= probe
+    return float(ng.Norm(recovered)) / max(1.0, float(ng.Norm(probe)))
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,7 +126,7 @@ class DirectionalConductivity:
 
     def quadratic_form(self, gradient: Any) -> Any:
         """Return ``∇χ·K∇χ`` for an NGSolve vector coefficient function."""
-        import ngsolve as ng  # type: ignore[import-untyped]
+        import ngsolve as ng
 
         direction = ng.CoefficientFunction(self.direction)
         parallel_gradient = ng.InnerProduct(direction, gradient)
@@ -185,6 +183,7 @@ def solve_frozen_field_anisotropic_diffusion(
     runtime: RuntimeOptions | None = None,
     quadrature_bonus_intorder: int = 20,
     residual_tolerance: float | None = 1.0e-11,
+    direction_is_normalized: bool = False,
 ) -> _FrozenFieldDiffusionSolution:
     """Solve note equation (M4a) for a spatially varying frozen field.
 
@@ -192,8 +191,11 @@ def solve_frozen_field_anisotropic_diffusion(
     ``integral kappa_perp grad(chi).grad(v) + (kappa_parallel-kappa_perp)
     (b_safe.grad(chi))(b_safe.grad(v)) = integral v S_ref``, where
     ``b_safe = B / sqrt(B.B + B_floor**2)``.  The smooth floor makes the
-    tensor finite at analytic island O- and X-point nulls. The same rank-one
-    tensor assembly accepts ``κ_perp=0`` for the Sovinec diagnostic.
+    tensor finite at analytic island O- and X-point nulls. For a unit field,
+    this direct tensor form equals the note's doubly projected M4a form. At an
+    active smooth floor it deliberately remains
+    ``K=κ_perp I+(κ_parallel-κ_perp)b_safe⊗b_safe``: the double projection is
+    not idempotent when ``|b_safe|<1`` and would implement a different tensor.
     """
     if polynomial_order < 1:
         raise ValueError("polynomial_order must be at least one")
@@ -216,17 +218,22 @@ def solve_frozen_field_anisotropic_diffusion(
     space = ng.H1(mesh, order=polynomial_order, dirichlet="bottom|right|top|left")
     trial, test = space.TnT()
     quadrature = ng.dx(bonus_intorder=quadrature_bonus_intorder)
-    safe_norm = ng.sqrt(ng.InnerProduct(raw_field, raw_field) + field_floor**2)
-    direction = raw_field / safe_norm
+    if direction_is_normalized:
+        if field_floor != 0.0:
+            raise ValueError("a pre-normalized direction cannot use a field floor")
+        direction = raw_field
+    else:
+        safe_norm = ng.sqrt(ng.InnerProduct(raw_field, raw_field) + field_floor**2)
+        direction = raw_field / safe_norm
     parallel_trial = ng.InnerProduct(direction, ng.grad(trial))
     parallel_test = ng.InnerProduct(direction, ng.grad(test))
     conductivity_contrast = parallel_conductivity - perpendicular_conductivity
 
     bilinear_form = ng.BilinearForm(space)
-    bilinear_form += (
-        perpendicular_conductivity * ng.InnerProduct(ng.grad(trial), ng.grad(test))
-        + conductivity_contrast * parallel_trial * parallel_test
-    ) * quadrature
+    tensor_form = conductivity_contrast * parallel_trial * parallel_test
+    if perpendicular_conductivity != 0.0:
+        tensor_form += perpendicular_conductivity * ng.InnerProduct(ng.grad(trial), ng.grad(test))
+    bilinear_form += tensor_form * quadrature
     linear_form = ng.LinearForm(space)
     linear_form += source * test * quadrature
     free_dofs = space.FreeDofs()
@@ -238,12 +245,6 @@ def solve_frozen_field_anisotropic_diffusion(
         field = ng.GridFunction(space)
         preconditioner = bilinear_form.mat.Inverse(free_dofs, inverse="sparsecholesky")
         field.vec.data = preconditioner * linear_form.vec
-        preconditioned = field.vec.CreateVector()
-        preconditioned.data = preconditioner * (bilinear_form.mat * field.vec)
-        preconditioned.data -= field.vec
-        preconditioner_identity_defect = float(ng.Norm(preconditioned)) / max(
-            1.0, float(ng.Norm(field.vec))
-        )
         residual = linear_form.vec.CreateVector()
         residual.data = bilinear_form.mat * field.vec - linear_form.vec
         free_residual = ng.Projector(free_dofs, True) * residual
@@ -259,11 +260,15 @@ def solve_frozen_field_anisotropic_diffusion(
         parallel_energy = float(
             ng.Integrate(parallel_conductivity * parallel_gradient**2, mesh, order=20)
         )
-        perpendicular_energy = float(
-            ng.Integrate(
-                perpendicular_conductivity * (gradient_norm_squared - parallel_gradient**2),
-                mesh,
-                order=20,
+        perpendicular_energy = (
+            0.0
+            if perpendicular_conductivity == 0.0
+            else float(
+                ng.Integrate(
+                    perpendicular_conductivity * (gradient_norm_squared - parallel_gradient**2),
+                    mesh,
+                    order=20,
+                )
             )
         )
         energy_diagnostics = _EnergyDiagnostics(
@@ -271,8 +276,12 @@ def solve_frozen_field_anisotropic_diffusion(
             perpendicular=perpendicular_energy,
             total=parallel_energy + perpendicular_energy,
         )
-        direction_norm_defect = 1.0 - ng.InnerProduct(direction, direction)
-        floor_activity_l2_squared = float(ng.Integrate(direction_norm_defect**2, mesh, order=40))
+        floor_activity_l2_squared = 0.0
+        if field_floor != 0.0:
+            direction_norm_defect = 1.0 - ng.InnerProduct(direction, direction)
+            floor_activity_l2_squared = float(
+                ng.Integrate(direction_norm_defect**2, mesh, order=40)
+            )
 
     if not isfinite(free_dof_relative_residual_norm):
         raise RuntimeError("frozen-field solve produced a non-finite algebraic residual")
@@ -300,7 +309,6 @@ def solve_frozen_field_anisotropic_diffusion(
         ),
         operator=bilinear_form.mat,
         preconditioner=preconditioner,
-        preconditioner_identity_defect=preconditioner_identity_defect,
     )
 
 
@@ -365,6 +373,7 @@ def measure_sovinec_pollution(
         runtime=resolved_runtime,
         quadrature_bonus_intorder=6,
         residual_tolerance=None,
+        direction_is_normalized=True,
     )
     mesh = solution._mesh
     field = solution._field

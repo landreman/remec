@@ -35,10 +35,4 @@ changes a stated acceptance criterion and the permanent baseline. Option 3 best
 satisfies both objectives but has no identified mechanism or bounded effort;
 claiming it is safe without evidence would be misleading.
 
-## Recommendation
-
-Choose option 1 unless a targeted investigation identifies a demonstrably
-bit-exact common implementation. If option 2 is preferred, explicitly approve
-the acceptance-criterion change and the regenerated measurement table.
-
-**DECISION: pending human sign-off**
+## DECISION: Option 2

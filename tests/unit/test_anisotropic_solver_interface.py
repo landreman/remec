@@ -22,7 +22,8 @@ from remec.solvers.anisotropic_diffusion import (
 def test_standard_cg_public_path_preserves_constant_m4a_diagnostics() -> None:
     """(M4a) StandardCG reports separately positive constant-field energies."""
     source = ng.sin(ng.pi * ng.x) * ng.sin(ng.pi * ng.y)
-    result = AnisotropicDiffusionSolver(polynomial_order=2).solve(
+    solver = AnisotropicDiffusionSolver(polynomial_order=2)
+    result = solver.solve(
         Slab2D.unit_square(maxh=0.25),
         DirectionalConductivity(parallel=7.0, perpendicular=0.3, direction=(3.0, 4.0)),
         source,
@@ -34,7 +35,8 @@ def test_standard_cg_public_path_preserves_constant_m4a_diagnostics() -> None:
     assert result.energy_diagnostics.total == pytest.approx(
         result.energy_diagnostics.parallel + result.energy_diagnostics.perpendicular
     )
-    assert result.diagnostics["preconditioner_identity_defect"] < 1.0e-11
+    assert solver.diagnostics() == result.diagnostics
+    assert solver.preconditioner_identity_defect() < 1.0e-11
     assert not hasattr(result, "field")
     assert not hasattr(result, "operator")
 
@@ -80,6 +82,11 @@ def test_sovinec_measurement_is_routed_through_production_safety_gate() -> None:
             physical_perpendicular_diffusivity=1.0e-2,
         )
     assert not diagnostic.is_safe
+    assert solver.assess_pollution(
+        numerical_perpendicular_diffusivity=0.0,
+        physical_perpendicular_diffusivity=0.0,
+        strict=True,
+    ).is_safe
 
 
 def test_floor_sensitivity_is_relative_even_for_small_observables() -> None:
