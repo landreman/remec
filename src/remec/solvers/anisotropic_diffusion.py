@@ -180,7 +180,7 @@ class AnisotropicDiffusionSolver:
             "perpendicular_energy": energy.perpendicular,
             "total_energy": energy.total,
             "floor_activity_l2_squared": internal.field_direction_diagnostics.floor_activity_l2_squared,
-            "central_amplitude": float(internal._field(internal._mesh(0.5, 0.5))),
+            "central_amplitude": internal.center_value(),
         }
         self._operator = internal.operator
         self._preconditioner = internal.preconditioner
@@ -197,7 +197,11 @@ class AnisotropicDiffusionSolver:
     def measure_sovinec_pollution(
         self, field: Slab2D, *, strict: bool = False
     ) -> PollutionDiagnostic:
-        """Route the rank-one M4a Sovinec solve and apply its §8.3 gate."""
+        """Measure rank-one M4a pollution and apply its §8.3 gate.
+
+        This diagnostic-only entry point deliberately does not replace the
+        operator, preconditioner, or diagnostics retained by :meth:`solve`.
+        """
         diagnostic = measure_sovinec_pollution(
             field, polynomial_order=self.polynomial_order, runtime=self.runtime
         )

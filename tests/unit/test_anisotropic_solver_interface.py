@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import warnings
+from math import pi
 
 import ngsolve as ng
 import pytest
@@ -87,6 +88,32 @@ def test_sovinec_measurement_is_routed_through_production_safety_gate() -> None:
         physical_perpendicular_diffusivity=0.0,
         strict=True,
     ).is_safe
+
+
+def test_positive_perpendicular_measurement_passes_production_safety_gate() -> None:
+    """§8.3 accepts a positive-κ_perp closed-field estimate from a real solve."""
+    psi = ng.sin(ng.pi * ng.x) * ng.sin(ng.pi * ng.y)
+    raw_field = ng.CoefficientFunction((psi.Diff(ng.y), -psi.Diff(ng.x)))
+    physical_perpendicular = 0.1
+    solver = AnisotropicDiffusionSolver(polynomial_order=2)
+    result = solver.solve(
+        Slab2D.unit_square(maxh=0.125),
+        SpatialAnisotropicConductivity(
+            parallel=1.0,
+            perpendicular=physical_perpendicular,
+            field_floor=1.0e-6,
+            raw_field=raw_field,
+        ),
+        psi,
+    )
+    effective_perpendicular = 1.0 / (2.0 * pi**2 * result.diagnostics["central_amplitude"])
+    diagnostic = solver.assess_pollution(
+        numerical_perpendicular_diffusivity=effective_perpendicular - physical_perpendicular,
+        physical_perpendicular_diffusivity=physical_perpendicular,
+        strict=True,
+    )
+
+    assert diagnostic.is_safe
 
 
 def test_floor_sensitivity_is_relative_even_for_small_observables() -> None:

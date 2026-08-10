@@ -12,9 +12,8 @@ the results are bit-for-bit unchanged.
 
 The common assembly is mathematically the intended rank-one M4a form when the
 already normalized tangent field is passed through without an additional safe
-normalization. Removing zero-valued tensor/integration terms did not eliminate
-the observed difference. The source of the remaining low-order numerical
-difference is not established here.
+normalization. The initial implementation did not convey that precondition to
+the common kernel, causing it to normalize an already-unit direction again.
 
 ## Options
 
@@ -32,7 +31,14 @@ difference is not established here.
 Option 1 preserves the established verification baseline but retains a distinct
 assembly implementation. Option 2 completes the common assembly extraction but
 changes a stated acceptance criterion and the permanent baseline. Option 3 best
-satisfies both objectives but has no identified mechanism or bounded effort;
-claiming it is safe without evidence would be misleading.
+satisfies both objectives once the redundant normalization is removed.
 
-## DECISION: Option 2
+## Decision history
+
+The human initially selected Option 2 while the source of the difference was
+unidentified. The subsequent `direction_is_normalized=True` correction removes
+that redundant normalization. At the corrected head, all nine Sovinec rows are
+bit-for-bit identical to `origin/main`; the regenerated table is therefore
+discarded.
+
+## DECISION: Option 3 (supersedes the provisional Option 2 outcome)

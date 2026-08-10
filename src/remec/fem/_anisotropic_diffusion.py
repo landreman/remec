@@ -43,18 +43,26 @@ class _FrozenFieldDiffusionSolution:
     operator: Any
     preconditioner: Any
 
+    def center_value(self) -> float:
+        """Return the field value at the unit-square centre for M4a diagnostics."""
+        return float(self._field(self._mesh(0.5, 0.5)))
+
+    def preconditioner_probe(self) -> Any:
+        """Return the assembled solution vector used for the inverse-action check."""
+        return self._field.vec
+
 
 def preconditioner_identity_defect(
     solution: _FrozenFieldDiffusionSolution, operator: Callable[[Any], Any], preconditioner: Any
 ) -> float:
-    """Return ``||P(Ax)-x||/max(1,||x||)`` for an assembled M4a probe state."""
+    """Return ``||P(Ax)-x||/max(||x||, tiny)`` for an assembled M4a probe state."""
     import ngsolve as ng  # type: ignore[import-untyped]
 
-    probe = solution._field.vec
+    probe = solution.preconditioner_probe()
     recovered = probe.CreateVector()
     recovered.data = preconditioner * operator(probe)
     recovered.data -= probe
-    return float(ng.Norm(recovered)) / max(1.0, float(ng.Norm(probe)))
+    return float(ng.Norm(recovered)) / max(1.0e-300, float(ng.Norm(probe)))
 
 
 @dataclass(frozen=True, slots=True)
@@ -168,6 +176,7 @@ def solve_anisotropic_diffusion(
         field_floor=0.0,
         runtime=runtime,
         quadrature_bonus_intorder=4,
+        direction_is_normalized=True,
     )
 
 
