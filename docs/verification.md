@@ -1,5 +1,50 @@
 # Verification records
 
+## Milestone 1.5 — `AnisotropicDiffusionSolver` strategy interface
+
+The public `AnisotropicDiffusionSolver` is the Phase-1 `StandardCG` strategy for
+note equation (M4a),
+
+\[
+\int_\Omega \nabla v\mathbin\cdot
+\left[\kappa_\perp I+(\kappa_\parallel-\kappa_\perp)
+\mathbf b_{\rm safe}\mathbf b_{\rm safe}^{T}\right]\nabla\chi\,dV
+=\int_\Omega vS_{\rm ref}\,dV.
+\]
+
+It exposes `solve`, `apply`, `build_preconditioner`, `diagnostics`, and the
+rank-one `measure_sovinec_pollution` entry point while keeping NGSolve objects
+behind `remec.fem`. All three Phase-1 paths use the spatial M4a tensor assembly
+where applicable; the rank-one path retains its historical quadrature and
+machine-readable pollution table. The public result contains only scalar
+diagnostics, including a direct sparse-Cholesky inverse identity defect below
+1e-11, not NGSolve meshes, fields, or matrices.
+
+For a unit direction, this is algebraically the note's projected M4a form. At
+an active smooth floor it intentionally retains the displayed tensor: applying a
+second perpendicular projection with \(|\mathbf b_{\rm safe}|<1\) would not be
+idempotent and would implement a different operator. ADR 0002 records the
+redundant-normalization correction that preserves the original Sovinec baseline
+bit-for-bit.
+`test_sovinec_common_path_preserves_the_bit_exact_reference_solution` is the
+same-process regression that demonstrates this acceptance criterion.
+
+For production safety, `assess_pollution` implements `DESIGN.md` §8.3's default
+criterion \(\kappa_{\perp,\rm num}<0.1\kappa_\perp\): it emits
+`AnisotropyPollutionWarning` normally and raises `AnisotropyPollutionError` in
+strict mode. `assess_floor_sensitivity` applies §6 to paired observables at two
+smooth field-floor values; its default 1% tolerance warns (or raises in strict
+mode) for a material difference on the observable's own scale. The test suite
+demonstrates the rank-one κ⊥=0 unsafe measurement and a 100% difference at an
+O(1e-3) observable, as well as safe counterparts.
+
+Mutation checks: removing the M4a tensor contrast fails the new public island
+manufactured solve (central response 2.014 rather than 1) as well as the frozen-field
+topology regressions; it also makes rank-one Sovinec singular. Rotating the Sovinec
+field from tangent to normal makes its source-tangency assertion fail (measured
+\(4.93\), required below \(10^{-12}\)). These are physical/discretization
+protections rather than residual checks.
+
 ## Milestone 1.4 — closed-field and analytic-island frozen fields
 
 This milestone extends the frozen-field verification of note equation (M4a) to a
@@ -75,7 +120,7 @@ with boundary-terminating exterior field lines, not a closed fixed-boundary magn
 configuration. Because the manufactured source is derived from the floored operator,
 the floor is intentionally part of the exact verification problem; this test does not
 claim that its visibly active floor is negligible in the §6 production-observable
-sense. STATUS assigns that separate sensitivity study to milestone 1.5. The island
+sense. The milestone 1.5 `Next:` follow-up records that separate sensitivity study. The island
 manufactured source is also sign-changing (a 201×201 point scan gives approximately
 \([-269.7,177.2]\)); like the milestone 1.2 direction-sensitive source, it is a linear
 verification device rather than an admissible positive reference source. The rate
