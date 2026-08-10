@@ -12,26 +12,29 @@ note equation (M4a),
 =\int_\Omega vS_{\rm ref}\,dV.
 \]
 
-It exposes `solve`, `apply`, `build_preconditioner`, and `diagnostics` while
-keeping NGSolve objects behind `remec.fem`. The constant-direction and spatial
-safe-field paths retain their previous formula and quadrature rules exactly. The
-automated interface regression compares every solution-vector entry to its legacy
-kernel with zero absolute tolerance; it also checks the separately reported M4a
-parallel/perpendicular energies and their positive sum.
+It exposes `solve`, `apply`, `build_preconditioner`, `diagnostics`, and the
+rank-one `measure_sovinec_pollution` entry point while keeping NGSolve objects
+behind `remec.fem`. All three Phase-1 paths use the spatial M4a tensor assembly
+where applicable; the rank-one path retains its historical quadrature and
+machine-readable pollution table. The public result contains only scalar
+diagnostics, including a direct sparse-Cholesky inverse identity defect below
+1e-11, not NGSolve meshes, fields, or matrices.
 
 For production safety, `assess_pollution` implements `DESIGN.md` §8.3's default
 criterion \(\kappa_{\perp,\rm num}<0.1\kappa_\perp\): it emits
 `AnisotropyPollutionWarning` normally and raises `AnisotropyPollutionError` in
 strict mode. `assess_floor_sensitivity` applies §6 to paired observables at two
 smooth field-floor values; its default 1% tolerance warns (or raises in strict
-mode) for a material difference. The test suite demonstrates the unsafe 20%
-pollution case and 2% floor-sensitive case, as well as safe counterparts.
+mode) for a material difference on the observable's own scale. The test suite
+demonstrates the rank-one κ⊥=0 unsafe measurement and a 100% difference at an
+O(1e-3) observable, as well as safe counterparts.
 
-Mutation checks: removing the M4a tensor contrast makes all seven frozen-field
-topology regressions fail; rotating the Sovinec field from tangent to normal makes
-its source-tangency assertion fail (measured \(4.93\), required below
-\(10^{-12}\)). Both mutated direct solves still complete algebraically, so these
-are physical/discretization protections rather than residual checks.
+Mutation checks: removing the M4a tensor contrast fails the new public island
+manufactured solve (central response 2.014 rather than 1) as well as the frozen-field
+topology regressions; it also makes rank-one Sovinec singular. Rotating the Sovinec
+field from tangent to normal makes its source-tangency assertion fail (measured
+\(4.93\), required below \(10^{-12}\)). These are physical/discretization
+protections rather than residual checks.
 
 ## Milestone 1.4 — closed-field and analytic-island frozen fields
 

@@ -5,7 +5,10 @@ from remec.solvers.anisotropic_diffusion import (
     AnisotropicDiffusionSolver,
     AnisotropyPollutionError,
     AnisotropyPollutionWarning,
+    EnergyDiagnostics,
     FloorSensitivityDiagnostic,
+    FloorSensitivityError,
+    FloorSensitivityWarning,
     PollutionSafetyDiagnostic,
     SpatialAnisotropicConductivity,
 )
@@ -15,7 +18,10 @@ __all__ = [
     "AnisotropicDiffusionSolver",
     "AnisotropyPollutionError",
     "AnisotropyPollutionWarning",
+    "EnergyDiagnostics",
     "FloorSensitivityDiagnostic",
+    "FloorSensitivityError",
+    "FloorSensitivityWarning",
     "PollutionSafetyDiagnostic",
     "SpatialAnisotropicConductivity",
 ]

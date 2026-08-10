@@ -81,11 +81,12 @@ that dependency. Phase 7 may run in parallel with Phase 8.
 - [x] **1.5** Refactor to `AnisotropicDiffusionSolver` — `DESIGN.md` §8.4
   <br>Acceptance: interface extracted, results bit-for-bit unchanged.
   <br>Measured: macOS / CPython 3.12.2 / NGSolve 6.2.2606 — public StandardCG
-  routes both constant and smoothly floored spatial M4a forms with bit-for-bit
-  matching solution vectors against the established kernels; all 38 PR tests pass.
-  The default pollution gate requires κ⊥,num/κ⊥ < 0.1, warning by default and
-  raising `AnisotropyPollutionError` in strict mode. The B-floor observable-sensitivity
-  gate defaults to 1%; its test catches a 2% change.
+  routes constant, smoothly floored spatial, and rank-one Sovinec M4a paths;
+  the existing pollution table remains unchanged. The direct inverse-preconditioner
+  identity defect is below 1e-11. The default pollution gate requires
+  κ⊥,num/κ⊥ < 0.1, warning by default and raising `AnisotropyPollutionError` in
+  strict mode; κ⊥ = 0 is correctly unsafe. The B-floor observable-sensitivity gate
+  defaults to 1% and catches a 100% change at an O(1e-3) observable.
   <br>Next: Phase 2 starts the mollified V_χ operator; keep this solver's M4a
   diagnostics and safety gates as the reusable frozen-field interface.
 

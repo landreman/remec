@@ -9,7 +9,8 @@ from typing import Any
 
 from remec.fem._anisotropic_diffusion import (
     DirectionalConductivity,
-    _EnergyDiagnostics,
+    PollutionDiagnostic,
+    measure_sovinec_pollution,
     solve_anisotropic_diffusion,
     solve_frozen_field_anisotropic_diffusion,
 )
@@ -18,11 +19,28 @@ from remec.options import RuntimeOptions
 
 
 class AnisotropyPollutionError(RuntimeError):
-    """Raised when numerical cross-field transport exceeds the strict safety gate."""
+    """Raised when §8.3 numerical cross-field transport is unsafe."""
 
 
 class AnisotropyPollutionWarning(RuntimeWarning):
-    """Numerical cross-field transport is too large for the requested physics."""
+    """Numerical cross-field transport is too large for requested physics."""
+
+
+class FloorSensitivityError(RuntimeError):
+    """Raised when the smooth §6 B-floor materially changes an observable."""
+
+
+class FloorSensitivityWarning(RuntimeWarning):
+    """The smooth §6 B-floor materially changes an observable."""
+
+
+@dataclass(frozen=True, slots=True)
+class EnergyDiagnostics:
+    """Separate non-negative M4a energies and their total."""
+
+    parallel: float
+    perpendicular: float
+    total: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,7 +56,7 @@ class PollutionSafetyDiagnostic:
 
 @dataclass(frozen=True, slots=True)
 class FloorSensitivityDiagnostic:
-    """§6 observable sensitivity to the smooth ``B_safe`` regularization."""
+    """§6 relative observable sensitivity to the smooth ``B_safe`` floor."""
 
     relative_change: float
     tolerance: float
@@ -47,66 +65,47 @@ class FloorSensitivityDiagnostic:
 
 @dataclass(frozen=True, slots=True)
 class SpatialAnisotropicConductivity:
-    """Smooth M4a tensor ``K=κ⊥I+(κ∥-κ⊥)b_safe⊗b_safe``.
+    """Frozen M4a coefficients ``K=κ⊥I+(κ∥-κ⊥)b_safe⊗b_safe``.
 
-    Here ``b_safe=B/sqrt(B·B+B_floor²)``.  This retains the note's (M4a)
-    tensor form at a field null, rather than silently replacing it with an
-    isotropic approximation.
+    ``raw_field`` is evaluated only inside ``remec.fem``.  The configuration
+    permits ``κ⊥=0`` for the rank-one Sovinec regression; positive production
+    transport remains protected by :meth:`AnisotropicDiffusionSolver.assess_pollution`.
     """
 
     parallel: float
     perpendicular: float
     field_floor: float
+    raw_field: Any
 
     def __post_init__(self) -> None:
-        if not all(
-            isfinite(value) and value > 0.0
-            for value in (self.parallel, self.perpendicular, self.field_floor)
-        ):
-            raise ValueError("conductivities and field_floor must be finite and positive")
+        if not isfinite(self.parallel) or self.parallel <= 0.0:
+            raise ValueError("parallel conductivity must be finite and positive")
+        if not isfinite(self.perpendicular) or self.perpendicular < 0.0:
+            raise ValueError("perpendicular conductivity must be finite and non-negative")
         if self.parallel < self.perpendicular:
             raise ValueError("parallel conductivity must not be below perpendicular conductivity")
-
-    def tensor(self, field: tuple[float, float]) -> tuple[tuple[float, float], tuple[float, float]]:
-        """Return the symmetric 2-D M4a tensor for a plain frozen field vector."""
-        norm_squared = field[0] ** 2 + field[1] ** 2 + self.field_floor**2
-        bx, by = field[0] / norm_squared**0.5, field[1] / norm_squared**0.5
-        contrast = self.parallel - self.perpendicular
-        return (
-            (self.perpendicular + contrast * bx * bx, contrast * bx * by),
-            (contrast * bx * by, self.perpendicular + contrast * by * by),
-        )
-
-    def floor_activity(self, field: tuple[float, float]) -> float:
-        """Return ``1-|b_safe|²=B_floor²/(B·B+B_floor²)``."""
-        return self.field_floor**2 / (field[0] ** 2 + field[1] ** 2 + self.field_floor**2)
+        if not isfinite(self.field_floor) or self.field_floor < 0.0:
+            raise ValueError("field_floor must be finite and non-negative")
 
 
 @dataclass(frozen=True, slots=True)
 class AnisotropicDiffusionResult:
-    """M4a solution, separate energies, and the retained assembled operator."""
+    """Public scalar M4a result; NGSolve objects remain in ``remec.fem``."""
 
-    mesh: Any
-    field: Any
     polynomial_order: int
     free_dof_residual_norm: float
     free_dof_relative_residual_norm: float
-    energy_diagnostics: _EnergyDiagnostics
+    energy_diagnostics: EnergyDiagnostics
     diagnostics: dict[str, float]
-    operator: Any
-
-    def apply(self, x: Any) -> Any:
-        """Apply the assembled M4a operator to ``x`` for Newton/preconditioners."""
-        return self.operator * x
 
 
 class AnisotropicDiffusionSolver:
-    """``StandardCG`` strategy for the note equation (M4a).
+    """``StandardCG`` strategy for note equation (M4a).
 
-    ``solve`` selects the established constant-direction or smoothly floored
-    spatial-field M4a assembly behind the FEM boundary.  Both paths retain their
-    historical quadrature rules and formulas, so the Phase-1 regression tables
-    remain bit-for-bit stable while later strategies share this public API.
+    The public interface routes constant directions, smoothly floored frozen
+    fields, and the rank-one Sovinec diagnostic while retaining NGSolve handles
+    privately.  ``apply`` and ``build_preconditioner`` expose distinct operator
+    actions required by the §8.4 strategy protocol.
     """
 
     def __init__(
@@ -127,31 +126,26 @@ class AnisotropicDiffusionSolver:
         self.runtime = runtime
         self.pollution_safety_factor = pollution_safety_factor
         self.floor_sensitivity_tolerance = floor_sensitivity_tolerance
-        self._last_result: AnisotropicDiffusionResult | None = None
+        self._operator: Any = None
+        self._preconditioner: Any = None
+        self._last_diagnostics: dict[str, float] | None = None
 
     def solve(
         self,
-        field: Slab2D | tuple[Slab2D, Any],
+        field: Slab2D,
         coefficients: DirectionalConductivity | SpatialAnisotropicConductivity,
         source: Any,
         boundary: str = "bottom|right|top|left",
         initial: Any | None = None,
     ) -> AnisotropicDiffusionResult:
-        """Solve ``∫∇v·K∇χ=∫vS_ref`` with the M4a conductivity tensor.
-
-        ``field`` is a ``Slab2D`` for a constant unit direction, or
-        ``(Slab2D, raw_field)`` for ``SpatialAnisotropicConductivity``.  The
-        current verification mesh has homogeneous named Dirichlet boundaries;
-        ``initial`` is reserved for iterative future strategies.
-        """
+        """Solve M4a; direct StandardCG ignores an optional initial iterate."""
         if boundary != "bottom|right|top|left":
             raise ValueError("only the unit-square named Dirichlet boundary is supported")
-        if initial is not None:
-            raise ValueError("StandardCG does not accept an initial iterate")
+        if not isinstance(field, Slab2D):
+            raise TypeError("StandardCG requires a Slab2D mesh")
+        del initial
         internal: Any
         if isinstance(coefficients, DirectionalConductivity):
-            if not isinstance(field, Slab2D):
-                raise TypeError("constant conductivity requires a Slab2D")
             internal = solve_anisotropic_diffusion(
                 field,
                 polynomial_order=self.polynomial_order,
@@ -161,13 +155,13 @@ class AnisotropicDiffusionSolver:
             )
             floor_activity = 0.0
         elif isinstance(coefficients, SpatialAnisotropicConductivity):
-            if not isinstance(field, tuple) or len(field) != 2 or not isinstance(field[0], Slab2D):
-                raise TypeError("spatial conductivity requires (Slab2D, raw_field)")
+            if coefficients.perpendicular == 0.0:
+                raise ValueError("use measure_sovinec_pollution for rank-one diagnostics")
             internal = solve_frozen_field_anisotropic_diffusion(
-                field[0],
+                field,
                 polynomial_order=self.polynomial_order,
                 source=source,
-                raw_field=field[1],
+                raw_field=coefficients.raw_field,
                 parallel_conductivity=coefficients.parallel,
                 perpendicular_conductivity=coefficients.perpendicular,
                 field_floor=coefficients.field_floor,
@@ -176,43 +170,69 @@ class AnisotropicDiffusionSolver:
             floor_activity = internal.field_direction_diagnostics.floor_activity_l2_squared
         else:
             raise TypeError("unsupported anisotropic conductivity")
-        result = AnisotropicDiffusionResult(
-            mesh=internal._mesh,
-            field=internal._field,
-            polynomial_order=internal.polynomial_order,
-            free_dof_residual_norm=internal.free_dof_residual_norm,
-            free_dof_relative_residual_norm=internal.free_dof_relative_residual_norm,
-            energy_diagnostics=internal.energy_diagnostics,
-            operator=internal.operator,
-            diagnostics={
-                "free_dof_residual_norm": internal.free_dof_residual_norm,
-                "free_dof_relative_residual_norm": internal.free_dof_relative_residual_norm,
-                "parallel_energy": internal.energy_diagnostics.parallel,
-                "perpendicular_energy": internal.energy_diagnostics.perpendicular,
-                "total_energy": internal.energy_diagnostics.total,
-                "floor_activity_l2_squared": floor_activity,
-            },
+        energy = EnergyDiagnostics(
+            internal.energy_diagnostics.parallel,
+            internal.energy_diagnostics.perpendicular,
+            internal.energy_diagnostics.total,
         )
-        self._last_result = result
-        return result
+        diagnostics = {
+            "free_dof_residual_norm": internal.free_dof_residual_norm,
+            "free_dof_relative_residual_norm": internal.free_dof_relative_residual_norm,
+            "parallel_energy": energy.parallel,
+            "perpendicular_energy": energy.perpendicular,
+            "total_energy": energy.total,
+            "floor_activity_l2_squared": floor_activity,
+            "central_amplitude": float(internal._field(internal._mesh(0.5, 0.5))),
+            "preconditioner_identity_defect": internal.preconditioner_identity_defect,
+        }
+        self._operator = internal.operator
+        self._preconditioner = internal.preconditioner
+        self._last_diagnostics = diagnostics
+        return AnisotropicDiffusionResult(
+            self.polynomial_order,
+            internal.free_dof_residual_norm,
+            internal.free_dof_relative_residual_norm,
+            energy,
+            dict(diagnostics),
+        )
+
+    def measure_sovinec_pollution(
+        self, field: Slab2D, *, strict: bool = False
+    ) -> PollutionDiagnostic:
+        """Route the rank-one M4a Sovinec solve and apply its §8.3 gate."""
+        diagnostic = measure_sovinec_pollution(
+            field, polynomial_order=self.polynomial_order, runtime=self.runtime
+        )
+        self.assess_pollution_diagnostic(diagnostic, strict=strict)
+        return diagnostic
 
     def apply(self, x: Any) -> Any:
-        """Apply the last M4a operator, as required by the strategy interface."""
-        if self._last_result is None:
+        """Apply the most recently assembled M4a operator to ``x``."""
+        if self._operator is None:
             raise RuntimeError("solve must be called before apply")
-        return self._last_result.apply(x)
+        return self._operator * x
 
     def build_preconditioner(self) -> Any:
-        """Return the last assembled SPD operator as the StandardCG hook."""
-        if self._last_result is None:
+        """Return the reused sparse-Cholesky inverse action for StandardCG."""
+        if self._preconditioner is None:
             raise RuntimeError("solve must be called before build_preconditioner")
-        return self._last_result.operator
+        return self._preconditioner
 
     def diagnostics(self) -> dict[str, float]:
         """Return scalar diagnostics from the most recent M4a solve."""
-        if self._last_result is None:
+        if self._last_diagnostics is None:
             raise RuntimeError("solve must be called before diagnostics")
-        return dict(self._last_result.diagnostics)
+        return dict(self._last_diagnostics)
+
+    def assess_pollution_diagnostic(
+        self, diagnostic: PollutionDiagnostic, *, strict: bool = False
+    ) -> PollutionSafetyDiagnostic:
+        """Apply §8.3 directly to a measured frozen-field pollution diagnostic."""
+        return self.assess_pollution(
+            numerical_perpendicular_diffusivity=diagnostic.numerical_perpendicular_diffusivity,
+            physical_perpendicular_diffusivity=diagnostic.physical_perpendicular_conductivity,
+            strict=strict,
+        )
 
     def assess_pollution(
         self,
@@ -222,23 +242,29 @@ class AnisotropicDiffusionSolver:
         strict: bool = False,
     ) -> PollutionSafetyDiagnostic:
         """Apply §8.3 ``κ_perp,num < safety_factor κ_perp`` safety gate."""
-        if not all(
-            isfinite(value) and value > 0.0
-            for value in (
-                numerical_perpendicular_diffusivity,
-                physical_perpendicular_diffusivity,
-            )
+        if (
+            not isfinite(numerical_perpendicular_diffusivity)
+            or numerical_perpendicular_diffusivity < 0.0
         ):
-            raise ValueError("perpendicular diffusivities must be finite and positive")
-        ratio = numerical_perpendicular_diffusivity / physical_perpendicular_diffusivity
-        diagnostic = PollutionSafetyDiagnostic(
+            raise ValueError("numerical perpendicular diffusivity must be finite and non-negative")
+        if (
+            not isfinite(physical_perpendicular_diffusivity)
+            or physical_perpendicular_diffusivity < 0.0
+        ):
+            raise ValueError("physical perpendicular diffusivity must be finite and non-negative")
+        ratio = (
+            float("inf")
+            if physical_perpendicular_diffusivity == 0.0
+            else numerical_perpendicular_diffusivity / physical_perpendicular_diffusivity
+        )
+        result = PollutionSafetyDiagnostic(
             numerical_perpendicular_diffusivity,
             physical_perpendicular_diffusivity,
             self.pollution_safety_factor,
             ratio,
             ratio < self.pollution_safety_factor,
         )
-        if not diagnostic.is_safe:
+        if not result.is_safe:
             message = (
                 "numerical perpendicular diffusion is too large: "
                 f"κ_perp,num/κ_perp={ratio:.3e}, required below "
@@ -247,7 +273,7 @@ class AnisotropicDiffusionSolver:
             if strict:
                 raise AnisotropyPollutionError(message)
             warnings.warn(message, AnisotropyPollutionWarning, stacklevel=2)
-        return diagnostic
+        return result
 
     def assess_floor_sensitivity(
         self,
@@ -256,25 +282,24 @@ class AnisotropicDiffusionSolver:
         observable_with_smaller_floor: float,
         strict: bool = False,
     ) -> FloorSensitivityDiagnostic:
-        """Compare observables at two smooth floors as required by DESIGN §6."""
+        """Compare §6 observables at two smooth field floors on their own scale."""
         if not all(
             isfinite(value) for value in (observable_with_floor, observable_with_smaller_floor)
         ):
             raise ValueError("floor-sensitivity observables must be finite")
-        relative_change = abs(observable_with_floor - observable_with_smaller_floor) / max(
-            1.0, abs(observable_with_smaller_floor)
-        )
-        diagnostic = FloorSensitivityDiagnostic(
+        scale = max(abs(observable_with_floor), abs(observable_with_smaller_floor), 1.0e-300)
+        relative_change = abs(observable_with_floor - observable_with_smaller_floor) / scale
+        result = FloorSensitivityDiagnostic(
             relative_change,
             self.floor_sensitivity_tolerance,
             relative_change <= self.floor_sensitivity_tolerance,
         )
-        if not diagnostic.is_acceptable:
+        if not result.is_acceptable:
             message = (
                 "B floor materially affects the observable: relative change "
                 f"{relative_change:.3e} exceeds {self.floor_sensitivity_tolerance:.3e}"
             )
             if strict:
-                raise RuntimeError(message)
-            warnings.warn(message, RuntimeWarning, stacklevel=2)
-        return diagnostic
+                raise FloorSensitivityError(message)
+            warnings.warn(message, FloorSensitivityWarning, stacklevel=2)
+        return result
