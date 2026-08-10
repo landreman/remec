@@ -52,14 +52,30 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   and `docs/verification.md`.
   <br>Next: the verification kernel remains internal; 1.5 owns the public
   `AnisotropicDiffusionSolver` interface extraction.
-- [ ] **1.3** Pollution benchmark — `DESIGN.md` §8.3 · note: §4
+- [x] **1.3** Pollution benchmark — `DESIGN.md` §8.3 · note: §4
   <br>**Phase gate.** Acceptance: machine-readable table; measured pollution decreases systematically with order *and* refinement. No coupled work proceeds until this holds.
-  <br>Measured: —
+  <br>Measured: macOS / CPython 3.12.2 / NGSolve 6.2.2606 — with
+  κ∥ = 1 and κ⊥ = 0, κ⊥,num/κ∥ decreases on 32 → 128 → 512 elements from
+  7.351e-2 → 1.967e-2 → 5.002e-3 (p=1), 1.627e-3 → 1.101e-4 → 7.193e-6
+  (p=2), and 8.805e-6 → 1.622e-7 → 2.761e-9 (p=3). Finest-pair rates are
+  1.975, 3.936, and 5.877. See `tests/manufactured/sovinec_pollution.csv` and
+  `docs/verification.md`.
+  <br>Next: milestone 1.4 can reuse the translated Sovinec field
+  b = (∂yψ, −∂xψ)/|∇ψ| and should add an independent analytic-island field rather
+  than treating this pollution regression as the full closed-field/island suite.
 - [ ] **1.4** Closed-field and island frozen-field tests — `DESIGN.md` §8.3, §22 · note: §4, §7
   <br>Measured: —
+  <br>Next: extend the small κ⊥ = 0 PR regression with the finite-anisotropy axis
+  and independent island field, including explicit field-null handling for arbitrary
+  meshes; mark and move the eventual full order/resolution/anisotropy scan into
+  scheduled CI when a nightly workflow exists.
 - [ ] **1.5** Refactor to `AnisotropicDiffusionSolver` — `DESIGN.md` §8.4
   <br>Acceptance: interface extracted, results bit-for-bit unchanged.
   <br>Measured: —
+  <br>Next: unify the constant-tensor kernel and dedicated spatially varying Sovinec
+  assembly without changing either result, restore separate parallel/perpendicular
+  energy diagnostics on the unified path, and implement the configurable
+  `AnisotropyPollutionError` production safety gate from §8.3.
 
 ## Phase 2 — level-set volume and transplant
 

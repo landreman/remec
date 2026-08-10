@@ -33,6 +33,30 @@ class _EnergyDiagnostics:
 
 
 @dataclass(frozen=True, slots=True)
+class PollutionDiagnostic:
+    """Measured effective perpendicular diffusion in the Sovinec M4a test.
+
+    The name refers to the anisotropic-conduction verification in Carl R.
+    Sovinec et al., "Nonlinear magnetohydrodynamics simulation using high-order
+    finite elements," J. Comput. Phys. 195 (2004) 355–386,
+    https://doi.org/10.1016/j.jcp.2003.10.004.
+    """
+
+    polynomial_order: int
+    maxh: float
+    elements: int
+    parallel_conductivity: float
+    physical_perpendicular_conductivity: float
+    central_amplitude: float
+    numerical_perpendicular_diffusivity: float
+    numerical_to_parallel_ratio: float
+    free_dof_relative_residual_norm: float
+    unit_direction_defect_l2_squared: float
+    source_tangency_l2_squared: float
+    source_laplacian_eigenvalue: float
+
+
+@dataclass(frozen=True, slots=True)
 class DirectionalConductivity:
     """Constant positive-definite 2D tensor K for the M4a verification kernel.
 
@@ -178,4 +202,130 @@ def solve_anisotropic_diffusion(
         free_dof_residual_norm=free_dof_residual_norm,
         free_dof_relative_residual_norm=free_dof_relative_residual_norm,
         energy_diagnostics=energy_diagnostics,
+    )
+
+
+def measure_sovinec_pollution(
+    slab: Slab2D,
+    *,
+    polynomial_order: int,
+    parallel_conductivity: float = 1.0,
+    source_amplitude: float = 1.0,
+    runtime: RuntimeOptions | None = None,
+) -> PollutionDiagnostic:
+    """Measure numerical perpendicular diffusion for note equation (M4a).
+
+    "Sovinec" refers to the anisotropic-conduction test in Carl R. Sovinec
+    et al., "Nonlinear magnetohydrodynamics simulation using high-order finite
+    elements," J. Comput. Phys. 195 (2004) 355–386,
+    https://doi.org/10.1016/j.jcp.2003.10.004. The test exposes artificial
+    cross-field transport from a non-field-aligned discretization: ``b`` is
+    tangent to the closed contours of ``psi = sin(pi*x) sin(pi*y)``, so
+    ``b·grad(psi) = 0``. With physical ``kappa_perp = 0``, any finite effective
+    perpendicular diffusivity is therefore numerical pollution. For source
+    ``Q = Q0*psi``, the discrete central response defines
+    ``kappa_perp,num = Q0 / (2*pi**2*chi(1/2, 1/2))``.
+
+    This benchmark currently has a dedicated spatially varying, rank-one M4a
+    assembly because ``DirectionalConductivity`` and
+    ``solve_anisotropic_diffusion`` support only constant directions and
+    strictly positive ``kappa_perp``. The perpendicular form is identically
+    zero here, so this path reports pollution, residual, unit-direction, and
+    source-tangency diagnostics rather than the two energy contributions.
+    Milestone 1.5 must unify both assemblies without changing their results.
+    """
+    if polynomial_order < 1:
+        raise ValueError("polynomial_order must be at least one")
+    if not isfinite(parallel_conductivity) or parallel_conductivity <= 0.0:
+        raise ValueError("parallel_conductivity must be finite and positive")
+    if not isfinite(source_amplitude) or source_amplitude <= 0.0:
+        raise ValueError("source_amplitude must be finite and positive")
+    if slab.lower != (0.0, 0.0) or slab.upper != (1.0, 1.0):
+        raise ValueError("the Sovinec benchmark currently supports the unit square only")
+
+    resolved_runtime = RuntimeOptions() if runtime is None else runtime
+
+    import ngsolve as ng
+
+    mesh = slab.build_mesh()._mesh
+    space = ng.H1(mesh, order=polynomial_order, dirichlet="bottom|right|top|left")
+    trial, test = space.TnT()
+    quadrature = ng.dx(bonus_intorder=6)
+
+    psi = ng.sin(ng.pi * ng.x) * ng.sin(ng.pi * ng.y)
+    # Differentiate the same coefficient function used in the linear form, so
+    # the tangency diagnostic cannot agree with an independently mistyped source.
+    dpsi_dx = psi.Diff(ng.x)
+    dpsi_dy = psi.Diff(ng.y)
+    source_laplacian = dpsi_dx.Diff(ng.x) + dpsi_dy.Diff(ng.y)
+    tangent_norm = ng.sqrt(dpsi_dx**2 + dpsi_dy**2)
+    # Rotate and normalize grad(psi): the resulting field follows the closed
+    # source contours, so the exact parallel operator cannot transport psi
+    # across them. The measured cross-contour response is discretization error.
+    tangent = ng.CoefficientFunction((dpsi_dy / tangent_norm, -dpsi_dx / tangent_norm))
+    source_gradient = ng.CoefficientFunction((psi.Diff(ng.x), psi.Diff(ng.y)))
+
+    parallel_trial = ng.InnerProduct(tangent, ng.grad(trial))
+    parallel_test = ng.InnerProduct(tangent, ng.grad(test))
+    bilinear_form = ng.BilinearForm(space)
+    bilinear_form += parallel_conductivity * parallel_trial * parallel_test * quadrature
+    linear_form = ng.LinearForm(space)
+    linear_form += source_amplitude * psi * test * quadrature
+    free_dofs = space.FreeDofs()
+
+    configure_threads(resolved_runtime.threads)
+    with ng.TaskManager():
+        bilinear_form.Assemble()
+        linear_form.Assemble()
+        field = ng.GridFunction(space)
+        field.vec.data = (
+            bilinear_form.mat.Inverse(free_dofs, inverse="sparsecholesky") * linear_form.vec
+        )
+        residual = linear_form.vec.CreateVector()
+        residual.data = bilinear_form.mat * field.vec - linear_form.vec
+        free_residual = ng.Projector(free_dofs, True) * residual
+        source_on_free_dofs = ng.Projector(free_dofs, True) * linear_form.vec
+        relative_residual = float(ng.Norm(free_residual)) / max(
+            1.0, float(ng.Norm(source_on_free_dofs))
+        )
+        central_amplitude = float(field(mesh(0.5, 0.5)))
+        unit_direction_defect_l2_squared = float(
+            ng.Integrate((ng.InnerProduct(tangent, tangent) - 1.0) ** 2, mesh, order=8)
+        )
+        source_tangency_l2_squared = float(
+            ng.Integrate(ng.InnerProduct(tangent, source_gradient) ** 2, mesh, order=8)
+        )
+        source_l2_squared = float(ng.Integrate(psi**2, mesh, order=8))
+        source_laplacian_eigenvalue = (
+            -float(ng.Integrate(source_laplacian * psi, mesh, order=8)) / source_l2_squared
+        )
+
+    if not isfinite(relative_residual):
+        raise RuntimeError("Sovinec pollution solve produced a non-finite algebraic residual")
+    if not isfinite(central_amplitude) or central_amplitude <= 0.0:
+        raise RuntimeError(
+            "Sovinec pollution solve produced a non-positive or non-finite central amplitude"
+        )
+    if not isfinite(source_laplacian_eigenvalue) or source_laplacian_eigenvalue <= 0.0:
+        raise RuntimeError("Sovinec source has no finite positive Laplacian eigenvalue")
+
+    # Match the center response to an isotropic perpendicular operator. Deriving
+    # the Laplacian eigenvalue from psi keeps the Sovinec 2*k**2 factor tied to
+    # the actual source rather than to a second hard-coded wavenumber.
+    numerical_perpendicular_diffusivity = source_amplitude / (
+        source_laplacian_eigenvalue * central_amplitude
+    )
+    return PollutionDiagnostic(
+        polynomial_order=polynomial_order,
+        maxh=slab.maxh,
+        elements=int(mesh.ne),
+        parallel_conductivity=parallel_conductivity,
+        physical_perpendicular_conductivity=0.0,
+        central_amplitude=central_amplitude,
+        numerical_perpendicular_diffusivity=numerical_perpendicular_diffusivity,
+        numerical_to_parallel_ratio=(numerical_perpendicular_diffusivity / parallel_conductivity),
+        free_dof_relative_residual_norm=relative_residual,
+        unit_direction_defect_l2_squared=unit_direction_defect_l2_squared,
+        source_tangency_l2_squared=source_tangency_l2_squared,
+        source_laplacian_eigenvalue=source_laplacian_eigenvalue,
     )

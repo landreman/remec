@@ -1,5 +1,76 @@
 # Verification records
 
+## Milestone 1.3 — Sovinec numerical-pollution regression
+
+"Sovinec" refers to C. R. Sovinec, A. H. Glasser, T. A. Gianakon, et al.,
+"Nonlinear magnetohydrodynamics simulation using high-order finite elements,"
+*Journal of Computational Physics* **195** (2004) 355–386,
+https://doi.org/10.1016/j.jcp.2003.10.004. Its anisotropic-conduction test
+measures spurious cross-field transport introduced by a discretization whose mesh
+is not aligned with the field. The physical perpendicular diffusivity is set to
+zero, so the measured effective perpendicular diffusivity is numerical pollution.
+
+The benchmark is the translated unit-square form of the `DESIGN.md` §8.3 test:
+\(\psi=\sin(\pi x)\sin(\pi y)
+=\cos(\pi(x-1/2))\cos(\pi(y-1/2))\),
+\(\mathbf b=(\partial_y\psi,-\partial_x\psi)/|\nabla\psi|\),
+\(Q=Q_0\psi\), \(\kappa_\parallel=1\), and \(\kappa_\perp=0\).
+Thus the field is tangent to closed contours of the source. With homogeneous
+Dirichlet data, the discrete central amplitude defines
+\(\kappa_{\perp,\mathrm{num}}=Q_0/(2\pi^2\chi_h(1/2,1/2))\).
+
+`test_sovinec_pollution_decreases_with_order_and_refinement` reads all nine rows
+of `tests/manufactured/sovinec_pollution.csv`, recomputes them within relative
+tolerance \(10^{-5}\), and
+requires strict decreases at each adjacent order and refinement. The finest-pair
+rates use \(\log_2(\kappa_{\perp,\mathrm{num}}(h)/
+\kappa_{\perp,\mathrm{num}}(h/2))\). The algebraic diagnostic is the free-DOF
+Euclidean residual divided by the larger of one and the free-DOF source norm; all
+runs in the acceptance table must remain at or below \(10^{-6}\). Extended scans
+return any finite residual so degradation can be recorded instead of aborting;
+NaN or infinity still fails loudly. This residual criterion only validates the
+direct solve and is not used as evidence of low pollution. Independent structural
+diagnostics also require \(\int_\Omega(|\mathbf b|^2-1)^2\,dV<10^{-12}\) and
+\(\int_\Omega(\mathbf b\cdot\nabla\psi)^2\,dV<10^{-12}\), so unit normalization
+and the 90-degree rotation of \(\mathbf b\) relative to the actual source gradient
+are checked structurally rather than only through the recorded CSV. A scaling case
+with \(\kappa_\parallel=10\) and \(Q_0=3\) checks the expected amplitude,
+effective-diffusivity, and dimensionless-ratio scalings. The implementation
+derives \(\nabla\psi\) and the \(2k^2\) Laplacian eigenvalue from the same
+coefficient function used as the source, and the test independently checks the
+eigenvalue \(2\pi^2\). CSV comparisons use relative tolerance \(10^{-5}\), about
+100 times the largest Linux/macOS variation measured in review. Every acceptance
+row also requires \(\kappa_{\perp,\mathrm{num}}/\kappa_\parallel<0.2\), which
+rejects an isotropic substitution independently of the recorded values.
+
+The regression table is recorded with `ngsolve.dx(bonus_intorder=6)`. Because
+\(1/|\nabla\psi|\) is non-polynomial near the isolated field nulls, changing the
+quadrature rule changes the pinned amplitudes and requires regenerating the CSV.
+Reviewing with `bonus_intorder=14` shifted amplitudes by at most 0.573% while
+leaving the finest-pair rates essentially unchanged (1.977, 3.936, and 5.877),
+confirming quadrature is not the source of the observed convergence trend.
+
+| Degree \(p\) | Elements | \(h=1/4\) | \(h=1/8\) | \(h=1/16\) | Finest-pair rate |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 1 | 32 → 128 → 512 | 7.351e-2 | 1.967e-2 | 5.002e-3 | 1.975 |
+| 2 | 32 → 128 → 512 | 1.627e-3 | 1.101e-4 | 7.193e-6 | 3.936 |
+| 3 | 32 → 128 → 512 | 8.805e-6 | 1.622e-7 | 2.761e-9 | 5.877 |
+
+At fixed mesh, raising \(p\) from 1→2 reduces pollution by factors 45.2,
+178.7, and 695.4 from coarse to fine; raising \(p\) from 2→3 gives factors
+184.8, 678.5, and 2605.2. Mutation checks confirmed that rotating the field
+from tangent to normal and omitting normalization of \(\mathbf b\) both make
+the regression fail.
+
+The current benchmark deliberately uses a dedicated spatially varying, rank-one
+M4a assembly because the milestone 1.1/1.2 verification helper accepts only a
+constant direction and strictly positive \(\kappa_\perp\). Milestone 1.5 owns
+unifying those paths bit-for-bit and restoring the §8.1 per-piece energy diagnostics.
+Milestone 1.4 owns the finite-anisotropy axis and the full scheduled scan; this PR
+keeps the fast, hardest-case \(\kappa_\perp=0\) table in PR CI. Extended scans
+return finite residuals for diagnosis, but still fail loudly when the central
+amplitude is non-finite or non-positive because the pollution metric is then invalid.
+
 ## Milestone 1.2 — oblique anisotropic K
 
 The manufactured solution is χ=sin(πx)sin(πy) with homogeneous Dirichlet
