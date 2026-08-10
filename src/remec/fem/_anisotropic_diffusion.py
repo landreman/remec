@@ -243,9 +243,11 @@ def solve_frozen_field_anisotropic_diffusion(
     ``integral kappa_perp grad(chi).grad(v) + (kappa_parallel-kappa_perp)
     (b_safe.grad(chi))(b_safe.grad(v)) = integral v S_ref``, where
     ``b_safe = B / sqrt(B.B + B_floor**2)``.  The smooth floor makes the
-    tensor finite at analytic island O- and X-point nulls.  Milestone 1.4
-    implements this verification-only path; milestone 1.5 owns the public
-    solver interface and unification with the earlier constant-field kernel.
+    tensor finite at analytic island O- and X-point nulls. This tensor form is
+    algebraically identical to the separate M4a parallel/perpendicular pieces,
+    including when the safe direction has norm below one. Milestone 1.4 implements
+    this verification-only path; milestone 1.5 owns the public solver interface
+    and unification with the earlier constant-field kernel.
     """
     if polynomial_order < 1:
         raise ValueError("polynomial_order must be at least one")
@@ -268,7 +270,7 @@ def solve_frozen_field_anisotropic_diffusion(
     mesh = slab.build_mesh()._mesh
     space = ng.H1(mesh, order=polynomial_order, dirichlet="bottom|right|top|left")
     trial, test = space.TnT()
-    quadrature = ng.dx(bonus_intorder=8)
+    quadrature = ng.dx(bonus_intorder=14)
     safe_norm = ng.sqrt(ng.InnerProduct(raw_field, raw_field) + field_floor**2)
     direction = raw_field / safe_norm
     parallel_trial = ng.InnerProduct(direction, ng.grad(trial))
@@ -305,13 +307,13 @@ def solve_frozen_field_anisotropic_diffusion(
         parallel_gradient = ng.InnerProduct(direction, gradient)
         gradient_norm_squared = ng.InnerProduct(gradient, gradient)
         parallel_energy = float(
-            ng.Integrate(parallel_conductivity * parallel_gradient**2, mesh, order=10)
+            ng.Integrate(parallel_conductivity * parallel_gradient**2, mesh, order=20)
         )
         perpendicular_energy = float(
             ng.Integrate(
                 perpendicular_conductivity * (gradient_norm_squared - parallel_gradient**2),
                 mesh,
-                order=10,
+                order=20,
             )
         )
         energy_diagnostics = _EnergyDiagnostics(
@@ -320,14 +322,14 @@ def solve_frozen_field_anisotropic_diffusion(
             total=parallel_energy + perpendicular_energy,
         )
         direction_norm_defect = 1.0 - ng.InnerProduct(direction, direction)
-        floor_activity_l2_squared = float(ng.Integrate(direction_norm_defect**2, mesh, order=10))
+        floor_activity_l2_squared = float(ng.Integrate(direction_norm_defect**2, mesh, order=40))
 
     if not isfinite(free_dof_relative_residual_norm):
         raise RuntimeError("frozen-field solve produced a non-finite algebraic residual")
-    if free_dof_relative_residual_norm > 1.0e-10:
+    if free_dof_relative_residual_norm > 1.0e-11:
         raise RuntimeError(
             "frozen-field direct solve failed: free-DOF relative residual "
-            f"{free_dof_relative_residual_norm:.3e} exceeds 1e-10"
+            f"{free_dof_relative_residual_norm:.3e} exceeds 1e-11"
         )
     if not all(
         isfinite(value) and value >= 0.0

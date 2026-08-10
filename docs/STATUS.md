@@ -67,9 +67,9 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   <br>Acceptance: finite-anisotropy closed-field response; independent analytic-island
   manufactured convergence in L² and K-energy norms; smooth field-null handling.
   <br>Measured: macOS / CPython 3.12.2 / NGSolve 6.2.2606 — island finest-pair degree 1:
-  L² 1.810, K-energy 0.964; degree 2: L² 3.131, K-energy 1.983; degree 3: L² 4.053,
+  L² 1.810, K-energy 0.964; degree 2: L² 3.132, K-energy 1.983; degree 3: L² 4.053,
   K-energy 2.996 (200 → 800 elements). In the degree-3, 512-element closed-field scan,
-  κ⊥,num/κ⊥ is 5.10e-6, 1.22e-5, and 6.45e-5 for κ⊥/κ∥ = 1e-1, 1e-2, and 1e-3.
+  κ⊥,num/κ⊥ is 4.86e-6, 1.18e-5, and 6.42e-5 for κ⊥/κ∥ = 1e-1, 1e-2, and 1e-3.
   See `tests/manufactured/analytic_island_rates.csv`,
   `tests/manufactured/closed_field_anisotropy_scan.csv`, and `docs/verification.md`.
   <br>Next: milestone 1.5 should route the constant, rank-one Sovinec, and new smoothly
