@@ -108,7 +108,8 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   `tests/manufactured/mollified_sphere_volume_rates.csv` and `docs/verification.md`.
   <br>Next: 2.2 should add the FEM quadrature-extraction pass and consume
   `MollifiedVolumeMap` through a monotone `VolumeProfile` transplant; 2.3 owns the
-  nonlocal JVP.
+  nonlocal JVP and must calibrate the `minimum_gradient_fraction=1e-3` critical-level
+  safeguard against tabulation spacing before using its mollified derivatives in Newton.
 - [ ] **2.2** Profiles + transplant — `DESIGN.md` §12.5 · note: §6
   <br>Acceptance: exact enclosed-volume and layer-cake tests.
   <br>Measured: —

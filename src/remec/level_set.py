@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 from math import isfinite
 
 import numpy as np
 from numpy.typing import NDArray
+
+
+class VolumeMapConsistencyWarning(RuntimeWarning):
+    """A mandatory §12.3 volume-map diagnostic exceeded its configured tolerance."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -129,6 +134,7 @@ class MollifiedVolumeMap:
         raw_endpoint_volume_error: float,
         raw_endpoint_zero_error: float,
         minimum_gradient_fraction: float,
+        floored_sample_count: int,
     ) -> None:
         self._values = values
         self._widths = widths
@@ -140,6 +146,7 @@ class MollifiedVolumeMap:
         self._raw_endpoint_volume_error = raw_endpoint_volume_error
         self._raw_endpoint_zero_error = raw_endpoint_zero_error
         self.minimum_gradient_fraction = minimum_gradient_fraction
+        self._floored_sample_count = floored_sample_count
         self._volume_interpolant = _MonotonePchip.build(levels, volumes)
         self._inverse_interpolant = _MonotonePchip.build(volumes[::-1], levels[::-1])
 
@@ -151,6 +158,7 @@ class MollifiedVolumeMap:
         spatial_width_cells: float = 1.5,
         levels: int = 129,
         minimum_gradient_fraction: float = 1.0e-3,
+        coarea_consistency_tolerance: float = 0.1,
     ) -> MollifiedVolumeMap:
         """Build a volume-uniform monotone tabulation from quadrature samples.
 
@@ -163,9 +171,12 @@ class MollifiedVolumeMap:
             raise ValueError("spatial_width_cells must be finite and positive")
         if not isfinite(minimum_gradient_fraction) or not 0.0 < minimum_gradient_fraction <= 1.0:
             raise ValueError("minimum_gradient_fraction must be finite and in (0, 1]")
+        if not isfinite(coarea_consistency_tolerance) or coarea_consistency_tolerance <= 0.0:
+            raise ValueError("coarea_consistency_tolerance must be finite and positive")
         values, gradients, weights, sizes = cls._validated_arrays(data)
         maximum_gradient = float(np.max(gradients))
         gradient_floor = max(np.finfo(float).tiny, maximum_gradient * minimum_gradient_fraction)
+        floored_sample_count = int(np.count_nonzero(gradients < gradient_floor))
         widths = spatial_width_cells * sizes * np.maximum(gradients, gradient_floor)
         minimum_level, maximum_level = float(np.min(values)), float(np.max(values))
         raw_levels = np.linspace(minimum_level, maximum_level, levels, dtype=np.float64)
@@ -177,7 +188,7 @@ class MollifiedVolumeMap:
         target_volumes = np.linspace(total_volume, 0.0, levels, dtype=np.float64)
         volume_uniform_levels = np.interp(target_volumes, raw_volumes[::-1], raw_levels[::-1])
         volume_uniform_levels[0], volume_uniform_levels[-1] = minimum_level, maximum_level
-        return cls(
+        volume_map = cls(
             values=values,
             widths=widths,
             weights=weights,
@@ -186,7 +197,18 @@ class MollifiedVolumeMap:
             raw_endpoint_volume_error=raw_endpoint_volume_error,
             raw_endpoint_zero_error=raw_endpoint_zero_error,
             minimum_gradient_fraction=minimum_gradient_fraction,
+            floored_sample_count=floored_sample_count,
         )
+        coarea_error = volume_map.diagnostics()["coarea_spot_relative_error"]
+        if coarea_error > coarea_consistency_tolerance:
+            warnings.warn(
+                "tabulated volume derivative disagrees with the mollified co-area density: "
+                f"relative error {coarea_error:.3g} exceeds "
+                f"{coarea_consistency_tolerance:.3g}",
+                VolumeMapConsistencyWarning,
+                stacklevel=2,
+            )
+        return volume_map
 
     @staticmethod
     def _validated_arrays(
@@ -280,6 +302,7 @@ class MollifiedVolumeMap:
             "spline_monotonicity_margin": float(np.min(-np.diff(self.volumes))),
             "coarea_spot_level": spot_level,
             "coarea_spot_relative_error": coarea_relative_error,
+            "floored_sample_count": float(self._floored_sample_count),
             "minimum_mollifier_width": float(np.min(self._widths)),
             "maximum_mollifier_width": float(np.max(self._widths)),
         }

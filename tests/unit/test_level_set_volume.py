@@ -9,7 +9,11 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from remec.level_set import MollifiedVolumeMap, QuadratureLevelSetData
+from remec.level_set import (
+    MollifiedVolumeMap,
+    QuadratureLevelSetData,
+    VolumeMapConsistencyWarning,
+)
 
 _MANUFACTURED_DIRECTORY = Path(__file__).parents[1] / "manufactured"
 
@@ -68,6 +72,10 @@ def test_mollified_volume_matches_analytic_circle_and_sphere(
     assert diagnostics["raw_endpoint_zero_error"] / data.total_volume < 1.0e-3
     assert diagnostics["spline_monotonicity_margin"] > 0.0
     assert diagnostics["coarea_spot_relative_error"] < 3.0e-2
+    inverse_probe_levels = np.linspace(0.02, radius**2 - 0.02, 7)
+    assert volume_map.inverse_level(volume_map.volume(inverse_probe_levels)) == pytest.approx(
+        inverse_probe_levels, abs=4.0e-2
+    )
 
 
 def test_tabulation_is_strictly_monotone_and_uniform_in_volume() -> None:
@@ -130,18 +138,39 @@ def test_mollified_sphere_volume_has_second_order_resolution_trend() -> None:
 
 def test_critical_point_gradient_floor_prevents_a_delta_spike() -> None:
     """(mollified_V) applies its named critical-point width safeguard."""
-    volume_map = MollifiedVolumeMap.build(
-        QuadratureLevelSetData(
-            values=np.concatenate((np.zeros(29), np.ones(71))),
-            gradient_magnitudes=np.concatenate((np.zeros(29), np.ones(71))),
-            weights=np.full(100, 0.01),
-            element_sizes=np.full(100, 0.1),
-        ),
-        spatial_width_cells=1.0,
-        levels=33,
-        minimum_gradient_fraction=1.0e-3,
-    )
+    with pytest.warns(VolumeMapConsistencyWarning, match="co-area density"):
+        volume_map = MollifiedVolumeMap.build(
+            QuadratureLevelSetData(
+                values=np.concatenate((np.zeros(29), np.ones(71))),
+                gradient_magnitudes=np.concatenate((np.zeros(29), np.ones(71))),
+                weights=np.full(100, 0.01),
+                element_sizes=np.full(100, 0.1),
+            ),
+            spatial_width_cells=1.0,
+            levels=33,
+            minimum_gradient_fraction=1.0e-3,
+        )
 
     assert volume_map.diagnostics()["minimum_mollifier_width"] == pytest.approx(1.0e-4)
+    assert volume_map.diagnostics()["floored_sample_count"] == 29.0
     assert np.isfinite(volume_map.coarea_density(0.0))
     assert volume_map.coarea_density(0.0) < 3.0e3
+
+
+def test_build_warns_when_the_mandatory_coarea_check_fails() -> None:
+    """§12.3 does not silently accept an inconsistent tabulated derivative."""
+    data, coordinates = _tensor_product_data(2)
+    radial_squared = np.sum(coordinates**2, axis=0)
+
+    with pytest.warns(VolumeMapConsistencyWarning, match="relative error"):
+        MollifiedVolumeMap.build(
+            QuadratureLevelSetData(
+                values=0.6**2 - radial_squared,
+                gradient_magnitudes=2.0 * np.sqrt(radial_squared),
+                weights=data.weights,
+                element_sizes=data.element_sizes,
+            ),
+            spatial_width_cells=0.05,
+            levels=129,
+            coarea_consistency_tolerance=0.1,
+        )

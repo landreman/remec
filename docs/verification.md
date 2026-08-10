@@ -14,7 +14,9 @@ using the compact, moment-matched smooth Heaviside
 \(H_\varepsilon\). The gradient-scaled width is deliberately local, so the
 regularization has a fixed spatial width rather than an inconsistent fixed width in
 level-set-value space. A named `minimum_gradient_fraction` applies a robust fraction
-of the sampled maximum gradient at critical points, avoiding a zero-width mollifier.
+of the sampled maximum gradient at critical points, avoiding a zero-width mollifier;
+the number of floored samples is reported. A mandatory co-area consistency diagnostic
+warns when the tabulated derivative exceeds its configurable relative-error tolerance.
 `coarea_density` implements `(V_derivatives)`,
 \(-dV_\chi^\varepsilon/d\hat\chi=\sum_i w_iH'_{\varepsilon_i}\), and a monotone
 PCHIP table exposes both `V_χ(χ̂)` and its stable inverse `χ̂(V)`. The map returns the
@@ -27,7 +29,9 @@ relative errors are 5.18e-4 and 7.76e-4; the independent analytic co-area densit
 \(\pi\) and \(2\pi(0.6)\) agree within 1.70e-2 and 2.56e-3. The test also verifies
 the endpoint identities, strict monotonicity, a tabulation uniformly spaced in
 enclosed volume, unnormalized endpoint residuals, and agreement between the tabulated
-derivative and independently assembled mollified co-area density.
+derivative and independently assembled mollified co-area density. It additionally
+checks the inverse round-trip `inverse_level(volume(level))` within 0.04 over the
+analytic circle branch.
 
 The manufactured sphere resolution table is checked in at
 `tests/manufactured/mollified_sphere_volume_rates.csv`:
@@ -58,7 +62,10 @@ target: NumPy 2.5's stubs use Python-3.12-only syntax even when checked by a lat
 interpreter. The bound can be lifted when those stubs support remec's stated target.
 Milestone 2.2 owns the NGSolve quadrature-extraction pass and will adapt this
 array-backed map to the complete §12.1 solver-facing interface; the nonlocal JVP remains
-Milestone 2.3.
+Milestone 2.3. That milestone must also calibrate the present `1e-3` critical-gradient
+fraction against tabulation spacing before reusing the mollified surface weights in a
+Newton derivative; the current map reports its floored-sample count and warns whenever
+its mandatory tabulation/co-area check exceeds the configured tolerance.
 
 ## Milestone 1.5 — `AnisotropicDiffusionSolver` strategy interface
 
