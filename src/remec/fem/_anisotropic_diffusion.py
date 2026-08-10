@@ -36,8 +36,8 @@ class _EnergyDiagnostics:
 class PollutionDiagnostic:
     """Measured effective perpendicular diffusion in the Sovinec M4a test.
 
-    The name refers to the anisotropic-conduction verification in Carl R.
-    Sovinec et al., "Nonlinear magnetohydrodynamics simulation using high-order
+    The name refers to the anisotropic-conduction verification in section 4.2 of
+    Carl R. Sovinec et al., "Nonlinear magnetohydrodynamics simulation using high-order
     finite elements," J. Comput. Phys. 195 (2004) 355–386,
     https://doi.org/10.1016/j.jcp.2003.10.004.
     """
@@ -215,7 +215,7 @@ def measure_sovinec_pollution(
 ) -> PollutionDiagnostic:
     """Measure numerical perpendicular diffusion for note equation (M4a).
 
-    "Sovinec" refers to the anisotropic-conduction test in Carl R. Sovinec
+    "Sovinec" refers to the anisotropic-conduction test in section 4.2 of Carl R. Sovinec
     et al., "Nonlinear magnetohydrodynamics simulation using high-order finite
     elements," J. Comput. Phys. 195 (2004) 355–386,
     https://doi.org/10.1016/j.jcp.2003.10.004. The test exposes artificial

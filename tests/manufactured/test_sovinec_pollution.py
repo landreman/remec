@@ -1,6 +1,6 @@
 """Sovinec numerical-pollution regression for note equation (M4a).
 
-"Sovinec" refers to the anisotropic-conduction verification in C. R. Sovinec
+"Sovinec" refers to the anisotropic-conduction verification in section 4.2 of C. R. Sovinec
 et al., *Journal of Computational Physics* 195 (2004) 355–386,
 https://doi.org/10.1016/j.jcp.2003.10.004.
 """
