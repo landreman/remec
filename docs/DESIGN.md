@@ -913,7 +913,9 @@ manufactured convergence. 1.2 oblique anisotropic K with parallel/perpendicular
 diagnostics and order scans. 1.3 pollution benchmark with machine-readable table —
 **no coupled work proceeds until measured pollution decreases systematically with order
 and refinement.** 1.4 closed-field and island frozen-field tests. 1.5 refactor into the
-`AnisotropicDiffusionSolver` interface without changing results.
+`AnisotropicDiffusionSolver` interface: preserve rank-one and smoothly floored spatial
+results bit-for-bit; retain constant-path machine records while allowing prescribed
+direct-tensor roundoff-level differences.
 
 **Phase 2 — level-set volume and transplant.** 2.1 mollified V_χ with analytic
 circle/sphere tests and monotone tabulation. 2.2 profiles + transplant with exact

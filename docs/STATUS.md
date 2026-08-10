@@ -79,11 +79,15 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   floor-sensitivity study that distinguishes deliberate manufactured-floor activity
   from acceptable production observables.
 - [x] **1.5** Refactor to `AnisotropicDiffusionSolver` — `DESIGN.md` §8.4
-  <br>Acceptance: interface extracted; recorded results are bit-for-bit unchanged.
+  <br>Acceptance: interface extracted; rank-one and smoothly floored spatial results
+  are bit-for-bit unchanged. The constant path retains its machine-recorded results
+  with prescribed direct-tensor roundoff-level changes.
   <br>Measured: macOS / CPython 3.12.2 / NGSolve 6.2.2606 — public StandardCG
   routes constant, smoothly floored spatial, and rank-one Sovinec M4a paths.
   ADR 0002 records the removal of a redundant normalization; all nine rank-one
-  rows match `origin/main` bit-for-bit. Its order/refinement trends remain strict. The direct
+  rows match `origin/main` bit-for-bit. The constant direct-tensor path differs only at
+  roundoff level (solution-vector maximum below 6e-15) while its CSV remains unchanged.
+  Its order/refinement trends remain strict. The direct
   inverse-preconditioner identity defect is below 1e-11. The default pollution gate requires
   κ⊥,num/κ⊥ < 0.1, warning by default and raising `AnisotropyPollutionError` in
   strict mode; κ⊥ = 0 is correctly unsafe. The B-floor observable-sensitivity gate

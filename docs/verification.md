@@ -118,7 +118,7 @@ with boundary-terminating exterior field lines, not a closed fixed-boundary magn
 configuration. Because the manufactured source is derived from the floored operator,
 the floor is intentionally part of the exact verification problem; this test does not
 claim that its visibly active floor is negligible in the §6 production-observable
-sense. STATUS assigns that separate sensitivity study to milestone 1.5. The island
+sense. The milestone 1.5 `Next:` follow-up records that separate sensitivity study. The island
 manufactured source is also sign-changing (a 201×201 point scan gives approximately
 \([-269.7,177.2]\)); like the milestone 1.2 direction-sensitive source, it is a linear
 verification device rather than an admissible positive reference source. The rate

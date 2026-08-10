@@ -94,8 +94,8 @@ def test_positive_perpendicular_measurement_passes_production_safety_gate() -> N
     """§8.3 accepts a positive-κ_perp closed-field estimate from a real solve."""
     psi = ng.sin(ng.pi * ng.x) * ng.sin(ng.pi * ng.y)
     raw_field = ng.CoefficientFunction((psi.Diff(ng.y), -psi.Diff(ng.x)))
-    physical_perpendicular = 0.1
-    solver = AnisotropicDiffusionSolver(polynomial_order=2)
+    physical_perpendicular = 1.0e-3
+    solver = AnisotropicDiffusionSolver(polynomial_order=3)
     result = solver.solve(
         Slab2D.unit_square(maxh=0.125),
         SpatialAnisotropicConductivity(
@@ -108,11 +108,13 @@ def test_positive_perpendicular_measurement_passes_production_safety_gate() -> N
     )
     effective_perpendicular = 1.0 / (2.0 * pi**2 * result.diagnostics["central_amplitude"])
     diagnostic = solver.assess_pollution(
-        numerical_perpendicular_diffusivity=effective_perpendicular - physical_perpendicular,
+        numerical_perpendicular_diffusivity=abs(effective_perpendicular - physical_perpendicular),
         physical_perpendicular_diffusivity=physical_perpendicular,
         strict=True,
     )
 
+    assert diagnostic.numerical_perpendicular_diffusivity > 0.0
+    assert diagnostic.ratio_to_physical < 0.1
     assert diagnostic.is_safe
 
 

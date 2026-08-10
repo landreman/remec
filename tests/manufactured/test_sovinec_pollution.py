@@ -12,9 +12,13 @@ from itertools import pairwise
 from math import isfinite, pi
 from pathlib import Path
 
+import ngsolve as ng
 import pytest
 
-from remec.fem._anisotropic_diffusion import measure_sovinec_pollution
+from remec.fem._anisotropic_diffusion import (
+    measure_sovinec_pollution,
+    solve_frozen_field_anisotropic_diffusion,
+)
 from remec.geometry.slab import Slab2D
 
 _MESH_SIZES = (0.25, 0.125, 0.0625)
@@ -95,3 +99,30 @@ def test_sovinec_extended_scan_reports_finite_residual() -> None:
     )
 
     assert isfinite(diagnostic.free_dof_relative_residual_norm)
+
+
+def test_sovinec_common_path_preserves_the_bit_exact_reference_solution() -> None:
+    """(M4a) the rank-one route must not re-normalize its unit tangent field."""
+    slab = Slab2D.unit_square(maxh=0.0625)
+    psi = ng.sin(ng.pi * ng.x) * ng.sin(ng.pi * ng.y)
+    tangent = ng.CoefficientFunction(
+        (
+            psi.Diff(ng.y) / ng.sqrt(psi.Diff(ng.x) ** 2 + psi.Diff(ng.y) ** 2),
+            -psi.Diff(ng.x) / ng.sqrt(psi.Diff(ng.x) ** 2 + psi.Diff(ng.y) ** 2),
+        )
+    )
+    reference = solve_frozen_field_anisotropic_diffusion(
+        slab,
+        polynomial_order=3,
+        source=psi,
+        raw_field=tangent,
+        parallel_conductivity=1.0,
+        perpendicular_conductivity=0.0,
+        field_floor=0.0,
+        quadrature_bonus_intorder=6,
+        residual_tolerance=None,
+        direction_is_normalized=True,
+    )
+    observed = measure_sovinec_pollution(slab, polynomial_order=3)
+
+    assert observed.central_amplitude == reference.center_value()

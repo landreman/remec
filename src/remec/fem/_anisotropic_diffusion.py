@@ -199,8 +199,10 @@ def solve_frozen_field_anisotropic_diffusion(
     The intended weak form is
     ``integral kappa_perp grad(chi).grad(v) + (kappa_parallel-kappa_perp)
     (b_safe.grad(chi))(b_safe.grad(v)) = integral v S_ref``, where
-    ``b_safe = B / sqrt(B.B + B_floor**2)``.  The smooth floor makes the
-    tensor finite at analytic island O- and X-point nulls. For a unit field,
+    ``b_safe = B / sqrt(B.B + B_floor**2)``. ``direction_is_normalized`` is
+    valid only for a unit raw field and zero floor; it skips that normalization
+    to preserve the rank-one Sovinec reference calculation exactly. The smooth
+    floor makes the tensor finite at analytic island O- and X-point nulls. For a unit field,
     this direct tensor form equals the note's doubly projected M4a form. At an
     active smooth floor it deliberately remains
     ``K=κ_perp I+(κ_parallel-κ_perp)b_safe⊗b_safe``: the double projection is
@@ -385,9 +387,8 @@ def measure_sovinec_pollution(
         direction_is_normalized=True,
     )
     mesh = solution._mesh
-    field = solution._field
     relative_residual = solution.free_dof_relative_residual_norm
-    central_amplitude = float(field(mesh(0.5, 0.5)))
+    central_amplitude = solution.center_value()
     with ng.TaskManager():
         unit_direction_defect_l2_squared = float(
             ng.Integrate((ng.InnerProduct(tangent, tangent) - 1.0) ** 2, mesh, order=8)
