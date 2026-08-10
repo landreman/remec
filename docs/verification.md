@@ -1,5 +1,38 @@
 # Verification records
 
+## Milestone 1.5 — `AnisotropicDiffusionSolver` strategy interface
+
+The public `AnisotropicDiffusionSolver` is the Phase-1 `StandardCG` strategy for
+note equation (M4a),
+
+\[
+\int_\Omega \kappa_\parallel(\mathbf b\mathbin\cdot\nabla\chi)
+(\mathbf b\mathbin\cdot\nabla v)+\kappa_\perp
+\nabla_\perp\chi\mathbin\cdot\nabla_\perp v\,dV
+=\int_\Omega vS_{\rm ref}\,dV.
+\]
+
+It exposes `solve`, `apply`, `build_preconditioner`, and `diagnostics` while
+keeping NGSolve objects behind `remec.fem`. The constant-direction and spatial
+safe-field paths retain their previous formula and quadrature rules exactly. The
+automated interface regression compares every solution-vector entry to its legacy
+kernel with zero absolute tolerance; it also checks the separately reported M4a
+parallel/perpendicular energies and their positive sum.
+
+For production safety, `assess_pollution` implements `DESIGN.md` §8.3's default
+criterion \(\kappa_{\perp,\rm num}<0.1\kappa_\perp\): it emits
+`AnisotropyPollutionWarning` normally and raises `AnisotropyPollutionError` in
+strict mode. `assess_floor_sensitivity` applies §6 to paired observables at two
+smooth field-floor values; its default 1% tolerance warns (or raises in strict
+mode) for a material difference. The test suite demonstrates the unsafe 20%
+pollution case and 2% floor-sensitive case, as well as safe counterparts.
+
+Mutation checks: removing the M4a tensor contrast makes all seven frozen-field
+topology regressions fail; rotating the Sovinec field from tangent to normal makes
+its source-tangency assertion fail (measured \(4.93\), required below
+\(10^{-12}\)). Both mutated direct solves still complete algebraically, so these
+are physical/discretization protections rather than residual checks.
+
 ## Milestone 1.4 — closed-field and analytic-island frozen fields
 
 This milestone extends the frozen-field verification of note equation (M4a) to a

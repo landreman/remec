@@ -78,13 +78,16 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   add a direct `|b_safe| < 1` symmetry/eigenpair unit contract, and add the §6
   floor-sensitivity study that distinguishes deliberate manufactured-floor activity
   from acceptable production observables.
-- [ ] **1.5** Refactor to `AnisotropicDiffusionSolver` — `DESIGN.md` §8.4
+- [x] **1.5** Refactor to `AnisotropicDiffusionSolver` — `DESIGN.md` §8.4
   <br>Acceptance: interface extracted, results bit-for-bit unchanged.
-  <br>Measured: —
-  <br>Next: unify the constant-tensor kernel and dedicated spatially varying Sovinec
-  assembly without changing either result, restore separate parallel/perpendicular
-  energy diagnostics on the unified path, and implement the configurable
-  `AnisotropyPollutionError` production safety gate from §8.3.
+  <br>Measured: macOS / CPython 3.12.2 / NGSolve 6.2.2606 — public StandardCG
+  routes both constant and smoothly floored spatial M4a forms with bit-for-bit
+  matching solution vectors against the established kernels; all 38 PR tests pass.
+  The default pollution gate requires κ⊥,num/κ⊥ < 0.1, warning by default and
+  raising `AnisotropyPollutionError` in strict mode. The B-floor observable-sensitivity
+  gate defaults to 1%; its test catches a 2% change.
+  <br>Next: Phase 2 starts the mollified V_χ operator; keep this solver's M4a
+  diagnostics and safety gates as the reusable frozen-field interface.
 
 ## Phase 2 — level-set volume and transplant
 
