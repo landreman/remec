@@ -137,11 +137,11 @@ class MollifiedVolumeMap:
         gradient_floor = max(np.finfo(float).tiny, maximum_gradient * 1.0e-12)
         widths = spatial_width_cells * sizes * np.maximum(gradients, gradient_floor)
         minimum_level, maximum_level = float(np.min(values)), float(np.max(values))
-        raw_levels = np.linspace(minimum_level, maximum_level, levels)
+        raw_levels = np.linspace(minimum_level, maximum_level, levels, dtype=np.float64)
         raw_volumes = cls._mollified_volumes(values, widths, weights, raw_levels)
         total_volume = float(np.sum(weights))
         raw_volumes[0], raw_volumes[-1] = total_volume, 0.0
-        target_volumes = np.linspace(total_volume, 0.0, levels)
+        target_volumes = np.linspace(total_volume, 0.0, levels, dtype=np.float64)
         volume_uniform_levels = np.interp(target_volumes, raw_volumes[::-1], raw_levels[::-1])
         volume_uniform_levels[0], volume_uniform_levels[-1] = minimum_level, maximum_level
         return cls(
