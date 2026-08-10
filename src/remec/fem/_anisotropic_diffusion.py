@@ -243,11 +243,11 @@ def solve_frozen_field_anisotropic_diffusion(
     ``integral kappa_perp grad(chi).grad(v) + (kappa_parallel-kappa_perp)
     (b_safe.grad(chi))(b_safe.grad(v)) = integral v S_ref``, where
     ``b_safe = B / sqrt(B.B + B_floor**2)``.  The smooth floor makes the
-    tensor finite at analytic island O- and X-point nulls. This tensor form is
-    algebraically identical to the separate M4a parallel/perpendicular pieces,
-    including when the safe direction has norm below one. Milestone 1.4 implements
-    this verification-only path; milestone 1.5 owns the public solver interface
-    and unification with the earlier constant-field kernel.
+    tensor finite at analytic island O- and X-point nulls. This is the direct
+    strong-form M4a tensor extension. When ``|b_safe| < 1`` it differs from the
+    doubly projected perpendicular-gradient form used by the constant-direction
+    helper; milestone 1.5 must reconcile that distinction while extracting the
+    public solver interface.
     """
     if polynomial_order < 1:
         raise ValueError("polynomial_order must be at least one")
@@ -270,7 +270,7 @@ def solve_frozen_field_anisotropic_diffusion(
     mesh = slab.build_mesh()._mesh
     space = ng.H1(mesh, order=polynomial_order, dirichlet="bottom|right|top|left")
     trial, test = space.TnT()
-    quadrature = ng.dx(bonus_intorder=14)
+    quadrature = ng.dx(bonus_intorder=20)
     safe_norm = ng.sqrt(ng.InnerProduct(raw_field, raw_field) + field_floor**2)
     direction = raw_field / safe_norm
     parallel_trial = ng.InnerProduct(direction, ng.grad(trial))

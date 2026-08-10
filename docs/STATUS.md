@@ -69,12 +69,13 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   <br>Measured: macOS / CPython 3.12.2 / NGSolve 6.2.2606 — island finest-pair degree 1:
   L² 1.810, K-energy 0.964; degree 2: L² 3.132, K-energy 1.983; degree 3: L² 4.053,
   K-energy 2.996 (200 → 800 elements). In the degree-3, 512-element closed-field scan,
-  κ⊥,num/κ⊥ is 4.86e-6, 1.18e-5, and 6.42e-5 for κ⊥/κ∥ = 1e-1, 1e-2, and 1e-3.
+  κ⊥,num/κ⊥ is 4.80e-6, 1.17e-5, and 6.42e-5 for κ⊥/κ∥ = 1e-1, 1e-2, and 1e-3.
   See `tests/manufactured/analytic_island_rates.csv`,
   `tests/manufactured/closed_field_anisotropy_scan.csv`, and `docs/verification.md`.
   <br>Next: milestone 1.5 should route the constant, rank-one Sovinec, and new smoothly
   floored spatial-field assemblies through one interface without changing their tables;
-  preserve the M4a tensor form `K = κ⊥I + (κ∥-κ⊥)b_safe b_safeᵀ` at field nulls.
+  preserve the M4a tensor form `K = κ⊥I + (κ∥-κ⊥)b_safe b_safeᵀ` at field nulls,
+  and add a direct `|b_safe| < 1` symmetry/eigenpair unit contract.
 - [ ] **1.5** Refactor to `AnisotropicDiffusionSolver` — `DESIGN.md` §8.4
   <br>Acceptance: interface extracted, results bit-for-bit unchanged.
   <br>Measured: —
