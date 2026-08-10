@@ -34,15 +34,25 @@ class _EnergyDiagnostics:
 
 @dataclass(frozen=True, slots=True)
 class PollutionDiagnostic:
-    """Measured effective perpendicular diffusion in the Sovinec M4a test."""
+    """Measured effective perpendicular diffusion in the Sovinec M4a test.
+
+    The name refers to the anisotropic-conduction verification in Carl R.
+    Sovinec et al., "Nonlinear magnetohydrodynamics simulation using high-order
+    finite elements," J. Comput. Phys. 195 (2004) 355–386,
+    https://doi.org/10.1016/j.jcp.2003.10.004.
+    """
 
     polynomial_order: int
     maxh: float
     elements: int
+    parallel_conductivity: float
+    physical_perpendicular_conductivity: float
     central_amplitude: float
     numerical_perpendicular_diffusivity: float
     numerical_to_parallel_ratio: float
     free_dof_relative_residual_norm: float
+    unit_direction_defect_l2_squared: float
+    source_tangency_l2_squared: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -204,9 +214,24 @@ def measure_sovinec_pollution(
 ) -> PollutionDiagnostic:
     """Measure numerical perpendicular diffusion for note equation (M4a).
 
-    The benchmark uses ``kappa_perp = 0`` and the field tangent to
-    ``psi = sin(pi*x) sin(pi*y)``.  For source ``Q = Q0*psi``, the central
-    response defines ``kappa_perp,num = Q0 / (2*pi**2*chi(1/2, 1/2))``.
+    "Sovinec" refers to the anisotropic-conduction test in Carl R. Sovinec
+    et al., "Nonlinear magnetohydrodynamics simulation using high-order finite
+    elements," J. Comput. Phys. 195 (2004) 355–386,
+    https://doi.org/10.1016/j.jcp.2003.10.004. The test exposes artificial
+    cross-field transport from a non-field-aligned discretization: ``b`` is
+    tangent to the closed contours of ``psi = sin(pi*x) sin(pi*y)``, so
+    ``b·grad(psi) = 0``. With physical ``kappa_perp = 0``, any finite effective
+    perpendicular diffusivity is therefore numerical pollution. For source
+    ``Q = Q0*psi``, the discrete central response defines
+    ``kappa_perp,num = Q0 / (2*pi**2*chi(1/2, 1/2))``.
+
+    This benchmark currently has a dedicated spatially varying, rank-one M4a
+    assembly because ``DirectionalConductivity`` and
+    ``solve_anisotropic_diffusion`` support only constant directions and
+    strictly positive ``kappa_perp``. The perpendicular form is identically
+    zero here, so this path reports pollution, residual, unit-direction, and
+    source-tangency diagnostics rather than the two energy contributions.
+    Milestone 1.5 must unify both assemblies without changing their results.
     """
     if polynomial_order < 1:
         raise ValueError("polynomial_order must be at least one")
@@ -230,7 +255,11 @@ def measure_sovinec_pollution(
     dpsi_dx = ng.pi * ng.cos(ng.pi * ng.x) * ng.sin(ng.pi * ng.y)
     dpsi_dy = ng.pi * ng.sin(ng.pi * ng.x) * ng.cos(ng.pi * ng.y)
     tangent_norm = ng.sqrt(dpsi_dx**2 + dpsi_dy**2)
+    # Rotate and normalize grad(psi): the resulting field follows the closed
+    # source contours, so the exact parallel operator cannot transport psi
+    # across them. The measured cross-contour response is discretization error.
     tangent = ng.CoefficientFunction((dpsi_dy / tangent_norm, -dpsi_dx / tangent_norm))
+    source_gradient = ng.CoefficientFunction((dpsi_dx, dpsi_dy))
 
     parallel_trial = ng.InnerProduct(tangent, ng.grad(trial))
     parallel_test = ng.InnerProduct(tangent, ng.grad(test))
@@ -256,24 +285,33 @@ def measure_sovinec_pollution(
             1.0, float(ng.Norm(source_on_free_dofs))
         )
         central_amplitude = float(field(mesh(0.5, 0.5)))
-
-    if relative_residual > 1.0e-6:
-        raise RuntimeError(
-            "Sovinec pollution solve failed: free-DOF relative residual "
-            f"{relative_residual:.3e} exceeds 1e-6"
+        unit_direction_defect_l2_squared = float(
+            ng.Integrate((ng.InnerProduct(tangent, tangent) - 1.0) ** 2, mesh, order=8)
         )
+        source_tangency_l2_squared = float(
+            ng.Integrate(ng.InnerProduct(tangent, source_gradient) ** 2, mesh, order=8)
+        )
+
+    if not isfinite(relative_residual):
+        raise RuntimeError("Sovinec pollution solve produced a non-finite algebraic residual")
     if not isfinite(central_amplitude) or central_amplitude <= 0.0:
         raise RuntimeError(
             "Sovinec pollution solve produced a non-positive or non-finite central amplitude"
         )
 
+    # Since -Delta psi = 2*pi**2*psi, match the discrete center response to an
+    # isotropic perpendicular operator to obtain the Sovinec effective kappa.
     numerical_perpendicular_diffusivity = source_amplitude / (2.0 * pi**2 * central_amplitude)
     return PollutionDiagnostic(
         polynomial_order=polynomial_order,
         maxh=slab.maxh,
         elements=int(mesh.ne),
+        parallel_conductivity=parallel_conductivity,
+        physical_perpendicular_conductivity=0.0,
         central_amplitude=central_amplitude,
         numerical_perpendicular_diffusivity=numerical_perpendicular_diffusivity,
         numerical_to_parallel_ratio=(numerical_perpendicular_diffusivity / parallel_conductivity),
         free_dof_relative_residual_norm=relative_residual,
+        unit_direction_defect_l2_squared=unit_direction_defect_l2_squared,
+        source_tangency_l2_squared=source_tangency_l2_squared,
     )

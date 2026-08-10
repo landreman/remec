@@ -2,6 +2,14 @@
 
 ## Milestone 1.3 — Sovinec numerical-pollution regression
 
+"Sovinec" refers to C. R. Sovinec, A. H. Glasser, T. A. Gianakon, et al.,
+"Nonlinear magnetohydrodynamics simulation using high-order finite elements,"
+*Journal of Computational Physics* **195** (2004) 355–386,
+https://doi.org/10.1016/j.jcp.2003.10.004. Its anisotropic-conduction test
+measures spurious cross-field transport introduced by a discretization whose mesh
+is not aligned with the field. The physical perpendicular diffusivity is set to
+zero, so the measured effective perpendicular diffusivity is numerical pollution.
+
 The benchmark is the translated unit-square form of the `DESIGN.md` §8.3 test:
 \(\psi=\sin(\pi x)\sin(\pi y)
 =\cos(\pi(x-1/2))\cos(\pi(y-1/2))\),
@@ -17,8 +25,15 @@ requires strict decreases at each adjacent order and refinement. The finest-pair
 rates use \(\log_2(\kappa_{\perp,\mathrm{num}}(h)/
 \kappa_{\perp,\mathrm{num}}(h/2))\). The algebraic diagnostic is the free-DOF
 Euclidean residual divided by the larger of one and the free-DOF source norm; all
-runs must remain at or below \(10^{-6}\). This residual tolerance only validates
-the direct solve and is not used as evidence of low pollution.
+runs in the acceptance table must remain at or below \(10^{-6}\). Extended scans
+return any finite residual so degradation can be recorded instead of aborting;
+NaN or infinity still fails loudly. This residual criterion only validates the
+direct solve and is not used as evidence of low pollution. Independent structural
+diagnostics also require \(\int_\Omega(|\mathbf b|^2-1)^2\,dV<10^{-12}\) and
+\(\int_\Omega(\mathbf b\cdot\nabla\psi)^2\,dV<10^{-12}\), so field normalization
+and source tangency are not certified only by the recorded CSV values. A scaling
+case with \(\kappa_\parallel=10\) and \(Q_0=3\) checks the expected amplitude,
+effective-diffusivity, and dimensionless-ratio scalings.
 
 | Degree \(p\) | Elements | \(h=1/4\) | \(h=1/8\) | \(h=1/16\) | Finest-pair rate |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -31,6 +46,13 @@ At fixed mesh, raising \(p\) from 1→2 reduces pollution by factors 45.2,
 184.8, 678.5, and 2605.2. Mutation checks confirmed that rotating the field
 from tangent to normal and omitting normalization of \(\mathbf b\) both make
 the regression fail.
+
+The current benchmark deliberately uses a dedicated spatially varying, rank-one
+M4a assembly because the milestone 1.1/1.2 verification helper accepts only a
+constant direction and strictly positive \(\kappa_\perp\). Milestone 1.5 owns
+unifying those paths bit-for-bit and restoring the §8.1 per-piece energy diagnostics.
+Milestone 1.4 owns the finite-anisotropy axis and the full scheduled scan; this PR
+keeps the fast, hardest-case \(\kappa_\perp=0\) table in PR CI.
 
 ## Milestone 1.2 — oblique anisotropic K
 

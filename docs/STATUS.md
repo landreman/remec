@@ -65,9 +65,17 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   than treating this pollution regression as the full closed-field/island suite.
 - [ ] **1.4** Closed-field and island frozen-field tests — `DESIGN.md` §8.3, §22 · note: §4, §7
   <br>Measured: —
+  <br>Next: extend the small κ⊥ = 0 PR regression with the finite-anisotropy axis
+  and independent island field, including explicit field-null handling for arbitrary
+  meshes; mark and move the eventual full order/resolution/anisotropy scan into
+  scheduled CI when a nightly workflow exists.
 - [ ] **1.5** Refactor to `AnisotropicDiffusionSolver` — `DESIGN.md` §8.4
   <br>Acceptance: interface extracted, results bit-for-bit unchanged.
   <br>Measured: —
+  <br>Next: unify the constant-tensor kernel and dedicated spatially varying Sovinec
+  assembly without changing either result, restore separate parallel/perpendicular
+  energy diagnostics on the unified path, and implement the configurable
+  `AnisotropyPollutionError` production safety gate from §8.3.
 
 ## Phase 2 — level-set volume and transplant
 
