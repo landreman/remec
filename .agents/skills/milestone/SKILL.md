@@ -90,7 +90,11 @@ PR body must contain, in this order:
 - Open ADRs blocking merge, or "none"
 - Anything you were unsure about and want the reviewer to look at hardest
 
-Then stop. Do not merge. Do not start the next milestone.
+## 9. Fix serious issues raised by Claude review
+
+Periodically check for the `claude-review` workflow run. For everything that it flags as `blocking` or `should-fix`, fix it, push, and iterate until the review is satisfied. For items flagged as `note`, it is up to your judgement whether to address them or not. If you disagree with a finding, write an ADR and mark it in the PR body.
+
+Once the `claude-review` workflow produces no `blocking` or `should-fix` findings, then stop. Do not merge. Do not start the next milestone.
 
 ## If you hit a STOP condition
 
