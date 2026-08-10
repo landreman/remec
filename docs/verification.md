@@ -1,5 +1,51 @@
 # Verification records
 
+## Milestone 2.1 — mollified level-set volume map
+
+`MollifiedVolumeMap` implements the note's equation `(mollified_V)`,
+
+\[
+V_\chi^\varepsilon(\hat\chi)=\sum_i w_i H_{\varepsilon_i}(\chi_i-\hat\chi),
+\qquad
+\varepsilon_i=c h_i\max(|\nabla\chi_i|,\mathrm{gradient\_floor}),
+\]
+
+using the compact, moment-matched smooth Heaviside
+\(H_\varepsilon\). The gradient-scaled width is deliberately local, so the
+regularization has a fixed spatial width rather than an inconsistent fixed width in
+level-set-value space. `coarea_density` implements `(V_derivatives)`,
+\(-dV_\chi^\varepsilon/d\hat\chi=\sum_i w_iH'_{\varepsilon_i}\), and a monotone
+PCHIP table exposes both `V_χ(χ̂)` and its stable inverse `χ̂(V)`. The map returns the
+endpoint identities exactly.
+
+`tests/unit/test_level_set_volume.py` evaluates \(\chi=0.6^2-r^2\) on
+Gauss quadrature in \([-1,1]^2\) and \([-1,1]^3\). At the zero level, the exact
+circle and sphere volumes are \(\pi(0.6)^2\) and \(4\pi(0.6)^3/3\). The measured
+relative errors are 1.28e-3 and 7.23e-4; the independent analytic co-area densities
+\(\pi\) and \(2\pi(0.6)\) agree within 1.70e-2 and 2.56e-3. The test also verifies
+the endpoint identities, strict monotonicity, and a tabulation uniformly spaced in
+enclosed volume.
+
+The manufactured sphere resolution table is checked in at
+`tests/manufactured/mollified_sphere_volume_rates.csv`:
+
+| Quadrature order | Absolute volume error | Adjacent rate |
+| ---: | ---: | ---: |
+| 24 | 1.5541e-2 | — |
+| 48 | 3.5616e-3 | 2.125 |
+| 96 | 6.5415e-4 | 2.445 |
+
+The measured rates exceed two, the expected \(O(\varepsilon^2)\) behavior of the
+mollified construction. The test recomputes all table errors and rejects either rate
+below two. This is a quadrature-resolution study of the map itself; it is not a claim
+about a future FEM solve's convergence rate.
+
+Mutation checks: replacing the gradient-scaled width by a fixed chi-space width makes
+the circle co-area-density assertion fail (3.328 versus \(\pi\), outside the 3% bound).
+Replacing `H'_ε` by zero makes both circle and sphere co-area checks fail. These checks
+protect the spatial-width and differentiability requirements independently of endpoint
+or algebraic-solver behavior.
+
 ## Milestone 1.5 — `AnisotropicDiffusionSolver` strategy interface
 
 The public `AnisotropicDiffusionSolver` is the Phase-1 `StandardCG` strategy for
