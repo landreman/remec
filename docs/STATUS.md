@@ -63,12 +63,18 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   <br>Next: milestone 1.4 can reuse the translated Sovinec field
   b = (∂yψ, −∂xψ)/|∇ψ| and should add an independent analytic-island field rather
   than treating this pollution regression as the full closed-field/island suite.
-- [ ] **1.4** Closed-field and island frozen-field tests — `DESIGN.md` §8.3, §22 · note: §4, §7
-  <br>Measured: —
-  <br>Next: extend the small κ⊥ = 0 PR regression with the finite-anisotropy axis
-  and independent island field, including explicit field-null handling for arbitrary
-  meshes; mark and move the eventual full order/resolution/anisotropy scan into
-  scheduled CI when a nightly workflow exists.
+- [x] **1.4** Closed-field and island frozen-field tests — `DESIGN.md` §8.3, §22 · note: §4, §7
+  <br>Acceptance: finite-anisotropy closed-field response; independent analytic-island
+  manufactured convergence in L² and K-energy norms; smooth field-null handling.
+  <br>Measured: macOS / CPython 3.12.2 / NGSolve 6.2.2606 — island finest-pair degree 1:
+  L² 1.810, K-energy 0.964; degree 2: L² 3.131, K-energy 1.983; degree 3: L² 4.053,
+  K-energy 2.996 (200 → 800 elements). In the degree-3, 512-element closed-field scan,
+  κ⊥,num/κ⊥ is 5.10e-6, 1.22e-5, and 6.45e-5 for κ⊥/κ∥ = 1e-1, 1e-2, and 1e-3.
+  See `tests/manufactured/analytic_island_rates.csv`,
+  `tests/manufactured/closed_field_anisotropy_scan.csv`, and `docs/verification.md`.
+  <br>Next: milestone 1.5 should route the constant, rank-one Sovinec, and new smoothly
+  floored spatial-field assemblies through one interface without changing their tables;
+  preserve the M4a tensor form `K = κ⊥I + (κ∥-κ⊥)b_safe b_safeᵀ` at field nulls.
 - [ ] **1.5** Refactor to `AnisotropicDiffusionSolver` — `DESIGN.md` §8.4
   <br>Acceptance: interface extracted, results bit-for-bit unchanged.
   <br>Measured: —
