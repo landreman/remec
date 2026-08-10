@@ -33,6 +33,27 @@ class _EnergyDiagnostics:
 
 
 @dataclass(frozen=True, slots=True)
+class _FieldDirectionDiagnostics:
+    """Diagnostics for smooth small-B protection in a frozen M4a field."""
+
+    floor: float
+    floor_activity_l2_squared: float
+
+
+@dataclass(frozen=True, slots=True)
+class _FrozenFieldDiffusionSolution:
+    """Internal result for a spatially varying frozen-field M4a solve."""
+
+    _mesh: Any
+    _field: Any
+    polynomial_order: int
+    free_dof_residual_norm: float
+    free_dof_relative_residual_norm: float
+    energy_diagnostics: _EnergyDiagnostics
+    field_direction_diagnostics: _FieldDirectionDiagnostics
+
+
+@dataclass(frozen=True, slots=True)
 class PollutionDiagnostic:
     """Measured effective perpendicular diffusion in the Sovinec M4a test.
 
@@ -202,6 +223,131 @@ def solve_anisotropic_diffusion(
         free_dof_residual_norm=free_dof_residual_norm,
         free_dof_relative_residual_norm=free_dof_relative_residual_norm,
         energy_diagnostics=energy_diagnostics,
+    )
+
+
+def solve_frozen_field_anisotropic_diffusion(
+    slab: Slab2D,
+    *,
+    polynomial_order: int,
+    source: Any,
+    raw_field: Any,
+    parallel_conductivity: float,
+    perpendicular_conductivity: float,
+    field_floor: float,
+    runtime: RuntimeOptions | None = None,
+) -> _FrozenFieldDiffusionSolution:
+    """Solve note equation (M4a) for a spatially varying frozen field.
+
+    The intended weak form is
+    ``integral kappa_perp grad(chi).grad(v) + (kappa_parallel-kappa_perp)
+    (b_safe.grad(chi))(b_safe.grad(v)) = integral v S_ref``, where
+    ``b_safe = B / sqrt(B.B + B_floor**2)``.  The smooth floor makes the
+    tensor finite at analytic island O- and X-point nulls. This is the direct
+    strong-form M4a tensor extension. When ``|b_safe| < 1`` it differs from the
+    doubly projected perpendicular-gradient form used by the constant-direction
+    helper; milestone 1.5 must reconcile that distinction while extracting the
+    public solver interface.
+    """
+    if polynomial_order < 1:
+        raise ValueError("polynomial_order must be at least one")
+    if not all(
+        isfinite(value) and value > 0.0
+        for value in (parallel_conductivity, perpendicular_conductivity)
+    ):
+        raise ValueError("conductivities must be finite and positive")
+    if parallel_conductivity < perpendicular_conductivity:
+        raise ValueError("parallel_conductivity must not be below perpendicular_conductivity")
+    if not isfinite(field_floor) or field_floor <= 0.0:
+        raise ValueError("field_floor must be finite and positive")
+    if slab.lower != (0.0, 0.0) or slab.upper != (1.0, 1.0):
+        raise ValueError("the frozen-field verification kernel supports the unit square only")
+
+    resolved_runtime = RuntimeOptions() if runtime is None else runtime
+
+    import ngsolve as ng
+
+    mesh = slab.build_mesh()._mesh
+    space = ng.H1(mesh, order=polynomial_order, dirichlet="bottom|right|top|left")
+    trial, test = space.TnT()
+    quadrature = ng.dx(bonus_intorder=20)
+    safe_norm = ng.sqrt(ng.InnerProduct(raw_field, raw_field) + field_floor**2)
+    direction = raw_field / safe_norm
+    parallel_trial = ng.InnerProduct(direction, ng.grad(trial))
+    parallel_test = ng.InnerProduct(direction, ng.grad(test))
+    conductivity_contrast = parallel_conductivity - perpendicular_conductivity
+
+    bilinear_form = ng.BilinearForm(space)
+    bilinear_form += (
+        perpendicular_conductivity * ng.InnerProduct(ng.grad(trial), ng.grad(test))
+        + conductivity_contrast * parallel_trial * parallel_test
+    ) * quadrature
+    linear_form = ng.LinearForm(space)
+    linear_form += source * test * quadrature
+    free_dofs = space.FreeDofs()
+
+    configure_threads(resolved_runtime.threads)
+    with ng.TaskManager():
+        bilinear_form.Assemble()
+        linear_form.Assemble()
+        field = ng.GridFunction(space)
+        field.vec.data = (
+            bilinear_form.mat.Inverse(free_dofs, inverse="sparsecholesky") * linear_form.vec
+        )
+        residual = linear_form.vec.CreateVector()
+        residual.data = bilinear_form.mat * field.vec - linear_form.vec
+        free_residual = ng.Projector(free_dofs, True) * residual
+        source_on_free_dofs = ng.Projector(free_dofs, True) * linear_form.vec
+        free_dof_residual_norm = float(ng.Norm(free_residual))
+        free_dof_relative_residual_norm = free_dof_residual_norm / max(
+            1.0, float(ng.Norm(source_on_free_dofs))
+        )
+
+        gradient = ng.grad(field)
+        parallel_gradient = ng.InnerProduct(direction, gradient)
+        gradient_norm_squared = ng.InnerProduct(gradient, gradient)
+        parallel_energy = float(
+            ng.Integrate(parallel_conductivity * parallel_gradient**2, mesh, order=20)
+        )
+        perpendicular_energy = float(
+            ng.Integrate(
+                perpendicular_conductivity * (gradient_norm_squared - parallel_gradient**2),
+                mesh,
+                order=20,
+            )
+        )
+        energy_diagnostics = _EnergyDiagnostics(
+            parallel=parallel_energy,
+            perpendicular=perpendicular_energy,
+            total=parallel_energy + perpendicular_energy,
+        )
+        direction_norm_defect = 1.0 - ng.InnerProduct(direction, direction)
+        floor_activity_l2_squared = float(ng.Integrate(direction_norm_defect**2, mesh, order=40))
+
+    if not isfinite(free_dof_relative_residual_norm):
+        raise RuntimeError("frozen-field solve produced a non-finite algebraic residual")
+    if free_dof_relative_residual_norm > 1.0e-11:
+        raise RuntimeError(
+            "frozen-field direct solve failed: free-DOF relative residual "
+            f"{free_dof_relative_residual_norm:.3e} exceeds 1e-11"
+        )
+    if not all(
+        isfinite(value) and value >= 0.0
+        for value in (parallel_energy, perpendicular_energy, floor_activity_l2_squared)
+    ):
+        raise RuntimeError("frozen-field solve produced a non-finite or negative diagnostic")
+
+    return _FrozenFieldDiffusionSolution(
+        _mesh=mesh,
+        _field=field,
+        polynomial_order=polynomial_order,
+        free_dof_residual_norm=free_dof_residual_norm,
+        free_dof_relative_residual_norm=free_dof_relative_residual_norm,
+        energy_diagnostics=energy_diagnostics,
+        field_direction_diagnostics=_FieldDirectionDiagnostics(
+            floor=field_floor,
+            floor_activity_l2_squared=floor_activity_l2_squared,
+        ),
     )
 
 

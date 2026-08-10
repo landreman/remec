@@ -31,3 +31,9 @@
   `.Diff(ngsolve.y)`, including repeated differentiation. Use these derivatives
   when a diagnostic must certify tangency to the exact coefficient function used
   in a form; a separately hand-written gradient can reproduce its own typo.
+
+- Milestone 1.4 (NGSolve 6.2.2606): vector `CoefficientFunction` objects support
+  division by a scalar `CoefficientFunction`, differentiation through the resulting
+  `sqrt(B·B + B_floor²)` normalization, and finite vector evaluation at an exact
+  analytic O- or X-point. This permits one source expression to be differentiated
+  from the same smoothly floored tensor assembled in the manufactured island form.

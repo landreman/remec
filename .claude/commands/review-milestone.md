@@ -1,7 +1,7 @@
 ---
 description: Adversarial review of a milestone PR against DESIGN.md and the note
 argument-hint: "[PR number, or blank for the current branch]"
-allowed-tools: Bash(git diff:*), Bash(git log:*), Bash(gh pr:*), Bash(make:*), Bash(pytest:*), Read, Grep, Glob
+allowed-tools: Bash(git diff:*), Bash(git log:*), Bash(gh pr:*), Bash(make*), Bash(pytest*), Bash(python*), Read, Grep, Glob
 ---
 
 Review $ARGUMENTS as an adversarial reviewer. Assume the implementation is plausible,
