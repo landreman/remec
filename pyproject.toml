@@ -12,6 +12,7 @@ license = { file = "LICENSE" }
 authors = [{ name = "REMEC contributors" }]
 dependencies = [
     "ngsolve>=6.2.2606,<6.3",
+    # NumPy 2.5 stubs require a Python 3.12 type-check target; remec supports 3.10.
     "numpy>=1.24,<2.5",
 ]
 

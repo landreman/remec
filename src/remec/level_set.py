@@ -51,8 +51,13 @@ class _MonotonePchip:
                 slopes[index] = 0.0
                 continue
             left_width, right_width = widths[index - 1], widths[index]
-            slopes[index] = (left_width + right_width) / (
-                (2.0 * right_width + left_width) / left + (right_width + 2.0 * left_width) / right
+            slopes[index] = (
+                3.0
+                * (left_width + right_width)
+                / (
+                    (2.0 * right_width + left_width) / left
+                    + (right_width + 2.0 * left_width) / right
+                )
             )
         return cls(x=x, y=y, slopes=slopes)
 
@@ -87,6 +92,23 @@ class _MonotonePchip:
             + h11 * width * self.slopes[index + 1]
         )
 
+    def derivative(self, points: NDArray[np.float64]) -> NDArray[np.float64]:
+        """Evaluate the derivative of the clamped cubic interpolant."""
+        clipped = np.clip(points, self.x[0], self.x[-1])
+        index = np.clip(np.searchsorted(self.x, clipped, side="right") - 1, 0, len(self.x) - 2)
+        width = self.x[index + 1] - self.x[index]
+        coordinate = (clipped - self.x[index]) / width
+        dh00 = (6.0 * coordinate**2 - 6.0 * coordinate) / width
+        dh10 = 3.0 * coordinate**2 - 4.0 * coordinate + 1.0
+        dh01 = (-6.0 * coordinate**2 + 6.0 * coordinate) / width
+        dh11 = 3.0 * coordinate**2 - 2.0 * coordinate
+        return (
+            dh00 * self.y[index]
+            + dh10 * self.slopes[index]
+            + dh01 * self.y[index + 1]
+            + dh11 * self.slopes[index + 1]
+        )
+
 
 class MollifiedVolumeMap:
     """Mollified note equation ``(mollified_V)`` level-set volume map.
@@ -104,6 +126,9 @@ class MollifiedVolumeMap:
         weights: NDArray[np.float64],
         levels: NDArray[np.float64],
         volumes: NDArray[np.float64],
+        raw_endpoint_volume_error: float,
+        raw_endpoint_zero_error: float,
+        minimum_gradient_fraction: float,
     ) -> None:
         self._values = values
         self._widths = widths
@@ -112,6 +137,9 @@ class MollifiedVolumeMap:
         self.volumes = volumes
         self.minimum_level = float(levels[0])
         self.maximum_level = float(levels[-1])
+        self._raw_endpoint_volume_error = raw_endpoint_volume_error
+        self._raw_endpoint_zero_error = raw_endpoint_zero_error
+        self.minimum_gradient_fraction = minimum_gradient_fraction
         self._volume_interpolant = _MonotonePchip.build(levels, volumes)
         self._inverse_interpolant = _MonotonePchip.build(volumes[::-1], levels[::-1])
 
@@ -122,6 +150,7 @@ class MollifiedVolumeMap:
         *,
         spatial_width_cells: float = 1.5,
         levels: int = 129,
+        minimum_gradient_fraction: float = 1.0e-3,
     ) -> MollifiedVolumeMap:
         """Build a volume-uniform monotone tabulation from quadrature samples.
 
@@ -132,14 +161,18 @@ class MollifiedVolumeMap:
             raise ValueError("levels must be at least three")
         if not isfinite(spatial_width_cells) or spatial_width_cells <= 0.0:
             raise ValueError("spatial_width_cells must be finite and positive")
+        if not isfinite(minimum_gradient_fraction) or not 0.0 < minimum_gradient_fraction <= 1.0:
+            raise ValueError("minimum_gradient_fraction must be finite and in (0, 1]")
         values, gradients, weights, sizes = cls._validated_arrays(data)
         maximum_gradient = float(np.max(gradients))
-        gradient_floor = max(np.finfo(float).tiny, maximum_gradient * 1.0e-12)
+        gradient_floor = max(np.finfo(float).tiny, maximum_gradient * minimum_gradient_fraction)
         widths = spatial_width_cells * sizes * np.maximum(gradients, gradient_floor)
         minimum_level, maximum_level = float(np.min(values)), float(np.max(values))
         raw_levels = np.linspace(minimum_level, maximum_level, levels, dtype=np.float64)
         raw_volumes = cls._mollified_volumes(values, widths, weights, raw_levels)
         total_volume = float(np.sum(weights))
+        raw_endpoint_volume_error = abs(raw_volumes[0] - total_volume)
+        raw_endpoint_zero_error = abs(raw_volumes[-1])
         raw_volumes[0], raw_volumes[-1] = total_volume, 0.0
         target_volumes = np.linspace(total_volume, 0.0, levels, dtype=np.float64)
         volume_uniform_levels = np.interp(target_volumes, raw_volumes[::-1], raw_levels[::-1])
@@ -150,6 +183,9 @@ class MollifiedVolumeMap:
             weights=weights,
             levels=volume_uniform_levels,
             volumes=target_volumes,
+            raw_endpoint_volume_error=raw_endpoint_volume_error,
+            raw_endpoint_zero_error=raw_endpoint_zero_error,
+            minimum_gradient_fraction=minimum_gradient_fraction,
         )
 
     @staticmethod
@@ -220,14 +256,30 @@ class MollifiedVolumeMap:
         )
         return float(np.dot(self._weights, derivative))
 
+    def volume_derivative(self, level: float) -> float:
+        """Return the tabulated ``dV_chi^epsilon/dchi_hat`` for the §12.3 check."""
+        point = np.asarray(level, dtype=float)
+        if point.ndim != 0:
+            raise TypeError("volume_derivative requires one scalar level")
+        return float(self._volume_interpolant.derivative(point))
+
     def diagnostics(self) -> dict[str, float]:
         """Return endpoint, monotonicity, and smoothing diagnostics for ``V_chi``."""
+        spot_level = float(self.levels[len(self.levels) // 2])
+        coarea_density = self.coarea_density(spot_level)
+        spline_density = -self.volume_derivative(spot_level)
+        coarea_relative_error = abs(spline_density - coarea_density) / max(
+            coarea_density, np.finfo(float).tiny
+        )
         return {
             "total_volume": float(self.volumes[0]),
             "minimum_level": self.minimum_level,
             "maximum_level": self.maximum_level,
-            "endpoint_volume_error": abs(self.volume(self.minimum_level) - self.volumes[0]),
-            "endpoint_zero_error": abs(self.volume(self.maximum_level) - self.volumes[-1]),
+            "raw_endpoint_volume_error": self._raw_endpoint_volume_error,
+            "raw_endpoint_zero_error": self._raw_endpoint_zero_error,
+            "spline_monotonicity_margin": float(np.min(-np.diff(self.volumes))),
+            "coarea_spot_level": spot_level,
+            "coarea_spot_relative_error": coarea_relative_error,
             "minimum_mollifier_width": float(np.min(self._widths)),
             "maximum_mollifier_width": float(np.max(self._widths)),
         }

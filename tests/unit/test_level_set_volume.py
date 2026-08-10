@@ -60,6 +60,14 @@ def test_mollified_volume_matches_analytic_circle_and_sphere(
     assert volume_map.volume(volume_map.minimum_level) == pytest.approx(data.total_volume)
     assert volume_map.volume(volume_map.maximum_level) == pytest.approx(0.0)
     assert volume_map.coarea_density(0.0) == pytest.approx(expected_density, rel=3.0e-2)
+    assert -volume_map.volume_derivative(0.0) == pytest.approx(
+        volume_map.coarea_density(0.0), rel=3.0e-2
+    )
+    diagnostics = volume_map.diagnostics()
+    assert diagnostics["raw_endpoint_volume_error"] / data.total_volume < 1.0e-3
+    assert diagnostics["raw_endpoint_zero_error"] / data.total_volume < 1.0e-3
+    assert diagnostics["spline_monotonicity_margin"] > 0.0
+    assert diagnostics["coarea_spot_relative_error"] < 3.0e-2
 
 
 def test_tabulation_is_strictly_monotone_and_uniform_in_volume() -> None:
@@ -114,4 +122,26 @@ def test_mollified_sphere_volume_has_second_order_resolution_trend() -> None:
         assert error == pytest.approx(float(row["absolute_error"]), rel=1.0e-10)
 
     rates = np.log2(np.asarray(errors[:-1]) / np.asarray(errors[1:]))
-    assert np.all(rates > 2.0)
+    assert rates == pytest.approx(
+        [float(row["adjacent_rate"]) for row in expected_rows[1:]], rel=1.0e-10
+    )
+    assert np.all(rates > 1.9)
+
+
+def test_critical_point_gradient_floor_prevents_a_delta_spike() -> None:
+    """(mollified_V) applies its named critical-point width safeguard."""
+    volume_map = MollifiedVolumeMap.build(
+        QuadratureLevelSetData(
+            values=np.concatenate((np.zeros(29), np.ones(71))),
+            gradient_magnitudes=np.concatenate((np.zeros(29), np.ones(71))),
+            weights=np.full(100, 0.01),
+            element_sizes=np.full(100, 0.1),
+        ),
+        spatial_width_cells=1.0,
+        levels=33,
+        minimum_gradient_fraction=1.0e-3,
+    )
+
+    assert volume_map.diagnostics()["minimum_mollifier_width"] == pytest.approx(1.0e-4)
+    assert np.isfinite(volume_map.coarea_density(0.0))
+    assert volume_map.coarea_density(0.0) < 3.0e3
