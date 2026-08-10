@@ -31,9 +31,10 @@ return any finite residual so degradation can be recorded instead of aborting;
 NaN or infinity still fails loudly. This residual criterion only validates the
 direct solve and is not used as evidence of low pollution. Independent structural
 diagnostics also require \(\int_\Omega(|\mathbf b|^2-1)^2\,dV<10^{-12}\) and
-\(\int_\Omega(\mathbf b\cdot\nabla\psi)^2\,dV<10^{-12}\), so field normalization
-and source tangency are not certified only by the recorded CSV values. A scaling
-case with \(\kappa_\parallel=10\) and \(Q_0=3\) checks the expected amplitude,
+\(\int_\Omega(\mathbf b\cdot\nabla\psi)^2\,dV<10^{-12}\), so unit normalization
+and the 90-degree rotation of \(\mathbf b\) relative to the actual source gradient
+are checked structurally rather than only through the recorded CSV. A scaling case
+with \(\kappa_\parallel=10\) and \(Q_0=3\) checks the expected amplitude,
 effective-diffusivity, and dimensionless-ratio scalings. The implementation
 derives \(\nabla\psi\) and the \(2k^2\) Laplacian eigenvalue from the same
 coefficient function used as the source, and the test independently checks the
@@ -41,6 +42,13 @@ eigenvalue \(2\pi^2\). CSV comparisons use relative tolerance \(10^{-5}\), about
 100 times the largest Linux/macOS variation measured in review. Every acceptance
 row also requires \(\kappa_{\perp,\mathrm{num}}/\kappa_\parallel<0.2\), which
 rejects an isotropic substitution independently of the recorded values.
+
+The regression table is recorded with `ngsolve.dx(bonus_intorder=6)`. Because
+\(1/|\nabla\psi|\) is non-polynomial near the isolated field nulls, changing the
+quadrature rule changes the pinned amplitudes and requires regenerating the CSV.
+Reviewing with `bonus_intorder=14` shifted amplitudes by at most 0.573% while
+leaving the finest-pair rates essentially unchanged (1.977, 3.936, and 5.877),
+confirming quadrature is not the source of the observed convergence trend.
 
 | Degree \(p\) | Elements | \(h=1/4\) | \(h=1/8\) | \(h=1/16\) | Finest-pair rate |
 | --- | ---: | ---: | ---: | ---: | ---: |
