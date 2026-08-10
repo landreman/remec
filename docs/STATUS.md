@@ -78,13 +78,14 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   add a direct `|b_safe| < 1` symmetry/eigenpair unit contract, and add the §6
   floor-sensitivity study that distinguishes deliberate manufactured-floor activity
   from acceptable production observables.
-- [ ] **1.5** Refactor to `AnisotropicDiffusionSolver` — `DESIGN.md` §8.4
+- [x] **1.5** Refactor to `AnisotropicDiffusionSolver` — `DESIGN.md` §8.4
   <br>Acceptance: interface extracted, results bit-for-bit unchanged.
-  <br>Measured: —
-  <br>Next: unify the constant-tensor kernel and dedicated spatially varying Sovinec
-  assembly without changing either result, restore separate parallel/perpendicular
-  energy diagnostics on the unified path, and implement the configurable
-  `AnisotropyPollutionError` production safety gate from §8.3.
+  <br>Measured: macOS / CPython 3.12.2 / NGSolve 6.2.2606 — `make check`: 35 passed,
+  1 slow test deselected; public constant-kernel result and separate M4a energy
+  diagnostics preserved; spatial tensor symmetry/eigenvalue and smooth-floor null
+  contracts pass. Existing 1.1–1.4 rate and pollution tables are unchanged.
+  <br>Next: add the configurable `AnisotropyPollutionError` production safety gate
+  from §8.3 before the AP milestone; retain this strategy as the default reference.
 
 ## Phase 2 — level-set volume and transplant
 

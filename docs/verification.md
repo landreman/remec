@@ -1,5 +1,26 @@
 # Verification records
 
+## Milestone 1.5 — public anisotropic diffusion strategy
+
+The extracted `AnisotropicDiffusionSolver` is the `StandardCG` strategy for note
+equation (M4a).  Its public `solve` method routes constant directional tensors and
+smoothly floored spatial fields to the established FEM kernels while preserving the
+separate parallel/perpendicular energies and free-DOF residual diagnostics.  The
+constant-direction contract uses the same degree-2, 32-element manufactured solve as
+the existing kernel; it reports 35 passing tests in `make check` (plus one excluded
+slow test), with relative free-DOF residual below 1e-11.  The spatial tensor
+contract checks symmetry, the exact perpendicular eigenvalue, a strictly sub-parallel
+safe-direction eigenvalue when the safe direction has norm below one, and isotropic
+behavior at a null.  Its floor activity is
+\(B_{floor}^2/(|B|^2+B_{floor}^2)\), distinguishing intentional manufactured-floor
+activity from production observables.
+
+The existing machine-readable rates and pollution tables remain unchanged and all
+prior 1.1–1.4 manufactured tests pass through the verification suite.  Mutation
+checks for this refactor were: replacing the spatial tensor by its isotropic part
+fails the symmetry/eigenpair and island regression contracts; removing the smooth
+floor term fails the null floor-activity contract.  No ADR is open.
+
 ## Milestone 1.4 — closed-field and analytic-island frozen fields
 
 This milestone extends the frozen-field verification of note equation (M4a) to a

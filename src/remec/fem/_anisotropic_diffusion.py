@@ -21,6 +21,7 @@ class _AnisotropicDiffusionSolution:
     free_dof_residual_norm: float
     free_dof_relative_residual_norm: float
     energy_diagnostics: _EnergyDiagnostics
+    operator: Any
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,6 +52,7 @@ class _FrozenFieldDiffusionSolution:
     free_dof_relative_residual_norm: float
     energy_diagnostics: _EnergyDiagnostics
     field_direction_diagnostics: _FieldDirectionDiagnostics
+    operator: Any
 
 
 @dataclass(frozen=True, slots=True)
@@ -223,6 +225,7 @@ def solve_anisotropic_diffusion(
         free_dof_residual_norm=free_dof_residual_norm,
         free_dof_relative_residual_norm=free_dof_relative_residual_norm,
         energy_diagnostics=energy_diagnostics,
+        operator=bilinear_form.mat,
     )
 
 
@@ -348,6 +351,7 @@ def solve_frozen_field_anisotropic_diffusion(
             floor=field_floor,
             floor_activity_l2_squared=floor_activity_l2_squared,
         ),
+        operator=bilinear_form.mat,
     )
 
 
