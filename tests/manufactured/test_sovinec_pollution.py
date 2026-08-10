@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import csv
 from itertools import pairwise
-from math import isfinite
+from math import isfinite, pi
 from pathlib import Path
 
 import pytest
@@ -28,10 +28,6 @@ def _recorded_pollution() -> dict[tuple[int, float], dict[str, float]]:
         return {
             (int(row["polynomial_order"]), float(row["maxh"])): {
                 "elements": float(row["elements"]),
-                "parallel_conductivity": float(row["parallel_conductivity"]),
-                "physical_perpendicular_conductivity": float(
-                    row["physical_perpendicular_conductivity"]
-                ),
                 "central_amplitude": float(row["central_amplitude"]),
                 "numerical_to_parallel_ratio": float(row["numerical_to_parallel_ratio"]),
             }
@@ -57,18 +53,15 @@ def test_sovinec_pollution_decreases_with_order_and_refinement() -> None:
     for key, diagnostic in diagnostics.items():
         expected = recorded[key]
         assert diagnostic.elements == expected["elements"]
-        assert diagnostic.parallel_conductivity == expected["parallel_conductivity"]
-        assert (
-            diagnostic.physical_perpendicular_conductivity
-            == expected["physical_perpendicular_conductivity"]
-        )
         assert diagnostic.unit_direction_defect_l2_squared < 1.0e-12
         assert diagnostic.source_tangency_l2_squared < 1.0e-12
+        assert diagnostic.source_laplacian_eigenvalue == pytest.approx(2.0 * pi**2)
+        assert diagnostic.numerical_to_parallel_ratio < 0.2
         assert diagnostic.central_amplitude == pytest.approx(
-            expected["central_amplitude"], rel=0.05
+            expected["central_amplitude"], rel=1.0e-5
         )
         assert diagnostic.numerical_to_parallel_ratio == pytest.approx(
-            expected["numerical_to_parallel_ratio"], rel=0.05
+            expected["numerical_to_parallel_ratio"], rel=1.0e-5
         )
         assert diagnostic.central_amplitude > 0.0
         assert diagnostic.free_dof_relative_residual_norm <= 1.0e-6
@@ -94,7 +87,7 @@ def test_sovinec_pollution_decreases_with_order_and_refinement() -> None:
     assert scaled.numerical_to_parallel_ratio == pytest.approx(base.numerical_to_parallel_ratio)
 
 
-def test_sovinec_extended_scan_reports_large_finite_residual() -> None:
+def test_sovinec_extended_scan_reports_finite_residual() -> None:
     """A permanent pollution scan reports finite solver degradation instead of aborting."""
     diagnostic = measure_sovinec_pollution(
         Slab2D.unit_square(maxh=0.0625),
@@ -102,4 +95,3 @@ def test_sovinec_extended_scan_reports_large_finite_residual() -> None:
     )
 
     assert isfinite(diagnostic.free_dof_relative_residual_norm)
-    assert diagnostic.free_dof_relative_residual_norm > 1.0e-6

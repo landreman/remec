@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import hypot, isfinite, pi
+from math import hypot, isfinite
 from typing import Any
 
 from remec.common.threads import configure_threads
@@ -53,6 +53,7 @@ class PollutionDiagnostic:
     free_dof_relative_residual_norm: float
     unit_direction_defect_l2_squared: float
     source_tangency_l2_squared: float
+    source_laplacian_eigenvalue: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -252,14 +253,17 @@ def measure_sovinec_pollution(
     quadrature = ng.dx(bonus_intorder=6)
 
     psi = ng.sin(ng.pi * ng.x) * ng.sin(ng.pi * ng.y)
-    dpsi_dx = ng.pi * ng.cos(ng.pi * ng.x) * ng.sin(ng.pi * ng.y)
-    dpsi_dy = ng.pi * ng.sin(ng.pi * ng.x) * ng.cos(ng.pi * ng.y)
+    # Differentiate the same coefficient function used in the linear form, so
+    # the tangency diagnostic cannot agree with an independently mistyped source.
+    dpsi_dx = psi.Diff(ng.x)
+    dpsi_dy = psi.Diff(ng.y)
+    source_laplacian = dpsi_dx.Diff(ng.x) + dpsi_dy.Diff(ng.y)
     tangent_norm = ng.sqrt(dpsi_dx**2 + dpsi_dy**2)
     # Rotate and normalize grad(psi): the resulting field follows the closed
     # source contours, so the exact parallel operator cannot transport psi
     # across them. The measured cross-contour response is discretization error.
     tangent = ng.CoefficientFunction((dpsi_dy / tangent_norm, -dpsi_dx / tangent_norm))
-    source_gradient = ng.CoefficientFunction((dpsi_dx, dpsi_dy))
+    source_gradient = ng.CoefficientFunction((psi.Diff(ng.x), psi.Diff(ng.y)))
 
     parallel_trial = ng.InnerProduct(tangent, ng.grad(trial))
     parallel_test = ng.InnerProduct(tangent, ng.grad(test))
@@ -291,6 +295,10 @@ def measure_sovinec_pollution(
         source_tangency_l2_squared = float(
             ng.Integrate(ng.InnerProduct(tangent, source_gradient) ** 2, mesh, order=8)
         )
+        source_l2_squared = float(ng.Integrate(psi**2, mesh, order=8))
+        source_laplacian_eigenvalue = (
+            -float(ng.Integrate(source_laplacian * psi, mesh, order=8)) / source_l2_squared
+        )
 
     if not isfinite(relative_residual):
         raise RuntimeError("Sovinec pollution solve produced a non-finite algebraic residual")
@@ -298,10 +306,15 @@ def measure_sovinec_pollution(
         raise RuntimeError(
             "Sovinec pollution solve produced a non-positive or non-finite central amplitude"
         )
+    if not isfinite(source_laplacian_eigenvalue) or source_laplacian_eigenvalue <= 0.0:
+        raise RuntimeError("Sovinec source has no finite positive Laplacian eigenvalue")
 
-    # Since -Delta psi = 2*pi**2*psi, match the discrete center response to an
-    # isotropic perpendicular operator to obtain the Sovinec effective kappa.
-    numerical_perpendicular_diffusivity = source_amplitude / (2.0 * pi**2 * central_amplitude)
+    # Match the center response to an isotropic perpendicular operator. Deriving
+    # the Laplacian eigenvalue from psi keeps the Sovinec 2*k**2 factor tied to
+    # the actual source rather than to a second hard-coded wavenumber.
+    numerical_perpendicular_diffusivity = source_amplitude / (
+        source_laplacian_eigenvalue * central_amplitude
+    )
     return PollutionDiagnostic(
         polynomial_order=polynomial_order,
         maxh=slab.maxh,
@@ -314,4 +327,5 @@ def measure_sovinec_pollution(
         free_dof_relative_residual_norm=relative_residual,
         unit_direction_defect_l2_squared=unit_direction_defect_l2_squared,
         source_tangency_l2_squared=source_tangency_l2_squared,
+        source_laplacian_eigenvalue=source_laplacian_eigenvalue,
     )

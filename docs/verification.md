@@ -20,7 +20,8 @@ Dirichlet data, the discrete central amplitude defines
 \(\kappa_{\perp,\mathrm{num}}=Q_0/(2\pi^2\chi_h(1/2,1/2))\).
 
 `test_sovinec_pollution_decreases_with_order_and_refinement` reads all nine rows
-of `tests/manufactured/sovinec_pollution.csv`, recomputes them within 5%, and
+of `tests/manufactured/sovinec_pollution.csv`, recomputes them within relative
+tolerance \(10^{-5}\), and
 requires strict decreases at each adjacent order and refinement. The finest-pair
 rates use \(\log_2(\kappa_{\perp,\mathrm{num}}(h)/
 \kappa_{\perp,\mathrm{num}}(h/2))\). The algebraic diagnostic is the free-DOF
@@ -33,7 +34,13 @@ diagnostics also require \(\int_\Omega(|\mathbf b|^2-1)^2\,dV<10^{-12}\) and
 \(\int_\Omega(\mathbf b\cdot\nabla\psi)^2\,dV<10^{-12}\), so field normalization
 and source tangency are not certified only by the recorded CSV values. A scaling
 case with \(\kappa_\parallel=10\) and \(Q_0=3\) checks the expected amplitude,
-effective-diffusivity, and dimensionless-ratio scalings.
+effective-diffusivity, and dimensionless-ratio scalings. The implementation
+derives \(\nabla\psi\) and the \(2k^2\) Laplacian eigenvalue from the same
+coefficient function used as the source, and the test independently checks the
+eigenvalue \(2\pi^2\). CSV comparisons use relative tolerance \(10^{-5}\), about
+100 times the largest Linux/macOS variation measured in review. Every acceptance
+row also requires \(\kappa_{\perp,\mathrm{num}}/\kappa_\parallel<0.2\), which
+rejects an isotropic substitution independently of the recorded values.
 
 | Degree \(p\) | Elements | \(h=1/4\) | \(h=1/8\) | \(h=1/16\) | Finest-pair rate |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -52,7 +59,9 @@ M4a assembly because the milestone 1.1/1.2 verification helper accepts only a
 constant direction and strictly positive \(\kappa_\perp\). Milestone 1.5 owns
 unifying those paths bit-for-bit and restoring the §8.1 per-piece energy diagnostics.
 Milestone 1.4 owns the finite-anisotropy axis and the full scheduled scan; this PR
-keeps the fast, hardest-case \(\kappa_\perp=0\) table in PR CI.
+keeps the fast, hardest-case \(\kappa_\perp=0\) table in PR CI. Extended scans
+return finite residuals for diagnosis, but still fail loudly when the central
+amplitude is non-finite or non-positive because the pollution metric is then invalid.
 
 ## Milestone 1.2 — oblique anisotropic K
 

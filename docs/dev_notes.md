@@ -25,3 +25,9 @@
   degrades as the measured pollution approaches roundoff (9.31e-8 for p=3 on 512
   elements here), despite a successful sparse Cholesky solve; record that residual
   separately from the pollution metric.
+
+- Milestone 1.3 review follow-up (NGSolve 6.2.2606): analytic
+  `CoefficientFunction` expressions support `.Diff(ngsolve.x)` and
+  `.Diff(ngsolve.y)`, including repeated differentiation. Use these derivatives
+  when a diagnostic must certify tangency to the exact coefficient function used
+  in a form; a separately hand-written gradient can reproduce its own typo.
