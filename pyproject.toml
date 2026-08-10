@@ -12,6 +12,7 @@ license = { file = "LICENSE" }
 authors = [{ name = "REMEC contributors" }]
 dependencies = [
     "ngsolve>=6.2.2606,<6.3",
+    "numpy>=1.24,<2.5",
 ]
 
 [project.optional-dependencies]
