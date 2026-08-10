@@ -47,6 +47,10 @@ class _FrozenFieldDiffusionSolution:
         """Return the field value at the unit-square centre for M4a diagnostics."""
         return float(self._field(self._mesh(0.5, 0.5)))
 
+    def mesh(self) -> Any:
+        """Return the internal mesh for same-kernel integral diagnostics."""
+        return self._mesh
+
     def preconditioner_probe(self) -> Any:
         """Return the assembled solution vector used for the inverse-action check."""
         return self._field.vec
@@ -386,7 +390,7 @@ def measure_sovinec_pollution(
         residual_tolerance=None,
         direction_is_normalized=True,
     )
-    mesh = solution._mesh
+    mesh = solution.mesh()
     relative_residual = solution.free_dof_relative_residual_norm
     central_amplitude = solution.center_value()
     with ng.TaskManager():

@@ -26,6 +26,8 @@ second perpendicular projection with \(|\mathbf b_{\rm safe}|<1\) would not be
 idempotent and would implement a different operator. ADR 0002 records the
 redundant-normalization correction that preserves the original Sovinec baseline
 bit-for-bit.
+`test_sovinec_common_path_preserves_the_bit_exact_reference_solution` is the
+same-process regression that demonstrates this acceptance criterion.
 
 For production safety, `assess_pollution` implements `DESIGN.md` §8.3's default
 criterion \(\kappa_{\perp,\rm num}<0.1\kappa_\perp\): it emits
