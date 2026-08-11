@@ -97,9 +97,19 @@ that dependency. Phase 7 may run in parallel with Phase 8.
 
 ## Phase 2 — level-set volume and transplant
 
-- [ ] **2.1** Mollified V_χ — `DESIGN.md` §12.1, §12.2 · note: §6
+- [x] **2.1** Mollified V_χ — `DESIGN.md` §12.1, §12.2 · note: §6
   <br>Acceptance: analytic circle/sphere; monotone tabulation.
-  <br>Measured: —
+  <br>Measured: macOS / CPython 3.12.2 / NumPy 2.4.6 — the zero-level circle and
+  sphere volumes have relative errors 5.18e-4 and 7.76e-4, respectively; their
+  mollified co-area densities agree within 1.70e-2 and 2.56e-3. The sphere
+  quadrature-resolution scan 24 → 48 → 96 measures adjacent rates 2.078 and
+  2.058. The endpoint identities hold exactly, raw endpoint residuals are checked,
+  and the 65-level table is strictly monotone with uniform enclosed-volume samples. See
+  `tests/manufactured/mollified_sphere_volume_rates.csv` and `docs/verification.md`.
+  <br>Next: 2.2 should add the FEM quadrature-extraction pass and consume
+  `MollifiedVolumeMap` through a monotone `VolumeProfile` transplant; 2.3 owns the
+  nonlocal JVP and must calibrate the `minimum_gradient_fraction=1e-3` critical-level
+  safeguard against tabulation spacing before using its mollified derivatives in Newton.
 - [ ] **2.2** Profiles + transplant — `DESIGN.md` §12.5 · note: §6
   <br>Acceptance: exact enclosed-volume and layer-cake tests.
   <br>Measured: —

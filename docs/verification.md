@@ -1,5 +1,72 @@
 # Verification records
 
+## Milestone 2.1 — mollified level-set volume map
+
+`MollifiedVolumeMap` implements the note's equation `(mollified_V)`,
+
+\[
+V_\chi^\varepsilon(\hat\chi)=\sum_i w_i H_{\varepsilon_i}(\chi_i-\hat\chi),
+\qquad
+\varepsilon_i=c h_i\max(|\nabla\chi_i|,\mathrm{gradient\_floor}),
+\]
+
+using the compact, moment-matched smooth Heaviside
+\(H_\varepsilon\). The gradient-scaled width is deliberately local, so the
+regularization has a fixed spatial width rather than an inconsistent fixed width in
+level-set-value space. A named `minimum_gradient_fraction` applies a robust fraction
+of the sampled maximum gradient at critical points, avoiding a zero-width mollifier;
+the number of floored samples is reported. A mandatory co-area consistency diagnostic
+warns when the tabulated derivative exceeds its configurable relative-error tolerance.
+`coarea_density` implements `(V_derivatives)`,
+\(-dV_\chi^\varepsilon/d\hat\chi=\sum_i w_iH'_{\varepsilon_i}\), and a monotone
+PCHIP table exposes both `V_χ(χ̂)` and its stable inverse `χ̂(V)`. The map returns the
+endpoint identities exactly.
+
+`tests/unit/test_level_set_volume.py` evaluates \(\chi=0.6^2-r^2\) on
+Gauss quadrature in \([-1,1]^2\) and \([-1,1]^3\). At the zero level, the exact
+circle and sphere volumes are \(\pi(0.6)^2\) and \(4\pi(0.6)^3/3\). The measured
+relative errors are 5.18e-4 and 7.76e-4; the independent analytic co-area densities
+\(\pi\) and \(2\pi(0.6)\) agree within 1.70e-2 and 2.56e-3. The test also verifies
+the endpoint identities, strict monotonicity, a tabulation uniformly spaced in
+enclosed volume, unnormalized endpoint residuals, and agreement between the tabulated
+derivative and independently assembled mollified co-area density. It additionally
+checks the inverse round-trip `inverse_level(volume(level))` within 0.04 over the
+analytic circle branch.
+
+The manufactured sphere resolution table is checked in at
+`tests/manufactured/mollified_sphere_volume_rates.csv`:
+
+| Quadrature order | Absolute volume error | Adjacent rate |
+| ---: | ---: | ---: |
+| 24 | 1.2347e-2 | — |
+| 48 | 2.9248e-3 | 2.078 |
+| 96 | 7.0256e-4 | 2.058 |
+
+The measured rates are consistent with the expected \(O(\varepsilon^2)\) behavior of
+the mollified construction. The test recomputes all table errors and rates and rejects
+either rate below 1.9. This is a quadrature-resolution study of the map itself; it is not a claim
+about a future FEM solve's convergence rate.
+
+Mutation checks: replacing the gradient-scaled width by a fixed chi-space width makes
+the circle co-area-density assertion fail (3.328 versus \(\pi\), outside the 3% bound).
+Replacing `H'_ε` by zero makes both circle and sphere co-area checks fail. The PCHIP
+derivative is independently checked against the co-area density, and the raw endpoint
+residuals are checked before endpoint normalization, so neither a wrong spline slope
+nor a removed mollified-Heaviside assembly can pass through endpoint identities alone.
+The plateau test rejects the former `1e-12` gradient guard: 29% zero-gradient samples
+must have a width of at least `1e-4` and a finite density below `3e3`.
+
+NumPy is declared explicitly because §12.2 requires the quadrature samples to be
+vectorized. Its temporary `<2.5` bound preserves the project-wide Python-3.10 mypy
+target: NumPy 2.5's stubs use Python-3.12-only syntax even when checked by a later
+interpreter. The bound can be lifted when those stubs support remec's stated target.
+Milestone 2.2 owns the NGSolve quadrature-extraction pass and will adapt this
+array-backed map to the complete §12.1 solver-facing interface; the nonlocal JVP remains
+Milestone 2.3. That milestone must also calibrate the present `1e-3` critical-gradient
+fraction against tabulation spacing before reusing the mollified surface weights in a
+Newton derivative; the current map reports its floored-sample count and warns whenever
+its mandatory tabulation/co-area check exceeds the configured tolerance.
+
 ## Milestone 1.5 — `AnisotropicDiffusionSolver` strategy interface
 
 The public `AnisotropicDiffusionSolver` is the Phase-1 `StandardCG` strategy for
