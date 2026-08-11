@@ -1,6 +1,6 @@
 # remec
 
-Regularized MHD Equilibrium Code.
+Regularized Extended-MHD Equilibrium Code.
 
 The project architecture and staged implementation plan are in
 [`docs/DESIGN.md`](docs/DESIGN.md), beginning with its overview in §1.  Contributors
