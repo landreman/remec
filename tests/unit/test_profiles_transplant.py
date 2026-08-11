@@ -96,6 +96,11 @@ def test_analytic_profile_accepts_a_resolved_sharp_edge_transition() -> None:
         return -50.0 / np.cosh((np.asarray(volume, dtype=float) - 0.8) / 0.01) ** 2
 
     TransplantedProfile(_unit_interval_volume_map(), AnalyticVolumeProfile(value, derivative))
+    with pytest.raises(InvalidProfileError, match="derivative disagrees"):
+        TransplantedProfile(
+            _unit_interval_volume_map(),
+            AnalyticVolumeProfile(value, lambda volume: 2.0 * derivative(volume)),
+        )
 
 
 def test_transplant_realizes_enclosed_volume_and_pressure_bounds() -> None:
