@@ -110,9 +110,15 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   `MollifiedVolumeMap` through a monotone `VolumeProfile` transplant; 2.3 owns the
   nonlocal JVP and must calibrate the `minimum_gradient_fraction=1e-3` critical-level
   safeguard against tabulation spacing before using its mollified derivatives in Newton.
-- [ ] **2.2** Profiles + transplant — `DESIGN.md` §12.5 · note: §6
+- [x] **2.2** Profiles + transplant — `DESIGN.md` §12.5 · note: §6
   <br>Acceptance: exact enclosed-volume and layer-cake tests.
-  <br>Measured: —
+  <br>Measured: macOS / CPython 3.12.2 / NGSolve 6.2.2606 — direct superlevel-volume
+  measurement of the transplanted field realizes seven targets with a 9.77e-5 maximum
+  absolute error (required below 2.0e-3); all eight compact quadratic-B-spline layer-cake residuals are below 9.1e-5
+  (required below 3.0e-3). The NGSolve mapped-quadrature pass integrates the unit square to 1.0
+  and its M4b BSpline transplant has 0.5 ± 0.03 mean pressure.
+  <br>Next: 2.3 owns the nonlocal ``delta V_chi`` JVP; the current BSpline represents
+  only M4b's local composition and NGSolve differentiates it symbolically.
 - [ ] **2.3** Differentiable map — `DESIGN.md` §12.6 · note: §6
   <br>Acceptance: JVP agrees with finite differences.
   <br>Measured: —
