@@ -86,6 +86,18 @@ def test_analytic_profile_rejects_an_inconsistent_derivative() -> None:
         TransplantedProfile(_unit_interval_volume_map(), profile)
 
 
+def test_analytic_profile_accepts_a_resolved_sharp_edge_transition() -> None:
+    """The derivative guard distinguishes a sharp valid profile from a wrong derivative."""
+
+    def value(volume: float | np.ndarray) -> np.ndarray:
+        return 0.5 * (1.0 - np.tanh((np.asarray(volume, dtype=float) - 0.8) / 0.01))
+
+    def derivative(volume: float | np.ndarray) -> np.ndarray:
+        return -50.0 / np.cosh((np.asarray(volume, dtype=float) - 0.8) / 0.01) ** 2
+
+    TransplantedProfile(_unit_interval_volume_map(), AnalyticVolumeProfile(value, derivative))
+
+
 def test_transplant_realizes_enclosed_volume_and_pressure_bounds() -> None:
     """(M4b) realizes ``p_0(V)`` and confines pressure to the profile range."""
     volume_map = _unit_interval_volume_map()

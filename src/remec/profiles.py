@@ -142,11 +142,15 @@ def _validate_profile(
     if np.any(derivatives > 1.0e-12 * max(1.0, np.max(np.abs(derivatives)))):
         raise InvalidProfileError("profile derivative must be non-positive")
     if isinstance(profile, AnalyticVolumeProfile):
-        finite_difference = np.gradient(values, probe)
+        refined_probe = np.linspace(0.0, total_volume, 1025)
+        refined_values = np.asarray(profile.value(refined_probe), dtype=float)
+        refined_derivatives = np.asarray(profile.derivative(refined_probe), dtype=float)
+        finite_difference = np.gradient(refined_values, refined_probe)
+        coarse_difference = np.interp(refined_probe, probe, np.gradient(values, probe))
+        resolution_error = np.abs(finite_difference - coarse_difference)
         scale = max(1.0, float(np.max(np.abs(finite_difference))))
-        if not np.allclose(
-            derivatives[1:-1], finite_difference[1:-1], rtol=2.0e-2, atol=2.0e-3 * scale
-        ):
+        tolerance = 2.0 * resolution_error + 2.0e-3 * scale
+        if np.any(np.abs(refined_derivatives[1:-1] - finite_difference[1:-1]) > tolerance[1:-1]):
             raise InvalidProfileError("profile derivative disagrees with its value function")
     if edge_value is not None and not np.isclose(values[-1], edge_value):
         raise InvalidProfileError("profile edge value differs from the required edge value")
