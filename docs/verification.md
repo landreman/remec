@@ -1,5 +1,48 @@
 # Verification records
 
+## Milestone 2.2 — profiles and the M4b transplant
+
+`VolumeProfile` supplies analytic and tabulated non-increasing (p_0(V)) profiles;
+the latter permits the intentional edge-vacuum plateau. `TransplantedProfile` implements
+note equation (M4b),
+
+\[
+p(\mathbf r)=p_0\!\left(V_\chi(\chi(\mathbf r))\right).
+\]
+
+It validates profile monotonicity and the complete [0, (V_\Omega)] interval,
+keeps the result within the prescribed pressure bounds, and exports the local monotone
+composition as an NGSolve degree-one `BSpline`. Thus NGSolve can form the local chain
+rule term (g'(\chi)\delta\chi); milestone 2.3 will add the nonlocal
+(p_0'(V_\chi)\delta V_\chi) contribution.
+
+`extract_ngsolve_quadrature` is the FEM bridge to the array-backed
+`MollifiedVolumeMap`. At each mapped integration point it uses
+(w_i= w(\mathrm{ip}_i)|\det J_i|), (h_i=|\det J_i|^{1/d}), the coefficient value,
+and the supplied analytic gradient. This retains curved-element geometry rather than
+forming a discontinuous histogram.
+
+`tests/unit/test_profiles_transplant.py` checks the exact enclosed-volume diagnostic
+on seven targets (absolute tolerance (2\times10^{-3})), pressure bounds and
+monotonicity, and the note's layer-cake relation
+
+\[
+\int_\Omega\varphi(p)\,dV=\int_0^{V_\Omega}\varphi(p_0(V))\,dV.
+\]
+
+For (p_0(V)=1-V^2) on the manufactured unit interval, its two smooth moment
+residuals are (2.364\times10^{-5}) and (1.190\times10^{-5}), versus a
+(3\times10^{-3}) threshold. A radial circle data set independently evaluates the
+first layer-cake moment (\int p\,dA=2) within 0.02. The NGSolve test extracts a
+unit-square quadrature total of 1.0, verifies that the center pressure exceeds the
+edge pressure, and measures mean pressure (0.5\pm0.03).
+
+Mutation check: replacing (V_\chi(\chi)) by a constant zero volume causes the two
+layer-cake checks, the NGSolve center/edge ordering, and the independent radial moment
+to fail (residuals 0.333 and 0.567; radial moment 4 rather than 2). This demonstrates
+that a test failure reflects omission of the M4b volume composition, not a solver
+residual.
+
 ## Milestone 2.1 — mollified level-set volume map
 
 `MollifiedVolumeMap` implements the note's equation `(mollified_V)`,

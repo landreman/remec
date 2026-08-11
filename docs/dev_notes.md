@@ -37,3 +37,12 @@
   `sqrt(B·B + B_floor²)` normalization, and finite vector evaluation at an exact
   analytic O- or X-point. This permits one source expression to be differentiated
   from the same smoothly floored tensor assembled in the manufactured island form.
+
+- Milestone 2.2 (NGSolve 6.2.2606): `mesh.GetTrafo(element)(integration_point)`
+  yields a mapped point with its local `measure`; multiply that by
+  `integration_point.weight` for physical quadrature weights. A `CoefficientFunction`
+  accepts that mapped point directly, so this extracts values and analytic gradient
+  magnitudes without exposing an NGSolve object in the array-backed volume-map API.
+  `BSpline(2, [x0, *knots, xN], values)` is the open linear spline representation
+  that interpolates the supplied values; guard its right endpoint explicitly because
+  the native spline's final knot is half-open.
