@@ -119,9 +119,15 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   and its M4b BSpline transplant has 0.5 ± 0.03 mean pressure.
   <br>Next: 2.3 owns the nonlocal ``delta V_chi`` JVP; the current BSpline represents
   only M4b's local composition and NGSolve differentiates it symbolically.
-- [ ] **2.3** Differentiable map — `DESIGN.md` §12.6 · note: §6
+- [x] **2.3** Differentiable map — `DESIGN.md` §12.6 · note: §6
   <br>Acceptance: JVP agrees with finite differences.
-  <br>Measured: —
+  <br>Measured: macOS / CPython 3.12.2 / NumPy 2.4.6 — the direct mollified
+  `(V_derivatives)` surface-average JVP agrees with a central finite difference at
+  four manufactured levels with maximum absolute error 5.73e-10 and maximum relative
+  error 1.94e-9 (step 1e-6). The JVP uses the direct H′εwᵢ quadrature weights, not a
+  numerical derivative of the volume-uniform PCHIP tabulation.
+  <br>Next: 2.4 remains optional; later Newton work can consume this array-backed
+  low-rank nonlocal action while retaining symbolic differentiation for M4b's local term.
 - [ ] **2.4** Cut-cell reference (optional) — `DESIGN.md` §12.4
   <br>Measured: —
 

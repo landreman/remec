@@ -1,5 +1,33 @@
 # Verification records
 
+## Milestone 2.3 — differentiable volume map
+
+`MollifiedVolumeMap.jvp` implements the nonlocal contribution required by
+`DESIGN.md` §12.6 and the note's `(V_derivatives)` equation. At requested level values
+it applies
+
+\[
+\delta V_\chi^\varepsilon(\hat\chi)
+=\sum_i H'_{\varepsilon_i}(\chi_i-\hat\chi)w_i\,\delta\chi_i.
+\]
+
+The gradient-scaled mollifier widths are frozen at the linearization point, exactly as
+the discrete derivative in the note specifies. The action directly evaluates the smooth
+quadrature functional, rather than differentiating the volume-uniform PCHIP table; this
+avoids numerical differentiation in the ill-conditioned near-step direction. The latter
+continues to provide monotone values and inverses for the M4b composition.
+
+`tests/unit/test_differentiable_volume_map.py` uses 4,096 manufactured unit-interval
+quadrature samples with constant gradient and spatial size, so the contract isolates the
+`H'_epsilon w_i` term from width variation. At levels 0.23, 0.37, 0.61, and 0.74, its
+central finite difference with step \(10^{-6}\) has maximum absolute discrepancy
+\(5.73\times10^{-10}\) and maximum relative discrepancy \(1.94\times10^{-9}\).
+
+Mutation check: replacing the `H'_epsilon` surface weights by zero makes all four JVP
+values zero while the independently evaluated finite-difference values range from
+\(-2.81\times10^{-1}\) to \(2.96\times10^{-1}\), so the contract fails for the
+intended omitted nonlocal derivative.
+
 ## Milestone 2.2 — profiles and the M4b transplant
 
 `VolumeProfile` supplies analytic and tabulated non-increasing (p_0(V)) profiles;

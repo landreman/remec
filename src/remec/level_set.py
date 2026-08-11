@@ -252,6 +252,45 @@ class MollifiedVolumeMap:
             result[index] = float(np.dot(weights, smooth_step))
         return result
 
+    @staticmethod
+    def mollified_volume(
+        values: NDArray[np.float64],
+        widths: NDArray[np.float64],
+        weights: NDArray[np.float64],
+        levels: float | NDArray[np.float64],
+    ) -> float | NDArray[np.float64]:
+        """Evaluate the un-tabulated mollified ``V_chi`` in ``(mollified_V)``.
+
+        Unlike :meth:`volume`, this method intentionally does not use the
+        volume-uniform PCHIP table.  It is the smooth quadrature functional
+        whose directional derivative is specified by ``(V_derivatives)``.
+        """
+        sample_values = np.asarray(values, dtype=float).reshape(-1)
+        sample_widths = np.asarray(widths, dtype=float).reshape(-1)
+        sample_weights = np.asarray(weights, dtype=float).reshape(-1)
+        if (
+            not sample_values.size
+            or len({sample_values.size, sample_widths.size, sample_weights.size}) != 1
+            or not np.all(np.isfinite(sample_values))
+            or not np.all(np.isfinite(sample_widths))
+            or not np.all(np.isfinite(sample_weights))
+            or np.any(sample_widths <= 0.0)
+            or np.any(sample_weights <= 0.0)
+        ):
+            raise ValueError("mollified-volume samples must be finite, equally sized, and positive")
+        points = np.asarray(levels, dtype=float)
+        if not np.all(np.isfinite(points)):
+            raise ValueError("mollified-volume levels must be finite")
+        result = MollifiedVolumeMap._mollified_volumes(
+            sample_values, sample_widths, sample_weights, points.reshape(-1)
+        ).reshape(points.shape)
+        return float(result) if points.ndim == 0 else result
+
+    @property
+    def mollifier_widths(self) -> NDArray[np.float64]:
+        """Return a copy of the frozen spatially scaled widths in ``(mollified_V)``."""
+        return np.array(self._widths, dtype=np.float64, copy=True)
+
     def volume(self, level: float | NDArray[np.float64]) -> float | NDArray[np.float64]:
         """Return monotone ``V_chi^epsilon(level)`` with exact endpoint identities."""
         points = np.asarray(level, dtype=float)
@@ -277,6 +316,36 @@ class MollifiedVolumeMap:
             0.0,
         )
         return float(np.dot(self._weights, derivative))
+
+    def jvp(
+        self,
+        delta_chi: NDArray[np.float64],
+        levels: float | NDArray[np.float64] | None = None,
+    ) -> float | NDArray[np.float64]:
+        """Apply the nonlocal ``(V_derivatives)`` JVP at one or more levels.
+
+        With the gradient-scaled mollifier widths frozen at this map's
+        linearization point, this applies
+        ``delta V_chi(level) = sum_i H'_epsilon_i(chi_i-level) w_i delta_chi_i``.
+        The direct mollified surface weights are used rather than a numerical
+        derivative of the volume-uniform tabulation, avoiding the near-step
+        conditioning warned about in DESIGN.md §12.3.
+        """
+        perturbation = np.asarray(delta_chi, dtype=float).reshape(-1)
+        if perturbation.shape != self._values.shape or not np.all(np.isfinite(perturbation)):
+            raise ValueError("delta_chi must be finite and match the quadrature sample shape")
+        evaluation_levels = self.levels if levels is None else np.asarray(levels, dtype=float)
+        points = np.asarray(evaluation_levels, dtype=float)
+        if not np.all(np.isfinite(points)):
+            raise ValueError("JVP levels must be finite")
+        argument = (self._values[:, None] - points.reshape(-1)) / self._widths[:, None]
+        surface_delta = np.where(
+            np.abs(argument) < 1.0,
+            (1.0 + np.cos(np.pi * argument)) / (2.0 * self._widths[:, None]),
+            0.0,
+        )
+        result = np.dot(self._weights * perturbation, surface_delta).reshape(points.shape)
+        return float(result) if points.ndim == 0 else result
 
     def volume_derivative(self, level: float) -> float:
         """Return the tabulated ``dV_chi^epsilon/dchi_hat`` for the §12.3 check."""
