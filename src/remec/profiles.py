@@ -141,6 +141,13 @@ def _validate_profile(
         raise InvalidProfileError("profile pressures must be non-increasing")
     if np.any(derivatives > 1.0e-12 * max(1.0, np.max(np.abs(derivatives)))):
         raise InvalidProfileError("profile derivative must be non-positive")
+    if isinstance(profile, AnalyticVolumeProfile):
+        finite_difference = np.gradient(values, probe)
+        scale = max(1.0, float(np.max(np.abs(finite_difference))))
+        if not np.allclose(
+            derivatives[1:-1], finite_difference[1:-1], rtol=2.0e-2, atol=2.0e-3 * scale
+        ):
+            raise InvalidProfileError("profile derivative disagrees with its value function")
     if edge_value is not None and not np.isclose(values[-1], edge_value):
         raise InvalidProfileError("profile edge value differs from the required edge value")
 
@@ -156,9 +163,10 @@ class TransplantedProfile:
 
     volume_map: MollifiedVolumeMap
     profile: VolumeProfile
+    edge_pressure: float | None = None
 
     def __post_init__(self) -> None:
-        self.profile.validate(self.volume_map.diagnostics()["total_volume"])
+        self.profile.validate(self.volume_map.diagnostics()["total_volume"], self.edge_pressure)
 
     @property
     def total_volume(self) -> float:
@@ -170,18 +178,35 @@ class TransplantedProfile:
         volume = self.volume_map.volume(np.asarray(chi, dtype=float))
         return self.profile.value(volume)
 
-    def enclosed_volume(self, pressure: float | ArrayLike) -> float | NDArray[np.float64]:
-        """Invert a strictly decreasing sampled ``p_0(V)`` to diagnose realization."""
+    def enclosed_volume(
+        self, chi: ArrayLike, weights: ArrayLike, pressure: float | ArrayLike
+    ) -> float | NDArray[np.float64]:
+        """Measure the M4b pressure superlevel volume at supplied quadrature samples.
+
+        This is the direct acceptance diagnostic: for a monotone transplant,
+        ``sum_i w_i [p(chi_i) >= p_0(V)]`` must reproduce the target enclosed
+        volume ``V``. It deliberately measures the spatial field rather than
+        inverting ``p_0`` algebraically.
+        """
         points, scalar = _as_array(pressure)
-        volumes = np.linspace(0.0, self.total_volume, len(self.volume_map.levels))
-        values = np.asarray(self.profile.value(volumes), dtype=float)
-        if np.any(np.diff(values) >= 0.0):
-            raise InvalidProfileError(
-                "enclosed-volume inversion requires a strictly decreasing profile"
+        levels = np.asarray(chi, dtype=float).reshape(-1)
+        sample_weights = np.asarray(weights, dtype=float).reshape(-1)
+        if len(levels) != len(sample_weights) or not len(levels) or np.any(sample_weights <= 0.0):
+            raise ValueError(
+                "chi and weights must be non-empty arrays of equal length with positive weights"
             )
-        if np.any(points < values[-1]) or np.any(points > values[0]):
+        pressure_samples = np.asarray(self.pressure(levels), dtype=float)
+        profile_range = np.asarray(
+            self.profile.value(np.array([self.total_volume, 0.0])), dtype=float
+        )
+        if np.any(points < profile_range[0]) or np.any(points > profile_range[1]):
             raise InvalidProfileError("pressure evaluated outside the profile range")
-        result = np.interp(points, values[::-1], volumes[::-1])
+        result = np.asarray(
+            [
+                float(np.sum(sample_weights[pressure_samples >= threshold]))
+                for threshold in points.reshape(-1)
+            ]
+        ).reshape(points.shape)
         return _scalar_or_array(result, scalar)
 
     def layer_cake_moments(
@@ -212,7 +237,7 @@ class TransplantedProfile:
             [
                 float(
                     np.dot(sample_weights, function(pressure))
-                    - np.trapezoid(function(target), volumes)
+                    - _trapezoid(function(target), volumes)
                 )
                 for function in test_functions
             ],
@@ -258,23 +283,36 @@ def extract_ngsolve_quadrature(
 
     if integration_order < 1:
         raise ValueError("integration_order must be positive")
-    values: list[float] = []
-    gradients: list[float] = []
     weights: list[float] = []
     sizes: list[float] = []
+    element_types = {element.type for element in mesh.Elements(ng.VOL)}
+    rules = {
+        element_type: ng.IntegrationRule(element_type, integration_order)
+        for element_type in element_types
+    }
     for element in mesh.Elements(ng.VOL):
-        rule = ng.IntegrationRule(element.type, integration_order)
+        rule = rules[element.type]
         transformation = mesh.GetTrafo(element)
         for point in rule:
             mapped_point = transformation(point)
             measure = float(mapped_point.measure)
-            values.append(float(chi(mapped_point)))
-            gradients.append(float(np.linalg.norm(np.asarray(gradient(mapped_point), dtype=float))))
             weights.append(float(point.weight) * measure)
             sizes.append(measure ** (1.0 / mesh.dim))
+    mapped_points = mesh.MapToAllElements(rules, ng.VOL)
+    values = np.asarray(chi(mapped_points), dtype=float).reshape(-1)
+    gradients = np.linalg.norm(np.asarray(gradient(mapped_points), dtype=float), axis=1)
+    if len(values) != len(weights):
+        raise RuntimeError(
+            "NGSolve mapped quadrature ordering does not match element integration rules"
+        )
     return QuadratureLevelSetData(
-        values=np.asarray(values, dtype=float),
-        gradient_magnitudes=np.asarray(gradients, dtype=float),
+        values=values,
+        gradient_magnitudes=gradients,
         weights=np.asarray(weights, dtype=float),
         element_sizes=np.asarray(sizes, dtype=float),
     )
+
+
+def _trapezoid(values: NDArray[np.float64], points: NDArray[np.float64]) -> float:
+    """NumPy-1.24-compatible composite trapezoidal integration."""
+    return float(np.sum(np.diff(points) * (values[:-1] + values[1:]) * 0.5))

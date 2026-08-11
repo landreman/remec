@@ -22,26 +22,29 @@ rule term (g'(\chi)\delta\chi); milestone 2.3 will add the nonlocal
 and the supplied analytic gradient. This retains curved-element geometry rather than
 forming a discontinuous histogram.
 
-`tests/unit/test_profiles_transplant.py` checks the exact enclosed-volume diagnostic
-on seven targets (absolute tolerance (2\times10^{-3})), pressure bounds and
-monotonicity, and the note's layer-cake relation
+`tests/unit/test_profiles_transplant.py` directly measures the pressure-superlevel
+volume of the transplanted quadrature field on seven targets (absolute tolerance
+(2\times10^{-3})), rather than algebraically inverting (p_0). It also checks pressure
+bounds and monotonicity, and the note's layer-cake relation
 
 \[
 \int_\Omega\varphi(p)\,dV=\int_0^{V_\Omega}\varphi(p_0(V))\,dV.
 \]
 
-For (p_0(V)=1-V^2) on the manufactured unit interval, its two smooth moment
-residuals are (2.364\times10^{-5}) and (1.190\times10^{-5}), versus a
-(3\times10^{-3}) threshold. A radial circle data set independently evaluates the
-first layer-cake moment (\int p\,dA=2) within 0.02. The NGSolve test extracts a
+For (p_0(V)=1-V^2) on the manufactured unit interval, an eight-function compact
+quadratic B-spline family spanning the full pressure interval has residuals between
+(-9.069\times10^{-5}) and (2.600\times10^{-5}), versus a (3\times10^{-3})
+threshold. A radial circle data set independently evaluates the first layer-cake
+moment (\int p\,dA=2) within 0.02. The NGSolve test extracts a
 unit-square quadrature total of 1.0, verifies that the center pressure exceeds the
 edge pressure, and measures mean pressure (0.5\pm0.03).
 
-Mutation check: replacing (V_\chi(\chi)) by a constant zero volume causes the two
-layer-cake checks, the NGSolve center/edge ordering, and the independent radial moment
-to fail (residuals 0.333 and 0.567; radial moment 4 rather than 2). This demonstrates
-that a test failure reflects omission of the M4b volume composition, not a solver
-residual.
+Mutation check: replacing (V_\chi(\chi)) by a constant zero volume causes direct
+superlevel-volume realization to fail on all seven targets (all measure 1.0), every
+compact B-spline layer-cake moment to fail (maximum residual 0.218), the NGSolve
+center/edge ordering to collapse, and the independent radial moment to become 4 rather
+than 2. This demonstrates that a test failure reflects omission of the M4b volume
+composition, not a solver residual.
 
 ## Milestone 2.1 — mollified level-set volume map
 

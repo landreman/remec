@@ -41,8 +41,10 @@
 - Milestone 2.2 (NGSolve 6.2.2606): `mesh.GetTrafo(element)(integration_point)`
   yields a mapped point with its local `measure`; multiply that by
   `integration_point.weight` for physical quadrature weights. A `CoefficientFunction`
-  accepts that mapped point directly, so this extracts values and analytic gradient
-  magnitudes without exposing an NGSolve object in the array-backed volume-map API.
+  accepts the `mesh.MapToAllElements({element_type: rule}, ngsolve.VOL)` result as a
+  batched array, so extract weights/geometric scales per element but evaluate values
+  and analytic gradient magnitudes in one vectorized NGSolve pass without exposing an
+  NGSolve object in the array-backed volume-map API.
   `BSpline(2, [x0, *knots, xN], values)` is the open linear spline representation
   that interpolates the supplied values; guard its right endpoint explicitly because
   the native spline's final knot is half-open.
