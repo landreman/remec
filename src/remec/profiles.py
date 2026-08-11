@@ -241,7 +241,7 @@ class TransplantedProfile:
                 )
                 for function in test_functions
             ],
-            dtype=float,
+            dtype=np.float64,
         )
 
     def as_ngsolve_coefficient(self, chi: ng.CoefficientFunction) -> ng.CoefficientFunction:
@@ -313,6 +313,8 @@ def extract_ngsolve_quadrature(
     )
 
 
-def _trapezoid(values: NDArray[np.float64], points: NDArray[np.float64]) -> float:
+def _trapezoid(values: ArrayLike, points: ArrayLike) -> float:
     """NumPy-1.24-compatible composite trapezoidal integration."""
-    return float(np.sum(np.diff(points) * (values[:-1] + values[1:]) * 0.5))
+    ordinates = np.asarray(values, dtype=np.float64)
+    abscissae = np.asarray(points, dtype=np.float64)
+    return float(np.sum(np.diff(abscissae) * (ordinates[:-1] + ordinates[1:]) * 0.5))
