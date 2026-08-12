@@ -1,5 +1,45 @@
 # Verification records
 
+## Milestone 2.3 — differentiable volume map
+
+`MollifiedVolumeMap.jvp` implements the nonlocal contribution required by
+`DESIGN.md` §12.6 and the note's `(V_derivatives)` equation. At requested level values
+it applies
+
+\[
+\delta V_\chi^\varepsilon(\hat\chi)
+=\sum_i H'_{\varepsilon_i}(\chi_i-\hat\chi)w_i\,\delta\chi_i.
+\]
+
+ADR 0003 selects the frozen-width quasi-Newton reading: gradient-scaled mollifier
+widths are held fixed at the linearization point, then rebuilt only after an iterate is
+accepted. This follows the explicit `H'_epsilon w_i` action displayed in the note but
+is not the derivative of a functional that simultaneously rebuilds those widths. The
+action directly evaluates the smooth quadrature functional rather than differentiating
+the volume-uniform PCHIP table, avoiding the ill-conditioned near-step direction. The
+latter continues to provide monotone values and inverses for the M4b composition.
+
+The JVP accumulates one level at a time, using O(N_quad + N_levels) working memory;
+it does not materialize a dense quadrature-by-level matrix in a Krylov matvec.
+
+`tests/unit/test_differentiable_volume_map.py` uses 4,096 manufactured unit-interval
+quadrature samples with constant gradient and spatial size, so the frozen-width contract
+isolates the `H'_epsilon w_i` term from width variation. At levels 0.23, 0.37, 0.61,
+and 0.74, its central finite difference with step \(10^{-6}\) has maximum absolute
+discrepancy \(4.51\times10^{-11}\). It also verifies the default tabulation-level JVP
+path and the exact frozen-width identity \(\delta V[1]=\rho=-dV/d\hat\chi\).
+
+A separate variable-gradient manufactured case rebuilds widths on both sides of the
+finite difference. Its measured frozen-versus-live relative discrepancy is
+\(1.24\times10^{-4}\), below the \(2.0\times10^{-4}\) O(epsilon) quasi-Newton
+regression bound. This test intentionally distinguishes the selected frozen-width
+functional from the unselected live-width derivative; it does not call them equal.
+
+Mutation check: replacing the `H'_epsilon` surface weights by zero makes all four JVP
+values zero while the independently evaluated finite-difference values range from
+\(-2.81\times10^{-1}\) to \(2.96\times10^{-1}\), so the contract fails for the
+intended omitted nonlocal derivative.
+
 ## Milestone 2.2 — profiles and the M4b transplant
 
 `VolumeProfile` supplies analytic and tabulated non-increasing (p_0(V)) profiles;

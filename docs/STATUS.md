@@ -119,9 +119,17 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   and its M4b BSpline transplant has 0.5 ± 0.03 mean pressure.
   <br>Next: 2.3 owns the nonlocal ``delta V_chi`` JVP; the current BSpline represents
   only M4b's local composition and NGSolve differentiates it symbolically.
-- [ ] **2.3** Differentiable map — `DESIGN.md` §12.6 · note: §6
+- [x] **2.3** Differentiable map — `DESIGN.md` §12.6 · note: §6
   <br>Acceptance: JVP agrees with finite differences.
-  <br>Measured: —
+  <br>Measured: macOS / CPython 3.12.2 / NumPy 2.4.6 — the ADR-0003 frozen-width
+  quasi-Newton `(V_derivatives)` surface-average JVP agrees with its central finite
+  difference at four manufactured levels with maximum absolute error 4.51e-11
+  (step 1e-6). A variable-gradient live-width rebuild differs by 1.24e-4 relative,
+  below the 2.0e-4 regression bound. The JVP is accumulated level-by-level in O(N+M)
+  memory and uses direct H′εwᵢ quadrature weights, never a PCHIP derivative.
+  <br>Next: 2.4 remains optional; later Newton work can consume this array-backed
+  low-rank quasi-Newton action while retaining symbolic differentiation for M4b's
+  local term. Revisit ADR 0003 Option 2 if nonlinear convergence is poor.
 - [ ] **2.4** Cut-cell reference (optional) — `DESIGN.md` §12.4
   <br>Measured: —
 
@@ -216,3 +224,4 @@ _(none yet — agents add rows here when they draft one)_
 
 | ADR | Milestone blocked | Question | Status |
 |---|---|---|---|
+| 0003 | 2.3 | Must the M4b mollifier-width JVP differentiate `epsilon = c h |grad chi|`? | Option 1 accepted |
