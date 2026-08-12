@@ -68,4 +68,8 @@ use the frozen-width quasi-Newton reading, or must linearize the live width. If 
 regression. If Option 2 or 3 is selected, specify the critical-floor derivative before
 implementation.
 
-## DECISION: pending human sign-off
+## DECISION: Option 1
+
+For now we choose the simplest option so we can proceed to get a minimal version
+of the code working. The issue is noted here so if poor convergence is observed
+later when nonlinear solves are performed, we can reconsider option 2.

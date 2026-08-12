@@ -253,7 +253,7 @@ class MollifiedVolumeMap:
         return result
 
     @staticmethod
-    def mollified_volume(
+    def _mollified_volume(
         values: NDArray[np.float64],
         widths: NDArray[np.float64],
         weights: NDArray[np.float64],
@@ -261,7 +261,7 @@ class MollifiedVolumeMap:
     ) -> float | NDArray[np.float64]:
         """Evaluate the un-tabulated mollified ``V_chi`` in ``(mollified_V)``.
 
-        Unlike :meth:`volume`, this method intentionally does not use the
+        Unlike :meth:`volume`, this internal method intentionally does not use the
         volume-uniform PCHIP table.  It is the smooth quadrature functional
         whose directional derivative is specified by ``(V_derivatives)``.
         """
@@ -338,14 +338,18 @@ class MollifiedVolumeMap:
         points = np.asarray(evaluation_levels, dtype=float)
         if not np.all(np.isfinite(points)):
             raise ValueError("JVP levels must be finite")
-        argument = (self._values[:, None] - points.reshape(-1)) / self._widths[:, None]
-        surface_delta = np.where(
-            np.abs(argument) < 1.0,
-            (1.0 + np.cos(np.pi * argument)) / (2.0 * self._widths[:, None]),
-            0.0,
-        )
-        result = np.dot(self._weights * perturbation, surface_delta).reshape(points.shape)
-        return float(result) if points.ndim == 0 else result
+        result = np.empty(points.size, dtype=np.float64)
+        weighted_perturbation = self._weights * perturbation
+        for index, level in enumerate(points.reshape(-1)):
+            argument = (self._values - level) / self._widths
+            surface_delta = np.where(
+                np.abs(argument) < 1.0,
+                (1.0 + np.cos(np.pi * argument)) / (2.0 * self._widths),
+                0.0,
+            )
+            result[index] = float(np.dot(weighted_perturbation, surface_delta))
+        reshaped_result = result.reshape(points.shape)
+        return float(reshaped_result) if points.ndim == 0 else reshaped_result
 
     def volume_derivative(self, level: float) -> float:
         """Return the tabulated ``dV_chi^epsilon/dchi_hat`` for the §12.3 check."""
