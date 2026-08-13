@@ -48,3 +48,10 @@
   `BSpline(2, [x0, *knots, xN], values)` is the open linear spline representation
   that interpolates the supplied values; guard its right endpoint explicitly because
   the native spline's final knot is half-open.
+
+- Milestone 2.4 (xfem 2.1.2606 / NGSolve 6.2.2606): the optional ngsxfem wheel is
+  distributed as the `xfem` package. Its high-order static cut integration helper is
+  `xfem.lsetcurv.LevelSetMeshAdaptation`, not a top-level `xfem` name: call
+  `CalcDeformation(level_set - level)` and then `Integrate(POS, 1, order=...)` for
+  \(\{\chi>\hat\chi\}\). The direct `xfem.Integrate` route only uses the piecewise-linear
+  cut approximation unless this deformation is supplied.

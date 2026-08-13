@@ -1,5 +1,37 @@
 # Verification records
 
+## Milestone 2.4 — optional sharp cut-cell reference
+
+`CutCellVolumeReference` is the optional `remec[cutcell]` implementation of the note's
+Sec. 6 sharp reference
+
+\[
+V_\chi(\hat\chi) = \int_\Omega H(\chi-\hat\chi)\,d\Omega.
+\]
+
+It uses `xfem.lsetcurv.LevelSetMeshAdaptation` to map its piecewise-linear cut geometry
+to the supplied high-order level set, then integrates its positive domain. It is a
+verification/final-evaluation route rather than a replacement for the differentiable
+`(mollified_V)` map: it intentionally provides no `(V_derivatives)` JVP. The optional
+dependency is installed in the regular CI check job, while the smoke jobs exercise the
+minimal installation without it.
+
+The manufactured circle in the unit-square quadrant has the exact sharp volume
+\(\pi(0.6^2-\hat\chi)/4\). The measured zero-level results in
+`tests/manufactured/cutcell_circle_rates.csv` are:
+
+| Triangles | Sharp cut-cell error | Cut-cell rate | Mollified–sharp difference | Difference rate |
+| ---: | ---: | ---: | ---: | ---: |
+| 128 | 4.752e-6 | — | 3.202e-3 | — |
+| 512 | 2.971e-7 | 3.999 | 8.016e-4 | 1.998 |
+| 2048 | 2.390e-8 | 3.636 | 2.004e-4 | 2.000 |
+
+The automated contract requires every sharp-reference rate to exceed 3.5 and every
+mollified-reference difference rate to exceed 1.9. It also checks sharp analytic volumes
+at four levels, monotonicity, and the unit-square total volume. Mutation checks confirmed
+that replacing the positive cut domain by its complement, or forcing the geometry mapping
+to first order, makes both manufactured tests fail.
+
 ## Milestone 2.3 — differentiable volume map
 
 `MollifiedVolumeMap.jvp` implements the nonlocal contribution required by
