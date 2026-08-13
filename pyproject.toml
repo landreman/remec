@@ -23,6 +23,9 @@ dev = [
     "pytest>=9,<10",
     "ruff>=0.14,<1",
 ]
+cutcell = [
+    "xfem>=2.1.2606,<2.2",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
