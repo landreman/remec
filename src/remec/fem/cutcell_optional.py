@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from numpy.typing import NDArray
+
+if TYPE_CHECKING:
+    import ngsolve as ng  # type: ignore[import-untyped]
 
 
 class CutCellUnavailableError(ImportError):
@@ -15,7 +18,7 @@ class CutCellUnavailableError(ImportError):
 def _load_cutcell_dependencies() -> tuple[Any, Any, Any]:
     """Load ngsxfem only when the optional reference is constructed."""
     try:
-        import ngsolve as ng  # type: ignore[import-untyped]
+        import ngsolve as ng
         from xfem import POS  # type: ignore[import-untyped]
         from xfem.lsetcurv import LevelSetMeshAdaptation  # type: ignore[import-untyped]
     except ModuleNotFoundError as error:
@@ -26,7 +29,7 @@ def _load_cutcell_dependencies() -> tuple[Any, Any, Any]:
 
 
 class CutCellVolumeReference:
-    """Sharp note §6 cut-cell reference for ``V_chi(level) = int H(chi-level) dOmega``.
+    """Sharp note `(M4b)` / §8.1 reference for ``V_chi(level) = int H(chi-level) dOmega``.
 
     ``ngsxfem`` maps its piecewise-linear cut geometry to the supplied high-order
     level set before integrating the positive domain ``{chi > level}``.  This is
@@ -36,8 +39,8 @@ class CutCellVolumeReference:
 
     def __init__(
         self,
-        mesh: Any,
-        level_set: Any,
+        mesh: ng.Mesh,
+        level_set: ng.CoefficientFunction,
         *,
         geometry_order: int = 3,
         integration_order: int | None = None,
@@ -63,15 +66,16 @@ class CutCellVolumeReference:
         points = np.asarray(level, dtype=float)
         if not np.all(np.isfinite(points)):
             raise ValueError("cut-cell reference levels must be finite")
-        result = np.empty_like(points, dtype=float)
+        result = np.empty(points.size, dtype=float)
         for index, value in enumerate(points.reshape(-1)):
             adaptation = self._level_set_adaptation(self._mesh, order=self.geometry_order)
             adaptation.CalcDeformation(self._level_set - float(value))
-            result.reshape(-1)[index] = float(
+            result[index] = float(
                 adaptation.Integrate(
                     self._positive_domain,
                     1.0,
                     order=self._integration_order,
                 )
             )
-        return float(result) if points.ndim == 0 else result
+        volumes = result.reshape(points.shape)
+        return float(volumes) if points.ndim == 0 else volumes

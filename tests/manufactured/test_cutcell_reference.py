@@ -46,6 +46,21 @@ def test_cutcell_reference_resolves_sharp_circle_volumes_and_monotonicity() -> N
     assert reference.total_volume == pytest.approx(1.0, abs=1.0e-12)
 
 
+def test_cutcell_reference_preserves_a_noncontiguous_level_array_shape() -> None:
+    """§12.4 returns one sharp volume per supplied level, independent of array layout."""
+    mesh = MakeStructured2DMesh(quads=False, nx=16, ny=16)
+    reference = CutCellVolumeReference(mesh, _circle_level_set(), geometry_order=3)
+    levels = np.asfortranarray([[0.0, 0.1], [0.2, 0.25]])
+
+    volumes = np.asarray(reference.volume(levels), dtype=float)
+
+    assert volumes.shape == levels.shape
+    expected = np.asarray(
+        [[_exact_quarter_circle_volume(float(level)) for level in row] for row in levels]
+    )
+    assert volumes == pytest.approx(expected, abs=4.0e-6)
+
+
 def test_cutcell_circle_converges_at_high_order_and_calibrates_mollified_map() -> None:
     """§12.4 catches a low-order cut geometry and quantifies `(mollified_V)` error."""
     with (_MANUFACTURED_DIRECTORY / "cutcell_circle_rates.csv").open() as stream:
@@ -70,18 +85,28 @@ def test_cutcell_circle_converges_at_high_order_and_calibrates_mollified_map() -
         cutcell_errors.append(cutcell_error)
         mollified_differences.append(mollified_difference)
 
-        assert cutcell_volume == pytest.approx(float(row["cutcell_volume"]), rel=2.0e-10)
-        assert cutcell_error == pytest.approx(float(row["cutcell_absolute_error"]), rel=2.0e-10)
+        assert cutcell_volume == pytest.approx(float(row["cutcell_volume"]), abs=1.0e-10)
+        assert cutcell_error == pytest.approx(float(row["cutcell_absolute_error"]), abs=1.0e-10)
         assert mollified_difference == pytest.approx(
-            float(row["mollified_reference_difference"]), rel=2.0e-10
+            float(row["mollified_reference_difference"]), abs=1.0e-10
         )
 
     cutcell_rates = np.log2(np.asarray(cutcell_errors[:-1]) / np.asarray(cutcell_errors[1:]))
     mollified_rates = np.log2(
         np.asarray(mollified_differences[:-1]) / np.asarray(mollified_differences[1:])
     )
-    # The table records the local measurement; rates derived from near-roundoff
-    # finest-grid errors vary in their final bits across supported wheel builds.
-    # The cross-platform physics contract is the order threshold below.
+    # The table records local rates; their final bits vary across supported wheel builds.
+    # The physics contract uses an error magnitude that separates geometry orders.
     assert np.all(cutcell_rates > 3.5)
     assert np.all(mollified_rates > 1.9)
+    mesh_widths = 1.0 / np.asarray([float(row["subdivisions"]) for row in expected_rows])
+    assert np.all(np.asarray(cutcell_errors) < 0.05 * mesh_widths**4)
+
+    finest_mesh = MakeStructured2DMesh(quads=False, nx=32, ny=32)
+    lower_order_error = abs(
+        float(
+            CutCellVolumeReference(finest_mesh, _circle_level_set(), geometry_order=2).volume(0.0)
+        )
+        - _exact_quarter_circle_volume(0.0)
+    )
+    assert lower_order_error > 0.05 * (1.0 / 32.0) ** 4

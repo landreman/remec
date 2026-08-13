@@ -130,7 +130,7 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   <br>Next: 2.4 remains optional; later Newton work can consume this array-backed
   low-rank quasi-Newton action while retaining symbolic differentiation for M4b's
   local term. Revisit ADR 0003 Option 2 if nonlinear convergence is poor.
-- [x] **2.4** Cut-cell reference (optional) — `DESIGN.md` §12.4 · note: §6
+- [x] **2.4** Cut-cell reference (optional) — `DESIGN.md` §12.4 · note: §6 (M4b), §8.1
   <br>Acceptance: optional high-order implicit-domain reference agrees with analytic sharp
   circle volumes and calibrates the mollified map under refinement.
   <br>Measured: macOS / CPython 3.12.2 / NGSolve 6.2.2606 / xfem 2.1.2606 —
@@ -139,8 +139,9 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   mollified-to-sharp differences are 3.202e-3, 8.016e-4, and 2.004e-4 with
   adjacent rates 1.998 and 2.000. See
   `tests/manufactured/cutcell_circle_rates.csv` and `docs/verification.md`.
-  <br>Next: use `CutCellVolumeReference` only as the optional sharp verification path;
-  retain `MollifiedVolumeMap` for the differentiable `(V_derivatives)` Newton action.
+  <br>Next: `CutCellVolumeReference` is deliberately a direct sharp-volume evaluator
+  (`volume` plus `total_volume`), not the solver-facing differentiable map; retain
+  `MollifiedVolumeMap` for inverse tabulation and the `(V_derivatives)` Newton action.
 
 ## Phase 3 — M3 kernel
 

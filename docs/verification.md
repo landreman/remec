@@ -3,7 +3,7 @@
 ## Milestone 2.4 — optional sharp cut-cell reference
 
 `CutCellVolumeReference` is the optional `remec[cutcell]` implementation of the note's
-Sec. 6 sharp reference
+`(M4b)` sharp reference (Sec. 6), using the sub-cell method in Sec. 8.1:
 
 \[
 V_\chi(\hat\chi) = \int_\Omega H(\chi-\hat\chi)\,d\Omega.
@@ -13,8 +13,9 @@ It uses `xfem.lsetcurv.LevelSetMeshAdaptation` to map its piecewise-linear cut g
 to the supplied high-order level set, then integrates its positive domain. It is a
 verification/final-evaluation route rather than a replacement for the differentiable
 `(mollified_V)` map: it intentionally provides no `(V_derivatives)` JVP. The optional
-dependency is installed in the regular CI check job, while the smoke jobs exercise the
-minimal installation without it.
+dependency is installed on five CI matrix legs; the Ubuntu/Python-3.10 leg runs the full
+test suite from `remec[dev]` without it, exercising the optional-import skip path. The
+smoke jobs separately exercise the minimal wheel installation.
 
 The manufactured circle in the unit-square quadrant has the exact sharp volume
 \(\pi(0.6^2-\hat\chi)/4\). The measured zero-level results in
