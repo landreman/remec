@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from importlib import import_module
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -18,14 +19,14 @@ class CutCellUnavailableError(ImportError):
 def _load_cutcell_dependencies() -> tuple[Any, Any, Any]:
     """Load ngsxfem only when the optional reference is constructed."""
     try:
-        import ngsolve as ng
-        from xfem import POS  # type: ignore[import-untyped]
-        from xfem.lsetcurv import LevelSetMeshAdaptation  # type: ignore[import-untyped]
+        ng = import_module("ngsolve")
+        xfem = import_module("xfem")
+        level_set_module = import_module("xfem.lsetcurv")
     except ModuleNotFoundError as error:
         raise CutCellUnavailableError(
             "CutCellVolumeReference requires the optional remec[cutcell] extra"
         ) from error
-    return ng, POS, LevelSetMeshAdaptation
+    return ng, xfem.POS, level_set_module.LevelSetMeshAdaptation
 
 
 class CutCellVolumeReference:
