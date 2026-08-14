@@ -402,9 +402,14 @@ def solve_frozen_current_continuity(
     - mu0 F B.grad(p)/B_safe^2
     + mu0 D_u F_prime grad_r(p).grad(p)/B_safe^2``.
 
-    The selected ``grad_r`` is used in both profile terms containing ``D_u``. The
-    complete shifted source is also used by SUPG, while M2 current and parallel-current
-    diagnostics are reconstructed from physical ``u`` and ``grad(u)``.
+    The selected ``grad_r`` is used in both profile terms containing ``D_u``. In the
+    Galerkin load, the profile diffusion is moved in weak form as
+    ``-integral D_u grad_r(v).grad_r(F)``. This exactly matches the direct-u symmetric
+    perpendicular block ``grad(v).P^2.grad(u)`` even when the smooth floor makes
+    ``P = I - b_safe b_safe^T`` non-idempotent. The SUPG source and its diagnostic use
+    the note-literal strong single projection ``div(D_u P grad(F))``, preserving the
+    declared ``O(B_floor**2/B**2)`` Galerkin/SUPG convention. M2 current and
+    parallel-current diagnostics are reconstructed from physical ``u`` and ``grad(u)``.
     """
     if polynomial_order < 1:
         raise ValueError("polynomial_order must be at least one")
@@ -477,6 +482,7 @@ def solve_frozen_current_continuity(
     profile_diffusion_source: Any = 0.0
     profile_reaction_source: Any = 0.0
     profile_final_correction_source: Any = 0.0
+    regularized_profile_gradient: Any | None = None
     if prescribed_current_profile is not None:
         profile_gradient = prescribed_current_profile.pressure_derivative * pressure_gradient
         regularized_profile_gradient = _regularized_gradient(
@@ -509,7 +515,10 @@ def solve_frozen_current_continuity(
             + profile_reaction_source
             + profile_final_correction_source
         )
-    total_source = drive + profile_source
+    galerkin_source = (
+        drive + profile_advection_source + profile_reaction_source + profile_final_correction_source
+    )
+    strong_source = drive + profile_source
     quadrature = ng.dx(bonus_intorder=quadrature_bonus_intorder)
     galerkin_operator = (
         test * ng.InnerProduct(magnetic_field, trial_gradient)
@@ -521,7 +530,13 @@ def solve_frozen_current_continuity(
     bilinear_form = ng.BilinearForm(space)
     bilinear_form += galerkin_operator * quadrature
     linear_form = ng.LinearForm(space)
-    linear_form += total_source * test * quadrature
+    linear_form += galerkin_source * test * quadrature
+    if regularized_profile_gradient is not None:
+        linear_form += (
+            -coefficients.current_diffusivity
+            * ng.InnerProduct(regularized_test, regularized_profile_gradient)
+            * quadrature
+        )
     supg_bilinear_form: Any | None = None
     supg_linear_form: Any | None = None
     tau: Any | None = None
@@ -561,7 +576,7 @@ def solve_frozen_current_continuity(
         )
         streamline_test = ng.InnerProduct(magnetic_field, test_gradient)
         supg_bilinear_integrand = tau * streamline_test * strong_operator
-        supg_linear_integrand = tau * streamline_test * total_source
+        supg_linear_integrand = tau * streamline_test * strong_source
         bilinear_form += supg_bilinear_integrand * quadrature
         linear_form += supg_linear_integrand * quadrature
         supg_bilinear_form = ng.BilinearForm(space)
@@ -697,7 +712,7 @@ def solve_frozen_current_continuity(
                 - coefficients.current_diffusivity * field_diffusion_divergence
                 + coefficients.vacuum_permeability * b_dot_grad_p * field / safe_magnitude**2
                 - solved_final_term
-                - total_source
+                - strong_source
             )
             supg_strong_residual_l2 = sqrt(
                 max(0.0, float(ng.Integrate(strong_residual**2, mesh, order=20)))

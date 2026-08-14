@@ -195,12 +195,17 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   (full ∇), below the 1e-10 gate. Finest-pair degree 1/2/3 L² rates are
   1.970 / 3.030 / 4.036 (∇⊥) and 1.968 / 3.040 / 4.033 (full ∇); all clear p+0.8.
   An independent quadratic-pressure transcription measures distinct nonzero profile-
-  diffusion source norms 2.012e-1 (∇⊥) and 2.400e-1 (full ∇), and verifies every
-  shifted source to 1e-12 relative tolerance. See
+  diffusion source norms 2.012e-1 (∇⊥) and 2.400e-1 (full ∇), independently verifies
+  the other three shifted sources to 1e-12 relative tolerance, and pins diffusion by
+  direct-u agreement. See
   `tests/manufactured/m3_utilde_rates.csv` and `docs/verification.md`.
+  Direct-u/ũ agreement remains below 3.0e-16 with deliberately active B floors of
+  0.1 and 1.0 after matching the symmetric Galerkin projection convention exactly.
   <br>Next: milestone 3.4 should use the preferred homogeneous ũ solve while retaining
   the direct-u cross-check, both gradient variants, complete shifted SUPG residual, and
-  physical-u/M2 reconstruction when measuring the D_u^{1/3} layer width.
+  physical-u/M2 reconstruction when measuring the D_u^{1/3} layer width. Add a stable
+  prescribed-profile identifier to coupled-run configuration/log provenance before
+  checkpointing F(p).
 - [ ] **3.4** D_u^{1/3} layer scaling — `DESIGN.md` §9, §22 · note: (M3), §5.5
   <br>Acceptance: measured δ ∝ D_u^{1/3} for both gradient variants; resolution requirements documented.
   <br>Measured: —

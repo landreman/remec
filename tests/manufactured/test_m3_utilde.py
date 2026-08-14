@@ -58,6 +58,7 @@ def _manufactured_case(
     variant: str,
     *,
     quadratic_pressure: bool = False,
+    magnetic_floor: float = 1.0e-8,
 ) -> tuple[FrozenCurrentContinuityCoefficients, PrescribedCurrentProfile, Any, Any]:
     r"""Manufacture every strong (M3) term for ``u = F(p) + utilde``."""
     magnetic_field = ng.CoefficientFunction((1.0 + ng.x, 0.5 - ng.y, 2.0 + ng.x * ng.y))
@@ -69,7 +70,6 @@ def _manufactured_case(
         profile_value = 0.25 + 0.3 * pressure
     pressure_gradient = ng.CoefficientFunction((pressure.Diff(ng.x), pressure.Diff(ng.y), 0.0))
     current_diffusivity = 0.2
-    magnetic_floor = 1.0e-8
     vacuum_permeability = 0.7
     safe_magnitude = ng.sqrt(ng.InnerProduct(magnetic_field, magnetic_field) + magnetic_floor**2)
     direction = magnetic_field / safe_magnitude
@@ -169,18 +169,17 @@ def test_utilde_matches_direct_u_and_retains_manufactured_order(
         assert direct_error == pytest.approx(expected["direct_l2_error"], rel=0.05)
         assert transformed_error == pytest.approx(expected["utilde_l2_error"], rel=0.05)
         assert relative_disagreement < 1.0e-10
-        assert relative_disagreement == pytest.approx(
-            expected["relative_disagreement"],
-            abs=1.0e-13,
+        assert result.diagnostics["m3_profile_advection_source_l2"] == pytest.approx(
+            expected["m3_profile_advection_source_l2"],
+            rel=0.05,
         )
-        for name in (
-            "m3_profile_advection_source_l2",
-            "m3_profile_diffusion_source_l2",
-        ):
-            assert result.diagnostics[name] == pytest.approx(expected[name], rel=0.05, abs=1.0e-14)
         assert transformed.utilde_at(0.0, 0.5) == pytest.approx(0.0, abs=1.0e-12)
         assert transformed.current_at(0.4, 0.6) == pytest.approx(
             direct.current_at(0.4, 0.6),
+            abs=1.0e-10,
+        )
+        assert transformed.parallel_current_over_field_at(0.4, 0.6) == pytest.approx(
+            direct.parallel_current_over_field_at(0.4, 0.6),
             abs=1.0e-10,
         )
         assert result.formulation == "utilde"
@@ -293,3 +292,35 @@ def test_utilde_profile_sources_are_transcribed_for_the_selected_gradient() -> N
         measured_diffusion_norms["full"],
         rel=0.05,
     )
+
+
+@pytest.mark.parametrize("variant", ["perpendicular", "full"])
+def test_utilde_matches_direct_u_when_the_magnetic_floor_is_active(variant: str) -> None:
+    r"""The Galerkin ``utilde_equation`` shift matches direct (M3) for active B_safe floors."""
+    for magnetic_floor in (1.0e-8, 0.1, 1.0):
+        coefficients, profile, _, _ = _manufactured_case(
+            variant,
+            quadratic_pressure=True,
+            magnetic_floor=magnetic_floor,
+        )
+        runtime = RuntimeOptions(regularization_gradient=variant)  # type: ignore[arg-type]
+        direct = CurrentContinuitySolver(
+            polynomial_order=3,
+            runtime=runtime,
+            stabilization="supg",
+        )
+        direct.solve(Slab2D(maxh=0.25), coefficients, boundary_value=profile.value)
+        transformed = CurrentContinuitySolver(
+            polynomial_order=3,
+            runtime=runtime,
+            stabilization="supg",
+        )
+        transformed.solve_utilde(Slab2D(maxh=0.25), coefficients, profile)
+        direct_field = direct._solution().grid_function()
+        transformed_field = transformed._solution().grid_function()
+        relative_disagreement = _l2_norm(
+            transformed,
+            transformed_field - direct_field,
+        ) / max(_l2_norm(direct, direct_field), 1.0)
+
+        assert relative_disagreement < 1.0e-10

@@ -21,8 +21,14 @@ F'(p)\nabla_rp\!\cdot\!\nabla p .
 
 Here \(L_{M3}\) is exactly the direct-u left-hand-side operator. The runtime-selected
 \(\nabla_r=\nabla_\perp\) or \(\nabla_r=\nabla\) is used in both transformed terms
-containing \(D_u\), and the complete shifted source enters both the Galerkin load and
-the SUPG strong residual. The solver reconstructs physical \(u\), \(\nabla u\), the
+containing \(D_u\). The Galerkin profile diffusion is moved in its symmetric weak form,
+\(-\int D_u\nabla_rv\cdot\nabla_rF\), so it exactly matches the direct-u
+\(\nabla v\cdot P^2\nabla u\) block even when the smooth floor makes
+\(P=I-\mathbf b_{\rm safe}\mathbf b_{\rm safe}^T\) non-idempotent. The SUPG load and
+strong-residual diagnostic use the note-literal single-projection
+\(+\nabla\cdot(D_uP\nabla F)\), retaining the documented
+\(O(B_{\rm floor}^2/B_{\rm safe}^2)\) Galerkin/SUPG convention. The solver reconstructs
+physical \(u\), \(\nabla u\), the
 note-(M2) current, and (for the full-gradient variant) physical \(J_\parallel/B\) before
 reporting diagnostics. The formulation is included in the configuration digest and
 structured solve records. `PrescribedCurrentProfile` carries the frozen \(F(p)\) and
@@ -48,20 +54,29 @@ disagreement to remain below \(10^{-10}\).
 The finest degree-3 reconstructed-utilde L2 errors are 1.272e-6 (∇⊥) and 1.280e-6
 (full ∇), equal to their direct-u errors to the displayed precision. Free-DOF relative
 residuals over the table remain below 1.04e-15. A separate quadratic-pressure oracle
-\(p=x^2+xy+y^2\) keeps every shifted term nonzero and verifies each source norm against
-an independently transcribed expression to relative tolerance \(10^{-12}\):
+\(p=x^2+xy+y^2\) keeps every shifted term nonzero. It independently retranscribes the
+advection, reaction, and final-correction sources to relative tolerance \(10^{-12}\);
+the explicit diffusion coefficient is cross-checked by the direct-u disagreement gate
+and by the distinct variant values:
 
 | Gradient variant | Advection source L2 | Diffusion source L2 | Reaction source L2 | Final-correction source L2 |
 | --- | ---: | ---: | ---: | ---: |
 | ∇⊥ | 7.820e-1 | 2.012e-1 | 1.207e-1 | 2.688e-2 |
 | full ∇ | 7.820e-1 | 2.400e-1 | 1.207e-1 | 3.064e-2 |
 
-This oracle also compares the reconstructed note-(M2) current pointwise with the
-direct-u solve and checks homogeneous utilde boundary values. Mutation checks confirmed
+This oracle also compares the reconstructed note-(M2) current and physical
+\(J_\parallel/B\) pointwise with the direct-u solve and checks homogeneous utilde
+boundary values. An active-floor scan at \(B_{\rm floor}=10^{-8},0.1,1.0\) raises
+the measured floor-activity L2 norm from 1.70e-16 to 1.43e-3 and 1.24e-1 while the
+maximum direct/utilde disagreement remains 2.98e-16. Before the exact symmetric weak
+shift, the 0.1-floor perpendicular disagreement was 5.28e-6.
+
+Mutation checks confirmed
 that deleting the \(-F'(p)\mathbf B\cdot\nabla p\) source increases the L2 disagreement
 from roundoff to 1.037e-1, while replacing the selected perpendicular gradient in the
-profile flux by the full gradient raises it to 6.346e-3. Both mutations turn the suite
-red.
+profile flux by the full gradient raises it to 6.346e-3. Reconstructing
+\(J_\parallel/B\) from solved \(\tilde u\) instead of physical \(u\) creates a 0.55
+pointwise error for both variants. All three mutations turn the suite red.
 
 ## Milestone 3.2 — complete-residual SUPG for M3
 

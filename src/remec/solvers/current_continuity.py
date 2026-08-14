@@ -57,9 +57,13 @@ class PrescribedCurrentProfile:
     ``value`` is ``F(p)`` and ``pressure_derivative`` is ``F'(p)``. Together with
     ``FrozenCurrentContinuityCoefficients.pressure_gradient`` they define
     ``grad(F(p)) = F'(p) grad(p)``. The two explicit divergence coefficients are
-    ``div(F'(p) grad_perp(p))`` and ``div(F'(p) grad(p))``; the solver selects the
-    runtime variant. They are explicit because NGSolve coordinate differentiation can
-    silently return zero for a GridFunction-backed pressure gradient.
+    ``div(F'(p) grad_perp(p))`` and ``div(F'(p) grad(p))``, where
+    ``grad_perp = (I - b_safe b_safe^T) grad`` is the note-literal single projection;
+    the solver selects the runtime variant for the SUPG strong source. The Galerkin
+    load instead moves its symmetric ``grad_r(v).grad_r(F)`` term directly, so it
+    remains algebraically identical to direct-u when the B floor is active. The
+    divergence coefficients are explicit because NGSolve coordinate differentiation
+    can silently return zero for a GridFunction-backed pressure gradient.
     """
 
     value: Any
