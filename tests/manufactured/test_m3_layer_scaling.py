@@ -20,6 +20,7 @@ from remec.solvers.current_continuity import (
 _DIFFUSIVITIES = (0.005, 0.01, 0.02, 0.04)
 _NORMAL_ELEMENT_WIDTH = 1.0 / 64.0
 _RATE_TABLE = Path(__file__).with_name("m3_layer_scaling.csv")
+_REFINEMENT_TABLE = Path(__file__).with_name("m3_layer_mesh_refinement.csv")
 
 
 def _recorded_rows() -> dict[tuple[str, float], dict[str, float]]:
@@ -32,13 +33,32 @@ def _recorded_rows() -> dict[tuple[str, float], dict[str, float]]:
                 for name in (
                     "elements",
                     "measured_layer_width",
+                    "theoretical_inner_scale",
+                    "fwhm_to_inner_scale",
                     "cells_across_layer",
-                    "free_dof_relative_residual",
                     "fitted_exponent",
                 )
             }
             for row in rows
         }
+
+
+def _recorded_refinement_rows() -> dict[tuple[int, int], dict[str, float]]:
+    """Read the checked-in mesh-independence check for the thinnest M3 layer."""
+    with _REFINEMENT_TABLE.open(newline="") as table_file:
+        rows = csv.DictReader(table_file)
+        return {
+            (int(row["nx"]), int(row["ny"])): {
+                name: float(row[name])
+                for name in ("elements", "measured_layer_width", "cells_across_layer")
+            }
+            for row in rows
+        }
+
+
+def _theoretical_inner_scale(diffusivity: float) -> float:
+    r"""Return the unit-coefficient estimate ``(D_u / (40 pi))**(1/3)``."""
+    return (diffusivity / (40.0 * pi)) ** (1.0 / 3.0)
 
 
 def _layer_case(
@@ -134,10 +154,14 @@ def _layer_fwhm(solver: CurrentContinuitySolver) -> float:
     peak_index = max(range(sample_count), key=amplitudes.__getitem__)
     assert 0 < peak_index < sample_count - 1
     half_maximum = 0.5 * amplitudes[peak_index]
-    left_below = max(index for index in range(peak_index) if amplitudes[index] < half_maximum)
-    right_below = next(
+    left_candidates = [index for index in range(peak_index) if amplitudes[index] < half_maximum]
+    right_candidates = [
         index for index in range(peak_index + 1, sample_count) if amplitudes[index] < half_maximum
-    )
+    ]
+    assert left_candidates, "layer FWHM has no left half-maximum crossing in the sample window"
+    assert right_candidates, "layer FWHM has no right half-maximum crossing in the sample window"
+    left_below = max(left_candidates)
+    right_below = min(right_candidates)
     left_crossing = _interpolated_crossing(
         x_coordinates[left_below],
         amplitudes[left_below],
@@ -199,15 +223,18 @@ def test_resonant_m3_layer_width_scales_as_diffusivity_to_one_third(variant: str
 
         assert solver._solution().mesh().ne == expected["elements"]
         assert width == pytest.approx(expected["measured_layer_width"], rel=0.05)
+        assert expected["theoretical_inner_scale"] == pytest.approx(
+            _theoretical_inner_scale(diffusivity), rel=1.0e-8
+        )
+        assert width / _theoretical_inner_scale(diffusivity) == pytest.approx(
+            expected["fwhm_to_inner_scale"], rel=0.05
+        )
         assert resolution.cells_across_layer == pytest.approx(
             expected["cells_across_layer"], rel=0.05
         )
         assert resolution.resolved
         assert resolution.cells_across_layer >= 6.0
         assert result.free_dof_relative_residual_norm < 1.0e-11
-        assert result.free_dof_relative_residual_norm == pytest.approx(
-            expected["free_dof_relative_residual"], abs=1.0e-12
-        )
         assert result.diagnostics["minimum_field_magnitude"] == pytest.approx(10.0, rel=1.0e-3)
         assert result.diagnostics["floor_activity_l2"] < 1.0e-12
         widths.append(width)
@@ -218,6 +245,40 @@ def test_resonant_m3_layer_width_scales_as_diffusivity_to_one_third(variant: str
     assert fitted_exponent == pytest.approx(
         recorded_rows[variant, _DIFFUSIVITIES[0]]["fitted_exponent"], abs=0.02
     )
+
+
+def test_thinnest_resonant_layer_fwhm_is_mesh_independent() -> None:
+    """The six-cell FWHM verdict is unchanged by one layer-aligned h-refinement."""
+    diffusivity = _DIFFUSIVITIES[0]
+    coefficients, profile = _layer_case(diffusivity)
+    recorded_rows = _recorded_refinement_rows()
+    measured_widths: dict[tuple[int, int], float] = {}
+
+    for subdivisions in ((64, 16), (96, 24)):
+        nx, ny = subdivisions
+        solver = CurrentContinuitySolver(
+            polynomial_order=3,
+            runtime=RuntimeOptions(regularization_gradient="perpendicular"),
+            stabilization="supg",
+        )
+        solver.solve_utilde(
+            Slab2D(maxh=1.0 / ny, subdivisions=subdivisions, periodic_y=True),
+            coefficients,
+            profile,
+            boundary="left|right",
+        )
+        measured_width = _layer_fwhm(solver)
+        expected = recorded_rows[subdivisions]
+        measured_widths[subdivisions] = measured_width
+
+        assert solver._solution().mesh().ne == expected["elements"]
+        assert measured_width == pytest.approx(expected["measured_layer_width"], rel=0.02)
+        assert nx * measured_width == pytest.approx(expected["cells_across_layer"], rel=0.02)
+
+    relative_change = (
+        abs(measured_widths[64, 16] - measured_widths[96, 24]) / measured_widths[96, 24]
+    )
+    assert relative_change < 0.01
 
 
 @pytest.mark.parametrize("variant", ["perpendicular", "full"])
@@ -252,6 +313,12 @@ def test_resonant_utilde_layer_retains_direct_u_and_m2_cross_checks(variant: str
         profile,
         boundary="left|right",
     )
+
+    for solver in (direct, transformed):
+        for x_coordinate in (0.35, 0.50, 0.65):
+            assert solver.solution_at(x_coordinate, 0.0) == pytest.approx(
+                solver.solution_at(x_coordinate, 1.0), abs=1.0e-11
+            )
 
     sample_points = (
         (0.35, 0.125),

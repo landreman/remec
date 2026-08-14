@@ -23,10 +23,11 @@ class _MeshBundle:
 class Slab2D:
     """A rectangular structured domain with named physical boundary regions.
 
-    ``periodic_y`` identifies the top and bottom sides for field-line harmonics.
-    ``subdivisions`` optionally fixes the two axis counts, which permits a
-    layer-aligned verification mesh to resolve the layer-normal direction without
-    over-resolving its smooth periodic harmonic.
+    ``periodic_y`` records and builds the top/bottom mesh identification used by
+    finite-element consumers to construct a periodic space. ``subdivisions``
+    optionally fixes the two axis counts, which permits a layer-aligned verification
+    mesh to resolve the layer-normal direction without over-resolving its smooth
+    periodic harmonic.
     """
 
     maxh: float

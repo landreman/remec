@@ -455,7 +455,8 @@ def solve_frozen_current_continuity(
             raise ValueError(f"{name} must be a three-component coefficient function")
 
     mesh = slab.build_mesh()._mesh
-    space = ng.H1(mesh, order=polynomial_order, dirichlet=boundary)
+    base_space = ng.H1(mesh, order=polynomial_order, dirichlet=boundary)
+    space = ng.Periodic(base_space) if slab.periodic_y else base_space
     trial, test = space.TnT()
     trial_gradient = _embedded_gradient(ng.grad(trial))
     test_gradient = _embedded_gradient(ng.grad(test))
