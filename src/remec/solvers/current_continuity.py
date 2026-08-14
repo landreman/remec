@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 from math import isfinite
 from typing import Any, Literal
@@ -17,6 +18,25 @@ from remec.options import (
 )
 
 CurrentContinuityFormulation = Literal["direct-u", "utilde"]
+
+
+class UnresolvedCurrentLayerWarning(RuntimeWarning):
+    """Warning that the DESIGN §5 current-layer resolution gate failed."""
+
+
+class UnresolvedCurrentLayerError(RuntimeError):
+    """Strict-mode failure for an unresolved note-``layer_width`` current layer."""
+
+
+@dataclass(frozen=True, slots=True)
+class CurrentLayerResolutionDiagnostic:
+    r"""Resolution report for the (M3) layer ``delta proportional D_u**(1/3)``."""
+
+    layer_width: float
+    normal_element_width: float
+    cells_across_layer: float
+    minimum_cells: int
+    resolved: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,7 +74,9 @@ class FrozenCurrentContinuityCoefficients:
 class PrescribedCurrentProfile:
     r"""Frozen ``F(p)`` data for the note's ``u = F(p) + utilde`` split.
 
-    ``value`` is ``F(p)`` and ``pressure_derivative`` is ``F'(p)``. Together with
+    ``identifier`` is a stable caller-owned provenance key included in the solve
+    configuration digest and structured records. ``value`` is ``F(p)`` and
+    ``pressure_derivative`` is ``F'(p)``. Together with
     ``FrozenCurrentContinuityCoefficients.pressure_gradient`` they define
     ``grad(F(p)) = F'(p) grad(p)``. The two explicit divergence coefficients are
     ``div(F'(p) grad_perp(p))`` and ``div(F'(p) grad(p))``, where
@@ -66,12 +88,17 @@ class PrescribedCurrentProfile:
     can silently return zero for a GridFunction-backed pressure gradient.
     """
 
+    identifier: str
     value: Any
     pressure_derivative: Any
     perpendicular_gradient_divergence: Any
     full_gradient_divergence: Any
 
     def __post_init__(self) -> None:
+        if not isinstance(self.identifier, str):
+            raise TypeError("identifier must be a string")
+        if not self.identifier or self.identifier.strip() != self.identifier:
+            raise ValueError("identifier must be non-empty without surrounding whitespace")
         for name in (
             "value",
             "pressure_derivative",
@@ -87,6 +114,7 @@ class CurrentContinuityResult:
     """Scalar public result for a frozen-field direct-u or utilde solve of (M3)."""
 
     formulation: CurrentContinuityFormulation
+    profile_identifier: str | None
     polynomial_order: int
     regularization_gradient: RegularizationGradient
     stabilization: CurrentContinuityStabilization
@@ -161,6 +189,7 @@ class CurrentContinuitySolver:
             raise TypeError("profile must be PrescribedCurrentProfile")
         configuration = {
             "formulation": formulation,
+            "profile_identifier": None if profile is None else profile.identifier,
             "polynomial_order": self.polynomial_order,
             "runtime": self.runtime,
             "current_diffusivity": coefficients.current_diffusivity,
@@ -172,6 +201,7 @@ class CurrentContinuitySolver:
         log_fields = {
             "configuration_digest": digest,
             "formulation": formulation,
+            "profile_identifier": None if profile is None else profile.identifier,
             "polynomial_order": self.polynomial_order,
             "regularization_gradient": self.runtime.regularization_gradient,
             "stabilization": self.stabilization,
@@ -204,6 +234,7 @@ class CurrentContinuitySolver:
             )
         return CurrentContinuityResult(
             formulation=formulation,
+            profile_identifier=None if profile is None else profile.identifier,
             polynomial_order=self.polynomial_order,
             regularization_gradient=self.runtime.regularization_gradient,
             stabilization=self.stabilization,
@@ -240,6 +271,42 @@ class CurrentContinuitySolver:
         if self._internal_solution is None:
             raise RuntimeError("solve must be called before evaluating the M3 result")
         return self._internal_solution
+
+    def assess_layer_resolution(
+        self,
+        *,
+        layer_width: float,
+        normal_element_width: float,
+        strict: bool = False,
+    ) -> CurrentLayerResolutionDiagnostic:
+        r"""Apply the DESIGN §5 gate to a measured note-(M3) layer width.
+
+        For Eq. ``layer_width``, callers measure or estimate ``delta`` and supply the
+        local element width normal to the layer. Production callers warn below
+        ``RuntimeOptions.min_layer_cells`` by default and fail when ``strict=True``.
+        """
+        if not isfinite(layer_width) or layer_width <= 0.0:
+            raise ValueError("layer_width must be finite and positive")
+        if not isfinite(normal_element_width) or normal_element_width <= 0.0:
+            raise ValueError("normal_element_width must be finite and positive")
+        cells_across_layer = layer_width / normal_element_width
+        diagnostic = CurrentLayerResolutionDiagnostic(
+            layer_width=layer_width,
+            normal_element_width=normal_element_width,
+            cells_across_layer=cells_across_layer,
+            minimum_cells=self.runtime.min_layer_cells,
+            resolved=cells_across_layer >= self.runtime.min_layer_cells,
+        )
+        if not diagnostic.resolved:
+            message = (
+                "M3 current layer is unresolved: "
+                f"{cells_across_layer:.3f} normal element widths across the layer, "
+                f"required at least {self.runtime.min_layer_cells}"
+            )
+            if strict:
+                raise UnresolvedCurrentLayerError(message)
+            warnings.warn(message, UnresolvedCurrentLayerWarning, stacklevel=2)
+        return diagnostic
 
     def solution_at(self, x_coordinate: float, y_coordinate: float) -> float:
         """Return u at a physical point after a solve."""

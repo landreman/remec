@@ -21,11 +21,20 @@ class _MeshBundle:
 
 @dataclass(frozen=True, slots=True)
 class Slab2D:
-    """A rectangular two-dimensional domain with named boundary regions."""
+    """A rectangular structured domain with named physical boundary regions.
+
+    ``periodic_y`` records and builds the top/bottom mesh identification used by
+    finite-element consumers to construct a periodic space. ``subdivisions``
+    optionally fixes the two axis counts, which permits a layer-aligned verification
+    mesh to resolve the layer-normal direction without over-resolving its smooth
+    periodic harmonic.
+    """
 
     maxh: float
     lower: tuple[float, float] = (0.0, 0.0)
     upper: tuple[float, float] = (1.0, 1.0)
+    subdivisions: tuple[int, int] | None = None
+    periodic_y: bool = False
 
     def __post_init__(self) -> None:
         if not isfinite(self.maxh) or self.maxh <= 0.0:
@@ -34,6 +43,16 @@ class Slab2D:
             raise ValueError("slab bounds must be finite")
         if self.lower[0] >= self.upper[0] or self.lower[1] >= self.upper[1]:
             raise ValueError("slab lower bounds must be strictly below upper bounds")
+        if self.subdivisions is not None and (
+            len(self.subdivisions) != 2
+            or any(
+                isinstance(value, bool) or not isinstance(value, int) or value < 1
+                for value in self.subdivisions
+            )
+        ):
+            raise ValueError("subdivisions must contain two positive integers")
+        if not isinstance(self.periodic_y, bool):
+            raise TypeError("periodic_y must be a boolean")
 
     @classmethod
     def unit_square(cls, *, maxh: float) -> Slab2D:
@@ -44,13 +63,28 @@ class Slab2D:
         """Build a deterministic structured slab mesh with named boundaries."""
         from ngsolve.meshes import MakeStructured2DMesh  # type: ignore[import-untyped]
 
-        boundary_names = ("bottom", "right", "top", "left")
         width = self.upper[0] - self.lower[0]
         height = self.upper[1] - self.lower[1]
+        if self.subdivisions is None:
+            nx = max(1, ceil(width / self.maxh))
+            ny = max(1, ceil(height / self.maxh))
+        else:
+            nx, ny = self.subdivisions
+        boundary_names = (
+            ("right", "left")
+            if self.periodic_y
+            else (
+                "bottom",
+                "right",
+                "top",
+                "left",
+            )
+        )
         mesh = MakeStructured2DMesh(
             quads=False,
-            nx=max(1, ceil(width / self.maxh)),
-            ny=max(1, ceil(height / self.maxh)),
+            nx=nx,
+            ny=ny,
+            periodic_y=self.periodic_y,
             mapping=lambda x, y: (self.lower[0] + width * x, self.lower[1] + height * y),
         )
         return _MeshBundle(
@@ -59,15 +93,16 @@ class Slab2D:
         )
 
     def boundary_regions(self) -> dict[str, str]:
-        """Return named regions for the slab's four exterior sides."""
-        return {name: name for name in ("bottom", "right", "top", "left")}
+        """Return named regions for the slab's non-periodic exterior sides."""
+        names = ("right", "left") if self.periodic_y else ("bottom", "right", "top", "left")
+        return {name: name for name in names}
 
     def characteristic_length(self) -> float:
         """Return the largest side length used to nondimensionalize the slab."""
         return max(self.upper[0] - self.lower[0], self.upper[1] - self.lower[1])
 
     def harmonic_basis(self, mesh_bundle: _MeshBundle) -> list[object]:
-        """Return no harmonic flux fields: a simply connected slab has none."""
+        """Return no 3D magnetic harmonic-flux fields for this verification slab."""
         del mesh_bundle
         return []
 
@@ -78,5 +113,7 @@ class Slab2D:
             "lower": self.lower,
             "upper": self.upper,
             "maxh": self.maxh,
+            "subdivisions": self.subdivisions,
+            "periodic_y": self.periodic_y,
             "boundary_regions": self.boundary_regions(),
         }

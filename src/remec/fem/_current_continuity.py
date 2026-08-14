@@ -40,6 +40,9 @@ class _FrozenCoefficients(Protocol):
 
 class _PrescribedCurrentProfile(Protocol):
     @property
+    def identifier(self) -> str: ...
+
+    @property
     def value(self) -> Any: ...
 
     @property
@@ -421,8 +424,15 @@ def solve_frozen_current_continuity(
         raise ValueError("stabilization must be 'none' or 'supg'")
     if slab.lower != (0.0, 0.0) or slab.upper != (1.0, 1.0):
         raise ValueError("the frozen M3 verification kernel supports the unit square only")
-    if boundary != "bottom|right|top|left":
-        raise ValueError("only the unit-square named Dirichlet boundary is supported")
+    boundary_names = tuple(boundary.split("|"))
+    available_boundaries = slab.boundary_regions()
+    if (
+        not boundary
+        or any(not name for name in boundary_names)
+        or any(name not in available_boundaries for name in boundary_names)
+    ):
+        available = "|".join(available_boundaries)
+        raise ValueError(f"boundary must name only available slab regions: {available}")
 
     if prescribed_current_profile is not None:
         for name in (
@@ -445,7 +455,8 @@ def solve_frozen_current_continuity(
             raise ValueError(f"{name} must be a three-component coefficient function")
 
     mesh = slab.build_mesh()._mesh
-    space = ng.H1(mesh, order=polynomial_order, dirichlet=boundary)
+    base_space = ng.H1(mesh, order=polynomial_order, dirichlet=boundary)
+    space = ng.Periodic(base_space) if slab.periodic_y else base_space
     trial, test = space.TnT()
     trial_gradient = _embedded_gradient(ng.grad(trial))
     test_gradient = _embedded_gradient(ng.grad(test))

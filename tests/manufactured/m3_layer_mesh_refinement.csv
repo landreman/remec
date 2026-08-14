@@ -1,0 +1,3 @@
+variant,current_diffusivity,nx,ny,elements,measured_layer_width,cells_across_layer
+perpendicular,0.0025,64,16,2048,0.1293094217,8.275803
+perpendicular,0.0025,96,24,4608,0.1293169073,12.414423

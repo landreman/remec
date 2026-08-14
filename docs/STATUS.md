@@ -206,9 +206,30 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   physical-u/M2 reconstruction when measuring the D_u^{1/3} layer width. Add a stable
   prescribed-profile identifier to coupled-run configuration/log provenance before
   checkpointing F(p).
-- [ ] **3.4** D_u^{1/3} layer scaling — `DESIGN.md` §9, §22 · note: (M3), §5.5
+- [x] **3.4** D_u^{1/3} layer scaling — `DESIGN.md` §9, §22 · note: (M3), §5.5
   <br>Acceptance: measured δ ∝ D_u^{1/3} for both gradient variants; resolution requirements documented.
-  <br>Measured: —
+  <br>Measured: macOS / CPython 3.12.2 / NGSolve 6.2.2606 — fitted physical-(M2)
+  `J_parallel/B` FWHM exponents are 0.346160 (∇⊥) and 0.345392 (full ∇), within 0.04
+  of 1/3. Across D_u = 0.0025 → 0.04, FWHM widths grow from 0.129309 → 0.337937
+  and 0.129302 → 0.337151, respectively. The lowest adjacent exponents, 0.338771
+  and 0.338644, are closer to 1/3 than the highest pair (0.357415 and 0.355391),
+  documenting the remaining systematic residual as finite-D_u behavior. This milestone
+  claims only the width half of the note's two-part `layer_width` scaling. Operational
+  FWHM is 4.772–4.949 times the unit-prefactor inner scale `(D_u/(40π))^(1/3)` and
+  spans 8.275–21.628 normal elements (required at least 6). At the thinnest case, a
+  64×16 → 96×24 h-refinement changes FWHM by only 5.789e-5 relative. The M3 space is
+  genuinely periodic, with direct-u/utilde seam values agreeing to 1e-11. Free-DOF
+  relative residuals stay below 4.36e-17; physical-u, M2-current, and J_parallel/B
+  cross-checks pass. Prescribed F(p) identifiers participate in the configuration
+  digest and structured solve records. See `tests/manufactured/m3_layer_scaling.csv`,
+  `tests/manufactured/m3_layer_mesh_refinement.csv`, and `docs/verification.md`.
+  <br>Next: milestone 3.5 may reuse the periodic machinery and physical-M2 Fourier
+  observable as a scaling baseline, but not this slab as evidence for cross-variant
+  agreement: B_x = 0 makes the layer-normal ∇⊥ and full-∇ operators identical. Add the
+  required field-misaligned/nonzero-B_x benchmark and performance/iteration
+  instrumentation without weakening the default ∇⊥ path or treating polynomial degree
+  as extra layer elements. A later coupled production driver owns invoking
+  `assess_layer_resolution` once it can estimate δ and the local normal mesh scale.
 - [ ] **3.5** Gradient-variant comparison study (∇⊥ vs full ∇) — `DESIGN.md` §9.4 · note: §5.5
   <br>Acceptance: on shared frozen-(B, p) benchmarks including a resonant layer and a
   field-misaligned mesh: measured O(ε_J) relative cross-variant agreement at fixed D_u

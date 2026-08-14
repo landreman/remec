@@ -17,8 +17,11 @@ from remec.solvers.current_continuity import (
     CurrentContinuityFormulation,
     CurrentContinuityResult,
     CurrentContinuitySolver,
+    CurrentLayerResolutionDiagnostic,
     FrozenCurrentContinuityCoefficients,
     PrescribedCurrentProfile,
+    UnresolvedCurrentLayerError,
+    UnresolvedCurrentLayerWarning,
 )
 
 __all__ = [
@@ -30,6 +33,7 @@ __all__ = [
     "CurrentContinuityResult",
     "CurrentContinuitySolver",
     "CurrentContinuityStabilization",
+    "CurrentLayerResolutionDiagnostic",
     "EnergyDiagnostics",
     "FloorSensitivityDiagnostic",
     "FloorSensitivityError",
@@ -38,4 +42,6 @@ __all__ = [
     "PollutionSafetyDiagnostic",
     "PrescribedCurrentProfile",
     "SpatialAnisotropicConductivity",
+    "UnresolvedCurrentLayerError",
+    "UnresolvedCurrentLayerWarning",
 ]
