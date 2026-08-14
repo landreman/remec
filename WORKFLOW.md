@@ -18,7 +18,7 @@ remec/
 ├── pyproject.toml
 ├── docs/
 │   ├── DESIGN.md
-│   ├── 20260808-03_Regularized_3D_MHD_equilibrium.tex
+│   ├── 20260814-01_Regularized_3D_MHD_equilibrium.tex
 │   ├── STATUS.md                        # provided
 │   ├── dev_notes.md                     # empty
 │   ├── verification.md                  # empty

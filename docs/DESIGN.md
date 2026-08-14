@@ -4,7 +4,7 @@
 **Primary backend:** Netgen/NGSolve
 **Primary language:** Python
 **Primary initial mode:** interpretive, fixed closed boundary
-**Mathematical source of truth:** `docs/20260808-03_Regularized_3D_MHD_equilibrium.tex` (referred to throughout as **"the note"**; labels (M1)–(M4b) and section numbers refer to it)
+**Mathematical source of truth:** `docs/20260814-01_Regularized_3D_MHD_equilibrium.tex` (referred to throughout as **"the note"**; labels (M1)–(M4b) and section numbers refer to it)
 
 ---
 
@@ -143,6 +143,7 @@ and compared against the standard formulation.
 | D15 | Transport coefficients implemented from the note's Sec. 10.2 formulas; PlasmaPy test-only | Few lines; avoids heavy dependency with an API under development | none |
 | D16 | Axisymmetric R–Z as a true reduced formulation, early; 3D-axisymmetric cross-check where feasible | Most sensitive end-to-end verification (GS + 1D transport); fastest dev platform; independent check of the note's Sec. 11 reduction | none |
 | D17 | Derivatives deferred but architected for: pure residuals, transpose actions, fixed reference mesh, smooth V_χ only, JVP/VJP interfaces | Converged-state adjoint reuses the Newton Jacobian transpose | Optimization use case materializes |
+| D18 | M3 regularization gradient runtime-selectable: ∇⊥ (default) or full ∇ (isotropic variant), applied consistently across (M2)/(M3); comparison study required (Sec. 9.4, milestone 3.5) | Note §5.5: variants agree to O(ε_J); full ∇ gives a fixed SPD **B**-independent Laplacian (assembly/preconditioner reuse, monotone stencils, no ∂op/∂**B** Newton block, damps parallel grid noise); ∇⊥ is the derived kinetic closure and preserves u = J∥/B exactly | Measured evidence of a clear winner → change the default via ADR |
 
 ---
 
@@ -157,6 +158,17 @@ With **b** = **B**/B, ∇⊥f = ∇f − **b**(**b**·∇f), K = κ⊥I + (κ∥
   + (μ₀D_u/B²)∇⊥u·∇p. The final right-hand-side term is part of the model and
   **MUST NOT** be omitted: it is required for (M3) to be exactly ∇·**J** = 0 for the
   current (M2), which is what makes Ampère's law integrable.
+- **(M2/M3 regularization-gradient variants — note §5.5):** the regularizing gradient
+  ∇ᵣ in (M2) and (M3) is runtime-selectable between ∇⊥ (default; the note's derived
+  closure) and the full ∇ (isotropic variant): **J** = u**B** + (**B**×∇p)/B² − D_u∇ᵣu
+  and **B**·∇u − ∇·(D_u∇ᵣu) = (2/B³)**B**·(∇p×∇B) − (μ₀u/B²)**B**·∇p
+  + (μ₀D_u/B²)∇ᵣu·∇p. The same ∇ᵣ MUST be used in the (M2) flux, the (M3) left-hand
+  side, and the (M3) final right-hand-side term — a mixed pairing leaves an O(D_u)
+  residual in ∇·**J** and MUST be treated as an error. With ∇ᵣ = ∇, u is the auxiliary
+  solved field and J∥/B = u − (D_u/B)**b**·∇u; diagnostics and bootstrap-type F(p)
+  closures MUST use the reconstructed **J**. Requirements and the comparison program
+  are in Section 9.4. This licence is specific to (M3); it does **not** extend to
+  (M4a)/(M4).
 - **(M4a)** ∇·(K∇χ) = −S_ref, S_ref > 0 (default S_ref = 1 after nondimensionalization).
 - **(M4b)** p(**r**) = p₀(V_χ(χ(**r**))), V_χ(χ̂) = ∫_Ω H(χ − χ̂) d³r. No independent
   pressure DOFs exist in interpretive mode.
@@ -182,7 +194,8 @@ layers resolved, scan ε_κ and D_u, extrapolate with the known scalings.
 
 Character of the sub-problems: (M4a) self-adjoint elliptic, extremely anisotropic —
 the central numerical risk; (M3) nonsymmetric advection–diffusion, first order along
-**b**, elliptic transverse, hypoelliptic; (M1)+(M2) div–curl/curl–curl; (M4b) explicit
+**b**, elliptic transverse, hypoelliptic (uniformly elliptic in the full-∇ variant of
+note §5.5); (M1)+(M2) div–curl/curl–curl; (M4b) explicit
 nonlocal composition, local + low-rank linearization.
 
 ---
@@ -372,8 +385,9 @@ field-split alternatives belong to the PETSc branch evaluation.)
 
 ### 9.1 Weak form and SUPG
 
-Unstabilized: ∫v **B**·∇u + ∫D_u ∇⊥v·∇⊥u = ∫v R(B, p, u, D_u), with R the complete
-right-hand side of (M3); every B⁻¹ uses B_safe. The baseline adds SUPG stabilization
+Unstabilized: ∫v **B**·∇u + ∫D_u ∇ᵣv·∇ᵣu = ∫v R(B, p, u, D_u), with R the complete
+right-hand side of (M3) and ∇ᵣ the selected regularization gradient (∇⊥ by default,
+full ∇ as the isotropic variant; Sec. 9.4); every B⁻¹ uses B_safe. The baseline adds SUPG stabilization
 with streamline direction **b**. Requirements: the strong residual used in SUPG MUST
 include the parallel advection term, the transverse diffusion, and **every** source and
 reaction term (including coefficient derivatives implied by the strong divergence where
@@ -393,13 +407,66 @@ If SUPG oscillates or smears the D_u^{1/3} layer, implement upwind interior-pena
 conforming to the same solver interface and sharing the manufactured solutions. The M3
 block is nonsymmetric: GMRES with a native preconditioner, or direct within the
 Section 21 policy. At least one manufactured test MUST fail conspicuously if the last
-(μ₀D_u/B²)∇⊥u·∇p term of (M3) is omitted.
+(μ₀D_u/B²)∇ᵣu·∇p term of (M3) is omitted; this test MUST run for both gradient
+variants.
+
+### 9.4 Regularization-gradient variants (∇⊥ vs. full ∇)
+
+The note's derived closure is the transverse −D_u∇⊥u; note §5.5 licenses an isotropic
+variant −D_u∇u that is equivalent to the order of the retained physics (variant
+solutions differ by O(ε_J) relative) and is expected to be numerically simpler: for
+constant D_u it is a fixed SPD Laplacian independent of the evolving **B** (assembly,
+factorization, and preconditioner reuse across nonlinear iterations; monotone stencils
+without mixed derivatives; no differentiation of **bb** inside the divergence; no
+∂(operator)/∂**B** Newton block; damping of parallel grid-scale noise that the
+transverse operator leaves untouched). Whether these advantages are significant in
+practice is an open experimental question this section exists to answer.
+
+Requirements:
+
+- The M3 solver MUST implement both variants behind one runtime option, e.g.
+  `regularization_gradient="perpendicular" | "full"`, default `"perpendicular"` (the
+  note is authoritative for the physical model; changing the default requires an ADR
+  citing the milestone-3.5 measurements).
+- The selected ∇ᵣ MUST be applied consistently in: the (M2) constitutive flux and the
+  J_raw construction (Sec. 10); the (M3) weak form; the SUPG strong residual; the final
+  (μ₀D_u/B²)∇ᵣu·∇p right-hand-side term; and the ũ-transformation source terms
+  transcribed from Eq. (utilde_equation) (with ∇ᵣ replacing ∇⊥ in its
+  ∇·(D_u F′(p)∇⊥p) term). Mixing operators between any of these breaks exact
+  ∇·**J** = 0 at O(D_u) and MUST be treated as an implementation error, not a
+  tolerance issue.
+- The choice MUST be recorded in the run configuration digest, structured logs, and
+  checkpoint metadata.
+- With `"full"`, u is the auxiliary solved variable; J∥/B = u − (D_u/B)**b**·∇u MUST be
+  the quantity reported by parallel-current diagnostics and consumed by bootstrap-type
+  F(p) closures.
+- All Section 9.1–9.3 manufactured tests, and the D_u^{1/3} layer-scaling
+  demonstration, MUST pass for both variants.
+- **Comparison study (milestone 3.5):** on shared frozen-(**B**, p) benchmarks
+  (including a resonant-layer case and a deliberately field-misaligned mesh), measure
+  and record as machine-readable tables: (a) the relative difference between the two
+  converged solutions at fixed D_u, verifying the O(ε_J) expectation and common
+  D_u → 0 limits; (b) assembly/refactorization counts and wall time per nonlinear
+  iteration; (c) linear-iteration counts and preconditioner behavior; (d) presence of
+  oscillations / monotonicity violations and layer smearing; (e) sensitivity to
+  mesh–field misalignment (the ∇⊥ tensor discretization incurs spurious parallel
+  diffusion ≤ ~D_u × misalignment error — Günter et al., Sharma–Hammett — which the
+  full-∇ variant accepts by construction); (f) damping of parallel grid-scale noise.
+  Results go in `docs/verification.md`. Because the two variants share no
+  discretization of the regularizing term, their agreement is also a strong
+  cross-verification of the M3 kernel itself.
+- **Scope limitation:** this licence is specific to (M3), where parallel transport is
+  advective with an O(1) coefficient so added parallel diffusion is subdominant by
+  ε_J k∥L̄ ≪ 1. It MUST NOT be applied to (M4a)/(M4), where both directions are
+  diffusive and the anisotropy ratio is the physics: isotropic contamination at the
+  κ∥ level destroys w_c ∝ ε_κ^{1/4} and the barrier structure (Sec. 3.6, Sec. 8).
 
 ---
 
 ## 10. Current construction and divergence-free projection
 
-Construct J_raw = u**B** + (**B**×∇p)/B_safe² − D_u∇⊥u at quadrature points, with each
+Construct J_raw = u**B** + (**B**×∇p)/B_safe² − D_u∇ᵣu at quadrature points, where ∇ᵣ
+MUST match the regularization gradient selected for the M3 solve (Sec. 9.4), with each
 term separately accessible for diagnostics/output. Then solve the constrained
 projection: (J_h, v) + (λ_h, ∇·v) = (J_raw, v), (∇·J_h, q) = 0, with J_h ∈ H(div),
 natural J_h·n̂ = 0 on the closed boundary, and explicit handling of any global current
@@ -753,7 +820,7 @@ remec/
 ├── LICENSE
 ├── pyproject.toml
 ├── docs/
-│   ├── 20260808-03_Regularized_3D_MHD_equilibrium.tex
+│   ├── 20260814-01_Regularized_3D_MHD_equilibrium.tex
 │   ├── DESIGN.md
 │   ├── equations.md              # transcribed weak forms with note eq. references
 │   ├── verification.md           # test matrix and current regression numbers
@@ -826,8 +893,10 @@ Anderson algebra; mollifiers and their derivatives; checkpoint round-trips.
 anisotropy; spatially varying anisotropy direction; curved geometry; periodic domain;
 closed field lines; island topology; convergence measured in L² and energy norms.
 M3 — pure aligned advection; transverse diffusion; reaction terms with **B**·∇p; the
-final D_u∇⊥u·∇p term (with a test that fails conspicuously if it is dropped);
-nonconstant B; SUPG on/off. Magnetics — discrete ∇·∇× = 0; manufactured curl–curl;
+final D_u∇ᵣu·∇p term (with a test that fails conspicuously if it is dropped);
+nonconstant B; SUPG on/off; both regularization-gradient variants (∇⊥ and full ∇;
+Sec. 9.4), with cross-variant agreement at O(ε_J) at fixed D_u and a common D_u → 0
+limit. Magnetics — discrete ∇·∇× = 0; manufactured curl–curl;
 gauge null-space handling; boundary normal-field condition; harmonic field + toroidal
 flux; current projection + Ampère compatibility. Level sets — analytic circle/sphere;
 deformed smooth level sets; multiple nested components; a saddle/separatrix level;
@@ -920,9 +989,17 @@ circle/sphere tests and monotone tabulation. 2.2 profiles + transplant with exac
 enclosed-volume and layer-cake tests. 2.3 differentiable map (JVP vs. finite
 differences). 2.4 optional ngsxfem cut-cell reference and comparison.
 
-**Phase 3 — M3 kernel.** 3.1 direct-u weak form with all terms on frozen (**B**, p).
-3.2 SUPG + manufactured tests. 3.3 ũ formulation transcribed and verified against
-direct-u. 3.4 D_u^{1/3} layer-scaling demonstration and resolution requirements.
+**Phase 3 — M3 kernel.** 3.1 direct-u weak form with all terms on frozen (**B**, p),
+with both regularization gradients (∇⊥ default and full ∇; Sec. 9.4) selectable at
+runtime and threaded consistently through every D_u term. 3.2 SUPG + manufactured
+tests, run for both variants. 3.3 ũ formulation transcribed and verified against
+direct-u (both variants). 3.4 D_u^{1/3} layer-scaling demonstration and resolution
+requirements (both variants). 3.5 gradient-variant comparison study per Sec. 9.4 and
+note §5.5: measured O(ε_J) cross-variant agreement at fixed D_u, common D_u → 0 limit,
+and a machine-readable performance/robustness comparison (assembly reuse, linear-solver
+behavior, monotonicity, misalignment sensitivity, parallel grid-noise damping) recorded
+in `docs/verification.md`; the default remains ∇⊥ unless changed by an ADR citing
+these measurements.
 
 **Phase 4 — compatible magnetic kernel.** 4.1 de Rham space/order-pairing tests.
 4.2 gauge-fixed curl–curl with manufactured magnetostatics. 4.3 harmonic flux field on
@@ -966,7 +1043,8 @@ demonstrated necessary.
 **Release definitions.** `remec 0.1` (first scientifically useful): pip install on
 Linux/macOS without compiler/MPI; 2D slab + axisymmetric; high-order anisotropic χ
 solver with pollution benchmark; differentiable V_χ + exact transplant to stated
-tolerance; complete M3 with SUPG; compatible magnetics + current projection; damped
+tolerance; complete M3 with SUPG and both regularization-gradient variants (Sec. 9.4);
+compatible magnetics + current projection; damped
 Picard; restartable checkpoints; D_u/ε_κ scans; documented axisymmetric end-to-end
 verification; clear under-resolution warnings. (A 3D demonstration is desirable but not
 required if toroidal magnetics are not yet sufficiently verified.) `remec 0.2`: smooth
@@ -993,7 +1071,8 @@ reality over this document's API assertions, recording discrepancies in
 `docs/dev_notes.md` (design-level changes require an ADR).
 
 Agents MUST NOT: omit a term because it appears numerically small; replace a tensor
-operator by an isotropic approximation except as an explicit experimental option;
+operator by an isotropic approximation except where explicitly sanctioned — the M3
+regularization-gradient option of Sec. 9.4 is sanctioned; (M4a)/(M4) is never;
 introduce field-aligned coordinates as a hidden assumption; use a histogram volume map
 in Newton; claim extreme-anisotropy capability from residual convergence alone; add
 PETSc, MPI, JAX, DESC, or SIMSOPT as base dependencies; assemble a dense/global coupled
@@ -1031,7 +1110,7 @@ is ambiguous, open a focused issue or ADR rather than making an undocumented cho
 
 ## 28. References and resources
 
-**Project sources:** the note (`docs/20260808-03_...tex`); this document; ADRs.
+**Project sources:** the note (`docs/20260814-01_...tex`); this document; ADRs.
 
 **NGSolve:** documentation (docu.ngsolve.org) — TaskManager, H(curl)/H(div) tutorial,
 periodic meshes/spaces, nonlinear problems and `AssembleLinearization`; `ngsxfem`

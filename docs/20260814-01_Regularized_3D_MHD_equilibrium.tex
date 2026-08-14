@@ -805,6 +805,97 @@ $\tilde u$ is the Pfirsch--Schl\"uter--like response and $F(p)$ carries the pres
 exactly as $\langle J_\parallel B\rangle(\psi)$ does in a classical code---but defined without
 reference to surfaces.
 
+\subsection{An isotropic variant of the current-viscosity closure}
+\label{sec:isotropic_variant}
+
+The constitutive relation~(\ref{eq:Jpi}) regularizes current continuity with a purely
+transverse flux, $\bJ_\pi=-D_u\gradperp u$. A natural variant replaces the perpendicular
+gradient by the full gradient,
+\begin{equation}
+\bJ_\pi=-\,D_u\,\nabla u ,
+\label{eq:Jpi_iso}
+\end{equation}
+which adds a parallel component $-D_u\,\bb\,(\bb\cdot\nabla u)$ to the constitutive
+current. Because a parallel current exerts no force, the perpendicular force
+balance~(\ref{eq:perp_model}) and the diamagnetic current~(\ref{eq:Jperp}) are exactly
+unchanged; the modification enters only the continuity closure. Two consequences must be
+tracked. First, the decomposition~(\ref{eq:J_decomposition}) no longer has
+$\bJ_\pi\perp\bB$, so the solved field $u$ and the physical $J_\parallel/B$ differ at
+$O(D_u)$: $\bJ\cdot\bB/B^{2}=u-(D_u/B)\,\bb\cdot\nabla u$. One simply treats $u$ as the
+auxiliary unknown and reconstructs $\bJ$ from~(\ref{eq:J_decomposition})
+with~(\ref{eq:Jpi_iso}); diagnostics, and any closure consuming $J_\parallel$ (e.g.\ a
+bootstrap model for $F$ in Sec.~\ref{sec:net_current}), must use the reconstructed
+current. Second, exactness of $\nabla\cdot\bJ=0$ requires the correction term of
+Eq.~(\ref{eq:u_equation}) to use the \emph{matching} gradient: the isotropic variant of
+the regularized continuity equation is
+\begin{equation}
+\bB\cdot\nabla u-\nabla\cdot\big(D_u\,\nabla u\big)
+=\frac{2}{B^{3}}\,\bB\cdot\big(\nabla p\times\nabla B\big)
+-\frac{\mu_0\,u}{B^{2}}\,\bB\cdot\nabla p
++\frac{\mu_0\,D_u}{B^{2}}\,\nabla u\cdot\nabla p ,
+\label{eq:u_equation_iso}
+\end{equation}
+and with this pairing the integrability argument for Amp\`ere's law in
+Sec.~\ref{sec:model} carries over verbatim, while a mixed pairing (transverse flux with
+isotropic diffusion, or vice versa) leaves an $O(D_u)$ residual in $\nabla\cdot\bJ$ and
+must be avoided.
+
+The two closures are equivalent to the order the model is claimed accurate. The key
+structural asymmetry with the pressure equation~(\ref{eq:pressure_equation}) is that in
+Eq.~(\ref{eq:u_equation}) parallel transport is \emph{advective with an $O(1)$
+coefficient}: at any parallel wavenumber $k_\parallel$ present in the solution, the added
+parallel diffusion $D_u k_\parallel^{2}$ is smaller than the advection $k_\parallel B$ by
+$D_u k_\parallel/B=\epsilon_J\,k_\parallel\bar L\ll1$. In the resonant layers of
+Sec.~\ref{sec:layer} the added term contributes $+D_u k_\parallel^{2}\hat u$ to
+Eq.~(\ref{eq:layer_equation}); at the layer edge, where
+$k_\parallel(\delta)B\sim D_u/\delta^{2}$ defines the width, this is subdominant to the
+retained transverse diffusion by the same small factor, and it vanishes at the layer
+center where $k_\parallel\rightarrow0$, so the width and amplitude
+scalings~(\ref{eq:layer_width}) are unchanged. The extra terms generated in the $F(p)$
+split of Sec.~\ref{sec:net_current} are $O(D_u\varepsilon_\kappa)$, negligible beside the
+terms already kept in Eq.~(\ref{eq:utilde_equation}). Entropy production remains
+sign-definite, $\int D_u|\nabla u|^{2}\ge\int D_u|\gradperp u|^{2}\ge0$. On a boundary
+with $\bB\cdot\bn=0$ the co-normal diffusive fluxes coincide,
+$\bn\cdot(\bI-\bb\bb)\cdot\nabla u=\bn\cdot\nabla u$, so the boundary-condition count and
+even the boundary-layer structure of the flux are identical. One property actually
+improves: the operator in Eq.~(\ref{eq:u_equation_iso}) is \emph{uniformly elliptic}
+independent of the geometry of $\bb$, so smoothness of $u$---and with it the exclusion of
+current sheets---follows from standard elliptic regularity rather than the H\"ormander
+bracket argument invoked after Eq.~(\ref{eq:u_equation}), and remains valid even where
+$\bb$ is nearly degenerate (as can occur transiently for the iterates of a numerical
+scheme, where $\gradperp=(\bI-\bb\bb)\cdot\nabla$ is ill-conditioned). The cost is one of
+derivational fidelity: the kinetic argument of Sec.~\ref{sec:current} fixes the closure
+to be \emph{transverse}---a parallel diffusion of $u$ corresponds physically to parallel
+electron viscosity, whose coefficient is far larger than $D_u$, not equal to it---so
+Eq.~(\ref{eq:Jpi_iso}) is an admissible \emph{numerical} variant, accurate to the order
+of the retained physics, rather than an alternative physical model.
+
+Numerically the isotropic variant has real attractions. For constant $D_u$ the
+regularizing operator is a fixed, isotropic, symmetric-positive-definite Laplacian,
+independent of the evolving $\bB$: it need not be reassembled as the field updates
+within a nonlinear iteration, admits standard monotone discretizations and
+preconditioners without the mixed-derivative stencils of the tensor operator, requires
+no differentiation of $\bb\bb$ inside the divergence, contributes no
+$\partial(\mathrm{operator})/\partial\bB$ block to a Newton linearization, and damps
+grid-scale oscillations of $u$ \emph{along} field lines, which the transverse operator
+leaves untouched. Conversely, discretizing $D_u\gradperp$ on a mesh not aligned with the
+field incurs spurious parallel diffusion of magnitude at most $\sim D_u$ times the
+misalignment error \cite{gunter2005,sharma2007}; the isotropic variant simply accepts,
+by construction, the worst case of an error that the estimates above show to be benign.
+We emphasize that this reasoning must \emph{never} be transplanted to the pressure
+equation: there both directions are diffusive and the anisotropy ratio
+$\varepsilon_\kappa$ \emph{is} the physics, so an isotropic contamination at the
+$\kappa_\parallel$ level would destroy the critical width~(\ref{eq:wc}), the island
+flattening, and the barrier structure entirely. A code should implement both closures
+behind a runtime switch, applied consistently to the constitutive
+current~(\ref{eq:J_decomposition}) and to every $D_u$ term of the continuity equation;
+verify that the two solutions agree to $O(\epsilon_J)$ at fixed $D_u$ and converge to a
+common answer in the $D_u\rightarrow0$ scan of Sec.~\ref{sec:numerics}---a cheap and
+rather sharp verification test, since the variants share no discretization of the
+regularizing term; and measure whether the expected robustness and cost advantages
+of~(\ref{eq:Jpi_iso}) are realized in practice.
+
+
 \section{The closed generalized model}
 \label{sec:model}
 

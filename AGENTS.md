@@ -1,7 +1,7 @@
 # AGENTS.md — operational contract for remec
 
 This file covers **how to work**. `docs/DESIGN.md` covers **what to build** and is
-authoritative for architecture; `docs/20260808-03_Regularized_3D_MHD_equilibrium.tex`
+authoritative for architecture; `docs/20260814-01_Regularized_3D_MHD_equilibrium.tex`
 ("the note") is authoritative for the mathematics.
 
 Read `docs/DESIGN.md` §26 before your first code change in a session. Do not restate it

@@ -145,16 +145,30 @@ that dependency. Phase 7 may run in parallel with Phase 8.
 
 ## Phase 3 — M3 kernel
 
-- [ ] **3.1** Direct-u weak form, frozen (B, p) — `DESIGN.md` §9.1 · note: (M3)
+- [ ] **3.1** Direct-u weak form, frozen (B, p) — `DESIGN.md` §9.1, §9.4 · note: (M3), §5.5
+  <br>Acceptance: both regularization gradients (∇⊥ default, full ∇ isotropic variant)
+  selectable at runtime and applied consistently to the (M2) flux, the (M3) weak form,
+  and the final `D_u ∇ᵣu·∇p` term; the choice recorded in config digest, logs, and
+  checkpoint metadata; with the full-∇ variant, diagnostics report
+  J∥/B = u − (D_u/B)b·∇u.
   <br>Measured: —
-- [ ] **3.2** SUPG + manufactured tests — `DESIGN.md` §9.1 · note: (M3)
-  <br>Acceptance: includes the test that fails conspicuously if the `D_u ∇⊥u·∇p` term is dropped (§22).
+- [ ] **3.2** SUPG + manufactured tests — `DESIGN.md` §9.1, §9.4 · note: (M3), §5.5
+  <br>Acceptance: includes the test that fails conspicuously if the `D_u ∇ᵣu·∇p` term is dropped (`DESIGN.md` §22); all manufactured tests run for both gradient variants.
   <br>Measured: —
-- [ ] **3.3** ũ formulation — `DESIGN.md` §9.2 · note: (M3)
-  <br>Acceptance: agrees with direct-u.
+- [ ] **3.3** ũ formulation — `DESIGN.md` §9.2, §9.4 · note: (M3), §5.5
+  <br>Acceptance: agrees with direct-u; transformed source terms use the selected ∇ᵣ; verified for both variants.
   <br>Measured: —
-- [ ] **3.4** D_u^{1/3} layer scaling — `DESIGN.md` §9, §22 · note: (M3)
-  <br>Acceptance: measured δ ∝ D_u^{1/3}; resolution requirements documented.
+- [ ] **3.4** D_u^{1/3} layer scaling — `DESIGN.md` §9, §22 · note: (M3), §5.5
+  <br>Acceptance: measured δ ∝ D_u^{1/3} for both gradient variants; resolution requirements documented.
+  <br>Measured: —
+- [ ] **3.5** Gradient-variant comparison study (∇⊥ vs full ∇) — `DESIGN.md` §9.4 · note: §5.5
+  <br>Acceptance: on shared frozen-(B, p) benchmarks including a resonant layer and a
+  field-misaligned mesh: measured O(ε_J) relative cross-variant agreement at fixed D_u
+  and a common D_u → 0 limit; machine-readable comparison tables for assembly/
+  refactorization reuse, linear-iteration counts, monotonicity/oscillations and layer
+  smearing, misalignment sensitivity, and parallel grid-noise damping, recorded in
+  `docs/verification.md`. Default remains ∇⊥ unless changed by an ADR citing these
+  measurements.
   <br>Measured: —
 
 ## Phase 4 — compatible magnetic kernel
