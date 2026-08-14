@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from math import isfinite
-from typing import Any
+from typing import Any, Literal
 
 from remec.common.logging import JsonEventLogger
 from remec.common.serialization import configuration_digest
@@ -15,6 +15,8 @@ from remec.options import (
     RegularizationGradient,
     RuntimeOptions,
 )
+
+CurrentContinuityFormulation = Literal["direct-u", "utilde"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,9 +51,38 @@ class FrozenCurrentContinuityCoefficients:
 
 
 @dataclass(frozen=True, slots=True)
-class CurrentContinuityResult:
-    """Scalar public result for a frozen-field direct-u solve of (M3)."""
+class PrescribedCurrentProfile:
+    r"""Frozen ``F(p)`` data for the note's ``u = F(p) + utilde`` split.
 
+    ``value`` is ``F(p)`` and ``pressure_derivative`` is ``F'(p)``. Together with
+    ``FrozenCurrentContinuityCoefficients.pressure_gradient`` they define
+    ``grad(F(p)) = F'(p) grad(p)``. The two explicit divergence coefficients are
+    ``div(F'(p) grad_perp(p))`` and ``div(F'(p) grad(p))``; the solver selects the
+    runtime variant. They are explicit because NGSolve coordinate differentiation can
+    silently return zero for a GridFunction-backed pressure gradient.
+    """
+
+    value: Any
+    pressure_derivative: Any
+    perpendicular_gradient_divergence: Any
+    full_gradient_divergence: Any
+
+    def __post_init__(self) -> None:
+        for name in (
+            "value",
+            "pressure_derivative",
+            "perpendicular_gradient_divergence",
+            "full_gradient_divergence",
+        ):
+            if getattr(getattr(self, name), "dim", 1) != 1:
+                raise ValueError(f"{name} must be scalar")
+
+
+@dataclass(frozen=True, slots=True)
+class CurrentContinuityResult:
+    """Scalar public result for a frozen-field direct-u or utilde solve of (M3)."""
+
+    formulation: CurrentContinuityFormulation
     polynomial_order: int
     regularization_gradient: RegularizationGradient
     stabilization: CurrentContinuityStabilization
@@ -62,7 +93,7 @@ class CurrentContinuityResult:
 
 
 class CurrentContinuitySolver:
-    r"""Direct-u solver for note equations (M2)--(M3).
+    r"""Direct-u and preferred utilde solver for note equations (M2)--(M3).
 
     The selected ``grad_r`` is used consistently in
     ``J = uB + B x grad(p)/B_safe^2 - D_u grad_r(u)`` and in the M3 weak form
@@ -98,11 +129,34 @@ class CurrentContinuitySolver:
         boundary_value: Any = 0.0,
     ) -> CurrentContinuityResult:
         """Solve the frozen-field direct-u weak form of note equation (M3)."""
+        return self._solve(
+            field,
+            coefficients,
+            formulation="direct-u",
+            profile=None,
+            boundary=boundary,
+            boundary_value=boundary_value,
+        )
+
+    def _solve(
+        self,
+        field: Slab2D,
+        coefficients: FrozenCurrentContinuityCoefficients,
+        *,
+        formulation: CurrentContinuityFormulation,
+        profile: PrescribedCurrentProfile | None,
+        boundary: str,
+        boundary_value: Any,
+    ) -> CurrentContinuityResult:
+        """Run one validated direct-u or transformed frozen-field solve."""
         if not isinstance(field, Slab2D):
-            raise TypeError("the direct-u M3 kernel requires a Slab2D mesh")
+            raise TypeError("the M3 kernel requires a Slab2D mesh")
         if not isinstance(coefficients, FrozenCurrentContinuityCoefficients):
             raise TypeError("coefficients must be FrozenCurrentContinuityCoefficients")
+        if formulation == "utilde" and not isinstance(profile, PrescribedCurrentProfile):
+            raise TypeError("profile must be PrescribedCurrentProfile")
         configuration = {
+            "formulation": formulation,
             "polynomial_order": self.polynomial_order,
             "runtime": self.runtime,
             "current_diffusivity": coefficients.current_diffusivity,
@@ -113,6 +167,7 @@ class CurrentContinuitySolver:
         digest = configuration_digest(configuration)
         log_fields = {
             "configuration_digest": digest,
+            "formulation": formulation,
             "polynomial_order": self.polynomial_order,
             "regularization_gradient": self.runtime.regularization_gradient,
             "stabilization": self.stabilization,
@@ -125,6 +180,7 @@ class CurrentContinuitySolver:
             polynomial_order=self.polynomial_order,
             coefficients=coefficients,
             runtime=self.runtime,
+            prescribed_current_profile=profile,
             boundary=boundary,
             boundary_value=boundary_value,
             stabilization=self.stabilization,
@@ -143,6 +199,7 @@ class CurrentContinuitySolver:
                 m3_supg_stabilization_norm=internal.diagnostics["m3_supg_stabilization_norm"],
             )
         return CurrentContinuityResult(
+            formulation=formulation,
             polynomial_order=self.polynomial_order,
             regularization_gradient=self.runtime.regularization_gradient,
             stabilization=self.stabilization,
@@ -150,6 +207,29 @@ class CurrentContinuitySolver:
             free_dof_residual_norm=internal.free_dof_residual_norm,
             free_dof_relative_residual_norm=internal.free_dof_relative_residual_norm,
             diagnostics=diagnostics,
+        )
+
+    def solve_utilde(
+        self,
+        field: Slab2D,
+        coefficients: FrozenCurrentContinuityCoefficients,
+        profile: PrescribedCurrentProfile,
+        *,
+        boundary: str = "bottom|right|top|left",
+    ) -> CurrentContinuityResult:
+        r"""Solve note Eq. ``utilde_equation`` with homogeneous ``utilde`` data.
+
+        This is the preferred (M3) formulation. It solves for ``utilde`` on the same
+        Galerkin/SUPG operator as direct ``u``, then reconstructs
+        ``u = F(p) + utilde`` for note-(M2) current and physical diagnostics.
+        """
+        return self._solve(
+            field,
+            coefficients,
+            formulation="utilde",
+            profile=profile,
+            boundary=boundary,
+            boundary_value=0.0,
         )
 
     def _solution(self) -> Any:
@@ -167,6 +247,10 @@ class CurrentContinuitySolver:
             x_coordinate, y_coordinate
         )
         return value
+
+    def utilde_at(self, x_coordinate: float, y_coordinate: float) -> float:
+        """Return the homogeneous utilde unknown after :meth:`solve_utilde`."""
+        return float(self._solution().utilde_at(x_coordinate, y_coordinate))
 
     def current_at(self, x_coordinate: float, y_coordinate: float) -> tuple[float, float, float]:
         """Return the reconstructed note-(M2) current at a physical point."""

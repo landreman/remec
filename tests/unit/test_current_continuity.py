@@ -19,6 +19,7 @@ from remec.geometry.slab import Slab2D
 from remec.solvers.current_continuity import (
     CurrentContinuitySolver,
     FrozenCurrentContinuityCoefficients,
+    PrescribedCurrentProfile,
 )
 
 
@@ -344,6 +345,54 @@ def test_direct_u_solver_preserves_the_prescribed_boundary_value() -> None:
     assert solver.solution_at(0.0, 0.5) == pytest.approx(0.3, abs=1.0e-12)
     assert solver.solution_at(1.0, 0.5) == pytest.approx(0.3, abs=1.0e-12)
     assert result.free_dof_relative_residual_norm < 1.0e-11
+
+
+def test_utilde_formulation_is_in_provenance_and_has_homogeneous_boundary_data() -> None:
+    r"""The preferred note-``utilde_equation`` path records and enforces its split."""
+    stream = io.StringIO()
+    solver = CurrentContinuitySolver(
+        polynomial_order=2,
+        logger=JsonEventLogger(stream),
+    )
+    result = solver.solve_utilde(
+        Slab2D(maxh=0.25),
+        _frozen_coefficients(),
+        PrescribedCurrentProfile(
+            value=0.3,
+            pressure_derivative=0.0,
+            perpendicular_gradient_divergence=0.0,
+            full_gradient_divergence=0.0,
+        ),
+    )
+    records = [json.loads(line) for line in stream.getvalue().splitlines()]
+
+    assert result.formulation == "utilde"
+    assert solver.utilde_at(0.0, 0.5) == pytest.approx(0.0, abs=1.0e-12)
+    assert solver.solution_at(0.0, 0.5) == pytest.approx(0.3, abs=1.0e-12)
+    assert all(record["formulation"] == "utilde" for record in records)
+    assert all(record["configuration_digest"] == result.configuration_digest for record in records)
+    assert result.diagnostics["m3_profile_advection_source_l2"] == 0.0
+    assert result.diagnostics["m3_profile_diffusion_source_l2"] == 0.0
+
+
+def test_prescribed_current_profile_rejects_vector_coefficients() -> None:
+    """F(p) and F'(p) must be scalar coefficients in the transformed (M3) source."""
+    vector = ng.CoefficientFunction((1.0, 2.0))
+
+    with pytest.raises(ValueError, match="value"):
+        PrescribedCurrentProfile(
+            value=vector,
+            pressure_derivative=1.0,
+            perpendicular_gradient_divergence=0.0,
+            full_gradient_divergence=0.0,
+        )
+    with pytest.raises(ValueError, match="pressure_derivative"):
+        PrescribedCurrentProfile(
+            value=1.0,
+            pressure_derivative=vector,
+            perpendicular_gradient_divergence=0.0,
+            full_gradient_divergence=0.0,
+        )
 
 
 def test_m3_options_and_coefficients_reject_invalid_physics() -> None:
