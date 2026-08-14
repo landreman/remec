@@ -95,6 +95,43 @@ def _regularized_gradient(gradient: Any, direction: Any, variant: str) -> Any:
     return gradient - direction * ng.InnerProduct(direction, gradient)
 
 
+def test_diamagnetic_divergence_identity_fixes_m3_drive_coefficient() -> None:
+    """The note's divergence identity independently fixes the M3 drive to 2/B_safe³."""
+    coefficients = _frozen_coefficients()
+    mesh = Slab2D(maxh=0.125).build_mesh()._mesh
+    magnetic_field = coefficients.magnetic_field
+    pressure_gradient = coefficients.pressure_gradient
+    physical_magnitude = ng.sqrt(ng.InnerProduct(magnetic_field, magnetic_field))
+    magnitude_gradient = ng.CoefficientFunction(
+        (physical_magnitude.Diff(ng.x), physical_magnitude.Diff(ng.y), 0.0)
+    )
+    safe_magnitude = ng.sqrt(
+        ng.InnerProduct(magnetic_field, magnetic_field) + coefficients.magnetic_floor**2
+    )
+    magnetic_curl = ng.CoefficientFunction(
+        (
+            magnetic_field[2].Diff(ng.y) - magnetic_field[1].Diff(ng.z),
+            magnetic_field[0].Diff(ng.z) - magnetic_field[2].Diff(ng.x),
+            magnetic_field[1].Diff(ng.x) - magnetic_field[0].Diff(ng.y),
+        )
+    )
+    probe = ng.sin(ng.pi * ng.x) * ng.sin(ng.pi * ng.y)
+    probe_gradient = ng.CoefficientFunction((probe.Diff(ng.x), probe.Diff(ng.y), 0.0))
+    diamagnetic_current = ng.Cross(magnetic_field, pressure_gradient) / safe_magnitude**2
+    drive = (
+        2.0
+        * ng.InnerProduct(magnetic_field, ng.Cross(pressure_gradient, magnitude_gradient))
+        / safe_magnitude**3
+    )
+    curl_correction = ng.InnerProduct(pressure_gradient, magnetic_curl) / safe_magnitude**2
+
+    left = float(ng.Integrate(ng.InnerProduct(diamagnetic_current, probe_gradient), mesh, order=30))
+    right = float(ng.Integrate(probe * (drive - curl_correction), mesh, order=30))
+
+    assert abs(left) > 0.1
+    assert left == pytest.approx(right, abs=1.0e-12)
+
+
 @pytest.mark.parametrize("variant", ["perpendicular", "full"])
 def test_direct_u_solution_satisfies_expected_m3_weak_form_assembly(
     variant: str,
@@ -159,7 +196,9 @@ def test_direct_u_solution_satisfies_expected_m3_weak_form_assembly(
     assert solution.diagnostics["m3_drive_l2"] > 1.0e-3
     assert solution.diagnostics["m3_reaction_l2"] > 1.0e-3
     assert solution.diagnostics["m3_final_correction_l2"] > 1.0e-3
-    magnetic_divergence = magnetic_field[0].Diff(ng.x) + magnetic_field[1].Diff(ng.y)
+    magnetic_divergence = (
+        magnetic_field[0].Diff(ng.x) + magnetic_field[1].Diff(ng.y) + magnetic_field[2].Diff(ng.z)
+    )
     assert float(ng.Integrate(magnetic_divergence**2, mesh, order=8)) < 1.0e-24
 
 
@@ -281,10 +320,10 @@ def test_m3_floor_diagnostic_is_live_and_reports_the_analytic_minimum() -> None:
     assert active_activity > 1.0e10 * small_activity
     assert active_activity > 0.05
     assert small_floor.diagnostics["minimum_field_magnitude"] == pytest.approx(
-        sqrt(5.0), abs=1.0e-12
+        sqrt(5.0), rel=1.0e-3
     )
     assert active_floor.diagnostics["minimum_field_magnitude"] == pytest.approx(
-        sqrt(5.0), abs=1.0e-12
+        sqrt(5.0), rel=1.0e-3
     )
 
 

@@ -142,6 +142,10 @@ def solve_frozen_current_continuity(
     prescribe the M3 drive; production callers own that consistency. This numerator
     is the gradient of the true magnitude, while all inverse powers use ``B_safe`` as
     required by DESIGN §6.
+
+    ``minimum_field_magnitude`` is the minimum over mesh vertices and deterministic
+    quadrature samples. It monitors DESIGN §5 invariant 4 but is a sampled upper bound
+    on the true domain minimum, not a certified global bound.
     """
     if polynomial_order < 1:
         raise ValueError("polynomial_order must be at least one")

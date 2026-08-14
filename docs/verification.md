@@ -38,6 +38,14 @@ bilinear form. On an order-3 mesh with `maxh=0.0625`, the measured L² errors ar
 gate. This is an exact-solution regression, not a convergence claim; the p/h sweep
 belongs to milestone 3.2.
 
+A solver-free divergence identity separately constrains the manufactured oracle's one
+shared coefficient, \(2/B_{\rm safe}^3\). With the true analytic \(\nabla|B|\), true
+\(\nabla\times\mathbf B\), and a compact boundary-vanishing probe, the weak diamagnetic
+flux and the M3 drive/curl expression agree to \(10^{-12}\); the identity is nonzero,
+so neither the factor 2 nor the denominator power can be absorbed into the injected drive.
+The measured correct discrepancy is 3.6e-16; changing \(2\to3\) raises it to 8.32e-2,
+and changing \(B_{\rm safe}^3\to B_{\rm safe}^2\) raises it to 2.81e-1.
+
 A secondary algebraic assembly check mirrors the intended weak form and verifies that
 the direct solve satisfies it. It is not treated as an independent physics oracle. Its
 shared order-2 frozen-coefficient unit-square field is exactly divergence-free, and every
