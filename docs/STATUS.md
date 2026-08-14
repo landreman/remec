@@ -145,13 +145,33 @@ that dependency. Phase 7 may run in parallel with Phase 8.
 
 ## Phase 3 — M3 kernel
 
-- [ ] **3.1** Direct-u weak form, frozen (B, p) — `DESIGN.md` §9.1, §9.4 · note: (M3), §5.5
+- [x] **3.1** Direct-u weak form, frozen (B, p) — `DESIGN.md` §9.1, §9.4 · note: (M3), §5.5
   <br>Acceptance: both regularization gradients (∇⊥ default, full ∇ isotropic variant)
   selectable at runtime and applied consistently to the (M2) flux, the (M3) weak form,
   and the final `D_u ∇ᵣu·∇p` term; the choice recorded in config digest, logs, and
   checkpoint metadata; with the full-∇ variant, diagnostics report
   J∥/B = u − (D_u/B)b·∇u.
-  <br>Measured: —
+  <br>Measured: macOS / CPython 3.12.2 / NGSolve 6.2.2606 — a strong-form
+  manufactured solution transcribed directly from (M3) has L² error 1.216e-6
+  for both variants; algebraic free-DOF relative residuals are 3.19e-17
+  and 2.12e-17. The frozen benchmark is exactly divergence-free, and its nonzero
+  drive/reaction/final-correction L² norms are 4.246e-1, 1.47–1.61e-2, and
+  1.232–1.239e-2. Pointwise M2 reconstruction and full-∇ J∥/B agree with independent
+  formulas to 1e-12; the runtime choice round-trips through digest, structured logs,
+  and checkpoint metadata. A divergence identity pins the M3 drive's `2/B_safe³`
+  coefficient to 3.6e-16, and its certified L² norm agrees with the assembled
+  diagnostic to 1e-12. B-floor activity is 1.70e-16 with sampled min |B| = 2.236;
+  setting the floor to 1.0 raises the live diagnostic to 1.241e-1.
+  <br>Next: milestone 3.2 should add centralized SUPG with a complete strong residual
+  for both variants. Retain the strong-form oracle: applying the same wrong drive factor
+  and reaction sign to the implementation and weak assembly check raises its L² errors
+  to 1.287 (∇⊥) / 1.284 (full ∇), while deleting the final M3 correction from the
+  implementation also makes the algebraic assembly check fail. The divergence identity
+  rejects `2→3` and `B_safe³→B_safe²` oracle mutations by 8.32e-2 and 2.81e-1;
+  coordinated implementation/assembly/oracle mutations shift the assembled drive norm
+  by +50% and +163%, so the certified-to-assembled comparison catches both.
+  Before evolving-field studies, pair the floor-activity measurement with an
+  observable-sensitivity warning/error gate.
 - [ ] **3.2** SUPG + manufactured tests — `DESIGN.md` §9.1, §9.4 · note: (M3), §5.5
   <br>Acceptance: includes the test that fails conspicuously if the `D_u ∇ᵣu·∇p` term is dropped (`DESIGN.md` §22); all manufactured tests run for both gradient variants.
   <br>Measured: —

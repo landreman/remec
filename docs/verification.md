@@ -1,5 +1,81 @@
 # Verification records
 
+## Milestone 3.1 — direct-u frozen-field M3 kernel
+
+`CurrentContinuitySolver` implements the unstabilized direct-u weak form of note
+equation (M3) on frozen \((\mathbf B,p)\):
+
+\[
+\begin{aligned}
+\int_\Omega v\,\mathbf B\!\cdot\!\nabla u
+&+D_u\nabla_r v\!\cdot\!\nabla_r u
++\frac{\mu_0}{B_{\rm safe}^2}v u\,\mathbf B\!\cdot\!\nabla p\\
+&-\frac{\mu_0D_u}{B_{\rm safe}^2}
+v\,\nabla_r u\!\cdot\!\nabla p\,dV
+=\int_\Omega \frac{2v}{B_{\rm safe}^3}
+\mathbf B\!\cdot\!(\nabla p\times\nabla B)\,dV .
+\end{aligned}
+\]
+
+The runtime choice is `perpendicular` by default, with
+\(\nabla_r=\nabla_\perp\), or `full`, with \(\nabla_r=\nabla\). The same selected
+gradient reconstructs note equation (M2),
+\(\mathbf J=u\mathbf B+\mathbf B\times\nabla p/B_{\rm safe}^2-D_u\nabla_r u\).
+For the full-gradient variant the reported physical parallel-current diagnostic is
+\(J_\parallel/B=u-(D_u/B_{\rm safe})\mathbf b_{\rm safe}\cdot\nabla u\), not the
+auxiliary solved variable alone. The choice is included in `RuntimeOptions`, so it is
+present in canonical configuration digests, both structured solve events, and checkpoint
+metadata.
+
+The primary physics oracle in `tests/unit/test_current_continuity.py` transcribes the
+strong form of (M3) directly with analytic coefficient derivatives on the spatially
+varying, solenoidal frozen field used by the assembly check. It chooses
+\(u_*=\sin(\pi x)\sin(\pi y)\), then uses the explicit
+`magnetic_magnitude_gradient` input to prescribe the exact M3 drive. This is independent
+of the implementation's integration by parts and movement of reaction terms into the
+bilinear form. On an order-3 mesh with `maxh=0.0625`, the measured L² errors are
+1.216e-6 for both variants, below the single-mesh \(10^{-5}\)
+gate. This is an exact-solution regression, not a convergence claim; the p/h sweep
+belongs to milestone 3.2.
+
+A divergence identity separately constrains the manufactured oracle's one shared
+coefficient, \(2/B_{\rm safe}^3\). With the true analytic \(\nabla|B|\), true
+\(\nabla\times\mathbf B\), and a compact boundary-vanishing probe, the weak diamagnetic
+flux and the M3 drive/curl expression agree to \(10^{-12}\); the identity is nonzero,
+so neither the factor 2 nor the denominator power can be absorbed into the injected drive.
+The measured correct discrepancy is 3.6e-16; changing \(2\to3\) raises it to 8.32e-2,
+and changing \(B_{\rm safe}^3\to B_{\rm safe}^2\) raises it to 2.81e-1. The test then
+ties this independent certificate to the implementation by comparing the certified
+drive's L² norm with the solver's assembled `m3_drive_l2` diagnostic to relative
+tolerance \(10^{-12}\). Coordinated implementation/assembly/oracle mutations now shift
+that diagnostic by +50% for \(2\to3\) and +163% for
+\(B_{\rm safe}^3\to B_{\rm safe}^2\), so both are caught end to end.
+
+A secondary algebraic assembly check mirrors the intended weak form and verifies that
+the direct solve satisfies it. It is not treated as an independent physics oracle. Its
+shared order-2 frozen-coefficient unit-square field is exactly divergence-free, and every
+source/reaction component is nonzero:
+
+| Gradient variant | Free-DOF relative residual | M3 drive L² | Reaction L² | Final correction L² |
+| --- | ---: | ---: | ---: | ---: |
+| perpendicular | 3.19e-17 | 4.246e-1 | 1.615e-2 | 1.239e-2 |
+| full | 2.12e-17 | 4.246e-1 | 1.467e-2 | 1.232e-2 |
+
+Both residuals are below the automated \(10^{-11}\) gate. Pointwise tests independently
+reconstruct all three M2 current components and the full-gradient \(J_\parallel/B\)
+formula to absolute tolerance \(10^{-12}\). The shared smooth floor reports L² activity
+1.70e-16 and sampled minimum physical field magnitude \(\sqrt{5}=2.236\). A deliberate
+floor of 1.0 raises the activity to 1.241e-1 while leaving the physical minimum unchanged,
+so the diagnostic cannot pass as a hard-coded zero.
+
+Mutation checks: changing the drive factor \(+2\) to \(-3\) and flipping the reaction
+sign in both the implementation and the mirrored weak assembly check leaves that
+secondary check green, but the strong-form oracle fails with L² errors 1.287
+(`perpendicular`) and 1.284 (`full`). Deleting the final
+\(\mu_0D_u\nabla_r u\cdot\nabla p/B_{\rm safe}^2\) term from the implementation also
+makes the algebraic assembly check fail. Reconstructing M2 with a gradient different
+from the one selected for M3 makes the pointwise current contract fail conspicuously.
+
 ## Milestone 2.4 — optional sharp cut-cell reference
 
 `CutCellVolumeReference` is the optional `remec[cutcell]` implementation of the note's

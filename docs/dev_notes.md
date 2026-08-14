@@ -1,5 +1,11 @@
 # NGSolve API notes
 
+- Milestone 3.1 (NGSolve 6.2.2606): the nonsymmetric direct-u M3 matrix can use
+  `bilinear_form.mat.Inverse(free_dofs, inverse="umfpack")`; solve a nonzero
+  Dirichlet lift by applying that inverse to `linear_form.vec - mat * field.vec`.
+  The resulting frozen order-2 verification systems have free-DOF relative residuals
+  below 4e-17 on macOS.
+
 - Milestone 0.2 (NGSolve 6.2.2606): `ngsolve.SetNumThreads(int)` is available for
   process-global worker configuration; no `ngsolve.GetNumThreads` API is exposed.
   The direct API verification therefore runs in a subprocess so it cannot leak a
