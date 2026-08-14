@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 RegularizationGradient = Literal["perpendicular", "full"]
+CurrentContinuityStabilization = Literal["none", "supg"]
 
 
 @dataclass(frozen=True, slots=True)

@@ -1,5 +1,6 @@
 """Linear and nonlinear solver kernels."""
 
+from remec.options import CurrentContinuityStabilization
 from remec.solvers.anisotropic_diffusion import (
     AnisotropicDiffusionResult,
     AnisotropicDiffusionSolver,
@@ -25,6 +26,7 @@ __all__ = [
     "AnisotropyPollutionWarning",
     "CurrentContinuityResult",
     "CurrentContinuitySolver",
+    "CurrentContinuityStabilization",
     "EnergyDiagnostics",
     "FloorSensitivityDiagnostic",
     "FloorSensitivityError",

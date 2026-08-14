@@ -8,12 +8,19 @@ from typing import Any, Protocol
 
 from remec.common.threads import configure_threads
 from remec.geometry.slab import Slab2D
-from remec.options import RegularizationGradient, RuntimeOptions
+from remec.options import (
+    CurrentContinuityStabilization,
+    RegularizationGradient,
+    RuntimeOptions,
+)
 
 
 class _FrozenCoefficients(Protocol):
     @property
     def magnetic_field(self) -> Any: ...
+
+    @property
+    def magnetic_field_gradient(self) -> Any | None: ...
 
     @property
     def pressure_gradient(self) -> Any: ...
@@ -42,6 +49,7 @@ class _CurrentContinuitySolution:
     _parallel_current_over_field: Any
     polynomial_order: int
     regularization_gradient: RegularizationGradient
+    stabilization: CurrentContinuityStabilization
     free_dof_residual_norm: float
     free_dof_relative_residual_norm: float
     diagnostics: dict[str, float]
@@ -90,6 +98,204 @@ def _regularized_gradient(gradient: Any, direction: Any, variant: Regularization
     return gradient - direction * ng.InnerProduct(direction, gradient)
 
 
+def _supg_parameter_expression(
+    element_size_along_field: Any,
+    diffusive_element_size: Any,
+    magnetic_magnitude: Any,
+    transverse_diffusion: float,
+    polynomial_order: int,
+) -> Any:
+    r"""Return the centralized DESIGN §9.1 M3 SUPG parameter expression.
+
+    The effective high-order scales are ``h_stream = h_parallel / p`` and
+    ``h_diff = h_K / p`` and
+
+    ``tau = ((2 |B| / h_stream)^2 + (4 D_u / h_diff^2)^2)^(-1/2)``.
+
+    The separate diffusive scale keeps tau bounded when the field is nearly normal to
+    the modeled slab. Inputs may be scalar numbers or NGSolve coefficient functions;
+    validation of scalar public inputs lives in :func:`supg_stabilization_parameter`.
+    """
+    effective_streamline_size = element_size_along_field / polynomial_order
+    effective_diffusive_size = diffusive_element_size / polynomial_order
+    advective_rate = 2.0 * magnetic_magnitude / effective_streamline_size
+    diffusive_rate = 4.0 * transverse_diffusion / effective_diffusive_size**2
+    return 1.0 / (advective_rate**2 + diffusive_rate**2) ** 0.5
+
+
+def supg_stabilization_parameter(
+    *,
+    element_size_along_field: float,
+    magnetic_magnitude: float,
+    transverse_diffusion: float,
+    polynomial_order: int,
+    diffusive_element_size: float | None = None,
+) -> float:
+    r"""Return the DESIGN §9.1 stabilization parameter for note equation (M3).
+
+    ``tau = ((2 |B| p / h_parallel)^2
+    + (4 D_u p^2 / h_K^2)^2)^(-1/2)``. ``h_K`` defaults to ``h_parallel`` for
+    scalar use; the FEM assembly supplies the bounded physical element size.
+    """
+    if not isfinite(element_size_along_field) or element_size_along_field <= 0.0:
+        raise ValueError("element_size_along_field must be finite and positive")
+    if not isfinite(magnetic_magnitude) or magnetic_magnitude < 0.0:
+        raise ValueError("magnetic_magnitude must be finite and non-negative")
+    if not isfinite(transverse_diffusion) or transverse_diffusion < 0.0:
+        raise ValueError("transverse_diffusion must be finite and non-negative")
+    if polynomial_order < 1:
+        raise ValueError("polynomial_order must be at least one")
+    resolved_diffusive_size = (
+        element_size_along_field if diffusive_element_size is None else diffusive_element_size
+    )
+    if not isfinite(resolved_diffusive_size) or resolved_diffusive_size <= 0.0:
+        raise ValueError("diffusive_element_size must be finite and positive")
+    if magnetic_magnitude == 0.0 and transverse_diffusion == 0.0:
+        raise ValueError("magnetic_magnitude and transverse_diffusion cannot both be zero")
+    value = _supg_parameter_expression(
+        element_size_along_field,
+        resolved_diffusive_size,
+        magnetic_magnitude,
+        transverse_diffusion,
+        polynomial_order,
+    )
+    return float(value)
+
+
+def _resolve_magnetic_field_gradient(
+    mesh: Any,
+    magnetic_field: Any,
+    supplied_gradient: Any | None,
+) -> Any:
+    r"""Return ``∂_j B_i`` for the complete strong (M3) projector divergence.
+
+    NGSolve 6.2.2606 silently returns zero from ``GridFunction.Diff(x)``. Therefore a
+    varying GridFunction-backed magnetic field must supply its native 2-by-3 gradient;
+    analytic coefficient functions retain the coordinate-differentiation fallback.
+    """
+    import ngsolve as ng
+
+    if supplied_gradient is not None:
+        supplied_dimensions = tuple(getattr(supplied_gradient, "dims", ()))
+        if supplied_dimensions == (3, 2):
+            return supplied_gradient
+        if supplied_dimensions == (2, 3):
+            return ng.CoefficientFunction(
+                tuple(
+                    supplied_gradient[coordinate, component]
+                    for component in range(3)
+                    for coordinate in range(2)
+                ),
+                dims=(3, 2),
+            )
+        raise ValueError("magnetic_field_gradient must have dimensions (3, 2) or (2, 3)")
+
+    coordinates = (ng.x, ng.y)
+    derived = ng.CoefficientFunction(
+        tuple(
+            magnetic_field[component].Diff(coordinate)
+            for component in range(3)
+            for coordinate in coordinates
+        ),
+        dims=(3, 2),
+    )
+    variation = 0.0
+    scale = 1.0
+    for component in range(3):
+        minimum, maximum = _quadrature_extrema(mesh, magnetic_field[component], integration_order=8)
+        variation = max(variation, maximum - minimum)
+        scale = max(scale, abs(minimum), abs(maximum))
+    derivative_l2_squared = float(
+        ng.Integrate(
+            sum(
+                derived[component, coordinate] ** 2
+                for component in range(3)
+                for coordinate in range(2)
+            ),
+            mesh,
+            order=8,
+        )
+    )
+    if variation > 1.0e-10 * scale and derivative_l2_squared < 1.0e-28:
+        raise ValueError(
+            "magnetic_field_gradient is required for a varying GridFunction-backed magnetic_field"
+        )
+    return derived
+
+
+def _normalized_direction_gradient(
+    magnetic_field: Any,
+    magnetic_field_gradient: Any,
+    safe_magnitude: Any,
+) -> Any:
+    r"""Return ``∂_j(B_i/B_safe)`` for the strong note-(M3) diffusion operator."""
+    import ngsolve as ng
+
+    entries: list[Any] = []
+    for component in range(3):
+        for coordinate in range(2):
+            magnitude_numerator = sum(
+                magnetic_field[index] * magnetic_field_gradient[index, coordinate]
+                for index in range(3)
+            )
+            entries.append(
+                magnetic_field_gradient[component, coordinate] / safe_magnitude
+                - magnetic_field[component] * magnitude_numerator / safe_magnitude**3
+            )
+    return ng.CoefficientFunction(tuple(entries), dims=(3, 2))
+
+
+def _regularized_gradient_divergence(
+    scalar: Any,
+    direction: Any,
+    variant: RegularizationGradient,
+    direction_gradient: Any | None = None,
+) -> Any:
+    r"""Return the complete strong M3 diffusion divergence ``div(grad_r u)``.
+
+    For note equation (M3), ``grad_r = grad`` in the isotropic variant and
+    ``grad_r = (I - b_safe b_safe^T) grad`` in the perpendicular variant. The
+    latter expansion includes derivatives of the spatially varying projector:
+    ``P_ij d_ij u + (d_i P_ij) d_j u`` for in-plane ``i,j``.
+    """
+    hessian = scalar.Operator("hesse")
+    if variant == "full":
+        return hessian[0, 0] + hessian[1, 1]
+
+    import ngsolve as ng
+
+    if direction_gradient is None:
+        raise ValueError("direction_gradient is required for perpendicular strong diffusion")
+
+    gradient = ng.grad(scalar)
+    divergence: Any = 0.0
+    for row in range(2):
+        for column in range(2):
+            projector = (1.0 if row == column else 0.0) - direction[row] * direction[column]
+            divergence += projector * hessian[row, column]
+            projector_derivative = -(
+                direction_gradient[row, row] * direction[column]
+                + direction[row] * direction_gradient[column, row]
+            )
+            divergence += projector_derivative * gradient[column]
+    return divergence
+
+
+def _quadrature_extrema(mesh: Any, coefficient: Any, integration_order: int) -> tuple[float, float]:
+    """Return deterministic volume-quadrature extrema for an elementwise coefficient."""
+    import ngsolve as ng
+    import numpy as np
+
+    element_types = {element.type for element in mesh.Elements(ng.VOL)}
+    rules = {
+        element_type: ng.IntegrationRule(element_type, integration_order)
+        for element_type in element_types
+    }
+    mapped_points = mesh.MapToAllElements(rules, ng.VOL)
+    values = np.asarray(coefficient(mapped_points), dtype=float).reshape(-1)
+    return float(np.min(values)), float(np.max(values))
+
+
 def _minimum_sampled_value(mesh: Any, coefficient: Any, integration_order: int) -> float:
     """Return the minimum over mesh vertices and deterministic volume quadrature points."""
     import ngsolve as ng
@@ -114,10 +320,11 @@ def solve_frozen_current_continuity(
     runtime: RuntimeOptions | None = None,
     boundary: str = "bottom|right|top|left",
     boundary_value: Any = 0.0,
+    stabilization: CurrentContinuityStabilization = "none",
     quadrature_bonus_intorder: int = 12,
     residual_tolerance: float = 1.0e-11,
 ) -> _CurrentContinuitySolution:
-    r"""Solve the unstabilized direct-u weak form of note equation (M3).
+    r"""Solve the direct-u weak form of note equation (M3), optionally with SUPG.
 
     With ``grad_r`` selected at runtime, this assembles
 
@@ -125,6 +332,14 @@ def solve_frozen_current_continuity(
     + mu0 v u (B.grad(p))/B_safe^2
     - mu0 D_u v grad_r(u).grad(p)/B_safe^2
     = integral 2 v B.(grad(p) x grad(B))/B_safe^3``.
+
+    With ``stabilization="supg"``, DESIGN §9.1 adds
+    ``integral tau (B.grad(v)) (L_M3(u) - drive)``. The strong operator
+    ``L_M3`` contains parallel advection, the complete strong divergence
+    ``-div(D_u grad_r(u))`` including projector derivatives, the reaction, and the
+    final ``-mu0 D_u grad_r(u).grad(p)/B_safe^2`` correction. The streamline
+    derivative is ``B.grad(v) = |B| b.grad(v)`` and ``tau`` is supplied by
+    :func:`supg_stabilization_parameter`.
 
     The same ``grad_r`` reconstructs note equation (M2),
     ``J = u B + B x grad(p)/B_safe^2 - D_u grad_r(u)``. For the full-gradient
@@ -135,7 +350,10 @@ def solve_frozen_current_continuity(
     ``grad_perp(v).grad_perp(u)`` is used rather than the note-literal single
     projection ``grad(v).grad_perp(u)``. They differ only by
     ``O(B_floor**2/B**2)`` because ``b_safe`` is not exactly unit, while the
-    symmetric convention preserves a positive diffusion block for later solvers.
+    symmetric convention preserves a positive diffusion block for later solvers. The
+    SUPG strong residual retains the note-literal single projection ``div(P grad(u))``;
+    consequently Galerkin and SUPG diffusion differ by the same declared floor-order
+    amount when the smooth floor is active.
 
     ``magnetic_magnitude_gradient`` normally supplies ``grad(|B|)`` from the same
     frozen field. It remains an explicit input so a strong-form manufactured test can
@@ -153,6 +371,8 @@ def solve_frozen_current_continuity(
         raise ValueError("quadrature_bonus_intorder must be non-negative")
     if not isfinite(residual_tolerance) or residual_tolerance <= 0.0:
         raise ValueError("residual_tolerance must be finite and positive")
+    if stabilization not in ("none", "supg"):
+        raise ValueError("stabilization must be 'none' or 'supg'")
     if slab.lower != (0.0, 0.0) or slab.upper != (1.0, 1.0):
         raise ValueError("the frozen M3 verification kernel supports the unit square only")
     if boundary != "bottom|right|top|left":
@@ -200,22 +420,72 @@ def solve_frozen_current_continuity(
         / safe_magnitude**2
     )
     quadrature = ng.dx(bonus_intorder=quadrature_bonus_intorder)
-
-    bilinear_form = ng.BilinearForm(space)
-    bilinear_form += (
+    galerkin_operator = (
         test * ng.InnerProduct(magnetic_field, trial_gradient)
         + coefficients.current_diffusivity * ng.InnerProduct(regularized_test, regularized_trial)
         + coefficients.vacuum_permeability * b_dot_grad_p * test * trial / safe_magnitude**2
         - final_correction * test
-    ) * quadrature
+    )
+
+    bilinear_form = ng.BilinearForm(space)
+    bilinear_form += galerkin_operator * quadrature
     linear_form = ng.LinearForm(space)
     linear_form += drive * test * quadrature
+    supg_bilinear_form: Any | None = None
+    supg_linear_form: Any | None = None
+    tau: Any | None = None
+    direction_gradient: Any | None = None
+    if stabilization == "supg":
+        in_plane_direction_norm = ng.sqrt(direction[0] ** 2 + direction[1] ** 2 + 1.0e-30)
+        element_size_along_field = ng.specialcf.mesh_size / in_plane_direction_norm
+        tau = _supg_parameter_expression(
+            element_size_along_field,
+            ng.specialcf.mesh_size,
+            safe_magnitude,
+            coefficients.current_diffusivity,
+            polynomial_order,
+        )
+        if resolved_runtime.regularization_gradient == "perpendicular":
+            magnetic_field_gradient = _resolve_magnetic_field_gradient(
+                mesh,
+                magnetic_field,
+                supplied_gradient=getattr(coefficients, "magnetic_field_gradient", None),
+            )
+            direction_gradient = _normalized_direction_gradient(
+                magnetic_field,
+                magnetic_field_gradient,
+                safe_magnitude,
+            )
+        strong_diffusion_divergence = _regularized_gradient_divergence(
+            trial,
+            direction,
+            resolved_runtime.regularization_gradient,
+            direction_gradient,
+        )
+        strong_operator = (
+            ng.InnerProduct(magnetic_field, trial_gradient)
+            - coefficients.current_diffusivity * strong_diffusion_divergence
+            + coefficients.vacuum_permeability * b_dot_grad_p * trial / safe_magnitude**2
+            - final_correction
+        )
+        streamline_test = ng.InnerProduct(magnetic_field, test_gradient)
+        supg_bilinear_integrand = tau * streamline_test * strong_operator
+        supg_linear_integrand = tau * streamline_test * drive
+        bilinear_form += supg_bilinear_integrand * quadrature
+        linear_form += supg_linear_integrand * quadrature
+        supg_bilinear_form = ng.BilinearForm(space)
+        supg_bilinear_form += supg_bilinear_integrand * quadrature
+        supg_linear_form = ng.LinearForm(space)
+        supg_linear_form += supg_linear_integrand * quadrature
     free_dofs = space.FreeDofs()
 
     configure_threads(resolved_runtime.threads)
     with ng.TaskManager():
         bilinear_form.Assemble()
         linear_form.Assemble()
+        if supg_bilinear_form is not None and supg_linear_form is not None:
+            supg_bilinear_form.Assemble()
+            supg_linear_form.Assemble()
         field = ng.GridFunction(space)
         field.Set(boundary_value, definedon=mesh.Boundaries(boundary))
         inverse = bilinear_form.mat.Inverse(free_dofs, inverse="umfpack")
@@ -274,6 +544,41 @@ def solve_frozen_current_continuity(
         minimum_field_magnitude = _minimum_sampled_value(
             mesh, physical_magnitude, integration_order=20
         )
+        if supg_bilinear_form is not None and supg_linear_form is not None and tau is not None:
+            stabilization_residual = supg_linear_form.vec.CreateVector()
+            stabilization_residual.data = supg_bilinear_form.mat * field.vec - supg_linear_form.vec
+            free_stabilization_residual = ng.Projector(free_dofs, True) * stabilization_residual
+            supg_stabilization_norm = float(ng.Norm(free_stabilization_residual))
+            supg_stabilization_relative_norm = supg_stabilization_norm / max(
+                1.0, float(ng.Norm(free_source))
+            )
+            field_diffusion_divergence = _regularized_gradient_divergence(
+                field,
+                direction,
+                resolved_runtime.regularization_gradient,
+                direction_gradient,
+            )
+            strong_residual = (
+                ng.InnerProduct(magnetic_field, field_gradient)
+                - coefficients.current_diffusivity * field_diffusion_divergence
+                + coefficients.vacuum_permeability * b_dot_grad_p * field / safe_magnitude**2
+                - final_term
+                - drive
+            )
+            supg_strong_residual_l2 = sqrt(
+                max(0.0, float(ng.Integrate(strong_residual**2, mesh, order=20)))
+            )
+            supg_tau_min, supg_tau_max = _quadrature_extrema(
+                mesh,
+                tau,
+                integration_order=20,
+            )
+        else:
+            supg_stabilization_norm = 0.0
+            supg_stabilization_relative_norm = 0.0
+            supg_strong_residual_l2 = 0.0
+            supg_tau_min = 0.0
+            supg_tau_max = 0.0
 
     diagnostics = {
         "solution_l2": sqrt(max(0.0, solution_l2_squared)),
@@ -282,6 +587,11 @@ def solve_frozen_current_continuity(
         "m3_drive_l2": sqrt(max(0.0, drive_l2_squared)),
         "m3_final_correction_l2": sqrt(max(0.0, final_term_l2_squared)),
         "m3_reaction_l2": sqrt(max(0.0, reaction_term_l2_squared)),
+        "m3_supg_stabilization_norm": supg_stabilization_norm,
+        "m3_supg_stabilization_relative_norm": supg_stabilization_relative_norm,
+        "m3_supg_strong_residual_l2": supg_strong_residual_l2,
+        "m3_supg_tau_min": supg_tau_min,
+        "m3_supg_tau_max": supg_tau_max,
         "floor_activity_l2": sqrt(max(0.0, floor_activity_l2_squared)),
         "floor_activity_l2_squared": floor_activity_l2_squared,
         "minimum_field_magnitude": minimum_field_magnitude,
@@ -304,6 +614,7 @@ def solve_frozen_current_continuity(
         _parallel_current_over_field=parallel_current_over_field,
         polynomial_order=polynomial_order,
         regularization_gradient=resolved_runtime.regularization_gradient,
+        stabilization=stabilization,
         free_dof_residual_norm=free_dof_residual_norm,
         free_dof_relative_residual_norm=free_dof_relative_residual_norm,
         diagnostics=diagnostics,
