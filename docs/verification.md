@@ -23,31 +23,53 @@ measured observable is the full width at half maximum of the fundamental Fourier
 amplitude of the reconstructed (M2) \(J_\parallel/B\), not the solved auxiliary field.
 
 The layer-aligned triangular mesh has 64 elements normal to the resonant surface and 16
-along its smooth periodic harmonic (2048 elements total), so
-\(h_\perp=1/64\). Degree-three H1 elements and the complete milestone-3.2 SUPG residual
-are used for both runtime gradient variants. The checked-in machine-readable scan is
+along its smooth periodic harmonic (2048 elements total), so \(h_\perp=1/64\).
+`MakeStructured2DMesh(periodic_y=True)` supplies the top/bottom identification and the
+M3 kernel consumes it with `ngsolve.Periodic(ngsolve.H1(...))`; the only Dirichlet
+boundaries are `left|right`. An automated regression evaluates the solved direct-u and
+utilde fields at both sides of the seam and requires agreement to \(10^{-11}\).
+Degree-three H1 elements use the production SUPG path for both runtime gradient
+variants. This milestone isolates the resonant advection/transverse-diffusion balance;
+the milestone-3.2 and 3.3 tests, rather than this width observable, constrain the other
+SUPG residual terms and their signs. The checked-in machine-readable scan is
 `tests/manufactured/m3_layer_scaling.csv`:
 
-| Gradient variant | \(D_u\) | Measured width | Normal elements across layer |
-| --- | ---: | ---: | ---: |
-| ∇⊥ | 0.005 | 0.139786 | 8.946 |
-| ∇⊥ | 0.010 | 0.176627 | 11.304 |
-| ∇⊥ | 0.020 | 0.223821 | 14.325 |
-| ∇⊥ | 0.040 | 0.285073 | 18.245 |
-| full ∇ | 0.005 | 0.139774 | 8.946 |
-| full ∇ | 0.010 | 0.176592 | 11.302 |
-| full ∇ | 0.020 | 0.223725 | 14.318 |
-| full ∇ | 0.040 | 0.284827 | 18.229 |
+| Gradient variant | \(D_u\) | FWHM | Unit-prefactor inner scale | FWHM / inner scale | FWHM elements |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| ∇⊥ | 0.005 | 0.163535 | 0.034139 | 4.790 | 10.466 |
+| ∇⊥ | 0.010 | 0.207292 | 0.043013 | 4.819 | 13.267 |
+| ∇⊥ | 0.020 | 0.263781 | 0.054193 | 4.867 | 16.882 |
+| ∇⊥ | 0.040 | 0.337937 | 0.068278 | 4.949 | 21.628 |
+| full ∇ | 0.005 | 0.163511 | 0.034139 | 4.790 | 10.465 |
+| full ∇ | 0.010 | 0.207215 | 0.043013 | 4.818 | 13.262 |
+| full ∇ | 0.020 | 0.263537 | 0.054193 | 4.863 | 16.866 |
+| full ∇ | 0.040 | 0.337151 | 0.068278 | 4.938 | 21.578 |
 
-Least-squares fits of \(\log\delta\) against \(\log D_u\) give exponents 0.342597
-(∇⊥) and 0.342227 (full ∇). The automated acceptance gate requires each exponent to
-lie within 0.04 of \(1/3\), every layer width to increase strictly with \(D_u\), and
-every measured row to agree with the recorded table within 5%. All widths clear the
-DESIGN §5 minimum of six normal element widths; the smallest has 8.946. Free-DOF
-relative residuals remain below 1.16e-16, sampled \(\min|\mathbf B|=10\), and the smooth
-field-floor activity is below 1e-12. A direct-u solve at \(D_u=0.01\) independently
-agrees with reconstructed utilde to 1e-10 in physical \(u\) and \(J_\parallel/B\), and
-to 1e-9 componentwise in the reconstructed (M2) current, for both variants.
+The note specifies a proportional inner scale, not an FWHM convention. Taking the
+local balance's coefficient literally gives
+\(\delta_0=(D_u/(40\pi))^{1/3}\), which spans only 2.185--4.370 base-mesh elements.
+The reported operational layer width is explicitly the reconstructed-current FWHM,
+4.790--4.949 times \(\delta_0\). Consequently, the DESIGN §5 resolution diagnostic is
+called here with the measured FWHM: the statement that every row clears six elements
+is an FWHM-based verdict, not a claim that the unit-prefactor estimate itself clears
+six. Its mesh independence is checked at the thinnest case in
+`tests/manufactured/m3_layer_mesh_refinement.csv`:
+
+| \((n_x,n_y)\) | Elements | Measured FWHM | FWHM elements |
+| --- | ---: | ---: | ---: |
+| (64, 16) | 2048 | 0.1635349031 | 10.466234 |
+| (96, 24) | 4608 | 0.1635371746 | 15.699569 |
+
+The two widths differ by \(1.389\times10^{-5}\) relative, so the minimum-resolution
+verdict does not depend on the base mesh. Least-squares fits of \(\log(\mathrm{FWHM})\)
+against \(\log D_u\) give exponents 0.348915 (∇⊥) and 0.347889 (full ∇). The automated
+acceptance gate requires each exponent to lie within 0.04 of \(1/3\), every layer width
+to increase strictly with \(D_u\), and every measured row to agree with the recorded
+table within 5%. Free-DOF relative residuals remain below \(4.36\times10^{-17}\),
+sampled \(\min|\mathbf B|=10\), and the smooth field-floor activity is below 1e-12. A
+direct-u solve at \(D_u=0.01\) independently agrees with reconstructed utilde to 1e-10
+in physical \(u\) and \(J_\parallel/B\), and to 1e-9 componentwise in the reconstructed
+(M2) current, for both variants.
 The profile is labeled `resonant-layer-constant-f-v1`; every transformed solve now
 requires such a stable caller-owned `PrescribedCurrentProfile.identifier`, exposes it
 on the result, and includes it in both the configuration digest and structured start/
@@ -63,7 +85,7 @@ count. Thus algebraic convergence and high-order degrees never substitute for a
 resolved physical layer.
 
 Mutation checks confirmed that halving the Galerkin \(D_u\nabla_rv\cdot\nabla_ru\)
-coefficient changes the smallest perpendicular width from 0.139786 to 0.111015 and
+coefficient changes the smallest perpendicular width from 0.163535 to 0.129504 and
 turns the recorded-width test red. Doubling the reported normal element width changes
 an eight-element resolved diagnostic to four elements, emits the unresolved warning,
 and turns the unit contract red. Together these constrain both the M3 balance that

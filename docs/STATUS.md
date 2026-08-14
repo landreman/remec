@@ -209,14 +209,17 @@ that dependency. Phase 7 may run in parallel with Phase 8.
 - [x] **3.4** D_u^{1/3} layer scaling — `DESIGN.md` §9, §22 · note: (M3), §5.5
   <br>Acceptance: measured δ ∝ D_u^{1/3} for both gradient variants; resolution requirements documented.
   <br>Measured: macOS / CPython 3.12.2 / NGSolve 6.2.2606 — fitted physical-(M2)
-  `J_parallel/B` layer-width exponents are 0.342597 (∇⊥) and 0.342227 (full ∇),
+  `J_parallel/B` FWHM exponents are 0.348915 (∇⊥) and 0.347889 (full ∇),
   within 0.04 of 1/3. Across D_u = 0.005 → 0.04, FWHM widths grow from
-  0.139786 → 0.285073 and 0.139774 → 0.284827, respectively; the layer-aligned mesh
-  resolves every row with 8.946–18.245 normal elements (required at least 6).
-  Free-DOF relative residuals stay below 1.16e-16 and direct-u/utilde physical-u,
-  M2-current, and J_parallel/B cross-checks pass. Prescribed F(p) identifiers now
-  participate in the configuration digest and structured solve records. See
-  `tests/manufactured/m3_layer_scaling.csv` and `docs/verification.md`.
+  0.163535 → 0.337937 and 0.163511 → 0.337151, respectively. This operational FWHM
+  is 4.790–4.949 times the unit-prefactor inner scale `(D_u/(40π))^(1/3)` and spans
+  10.465–21.628 normal elements (required at least 6). At the thinnest case, a 64×16
+  → 96×24 h-refinement changes FWHM by only 1.389e-5 relative. The M3 space is genuinely
+  periodic, with direct-u/utilde seam values agreeing to 1e-11. Free-DOF relative
+  residuals stay below 4.36e-17; physical-u, M2-current, and J_parallel/B cross-checks
+  pass. Prescribed F(p) identifiers participate in the configuration digest and
+  structured solve records. See `tests/manufactured/m3_layer_scaling.csv`,
+  `tests/manufactured/m3_layer_mesh_refinement.csv`, and `docs/verification.md`.
   <br>Next: milestone 3.5 can reuse the periodic resonant slab, physical-M2 Fourier
   width observable, and explicit normal-element resolution gate. Add its field-
   misaligned mesh and performance/iteration instrumentation without weakening the
