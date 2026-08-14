@@ -1,5 +1,68 @@
 # Verification records
 
+## Milestone 3.3 — transformed utilde formulation for M3
+
+`CurrentContinuitySolver.solve_utilde` implements the note's preferred split
+\(u=F(p)+\tilde u\) with homogeneous \(\tilde u=0\) boundary data. It retains the
+milestone-3.2 Galerkin/SUPG operator and moves every \(F(p)\) contribution to the
+right-hand side of (M3):
+
+\[
+\begin{aligned}
+L_{M3}(\tilde u)={}&\frac{2}{B_{\rm safe}^3}
+\mathbf B\!\cdot\!(\nabla p\times\nabla B)
+-F'(p)\,\mathbf B\!\cdot\!\nabla p
++\nabla\!\cdot\!\left(D_uF'(p)\nabla_r p\right)\\
+&-\frac{\mu_0F(p)}{B_{\rm safe}^2}\mathbf B\!\cdot\!\nabla p
++\frac{\mu_0D_u}{B_{\rm safe}^2}
+F'(p)\nabla_rp\!\cdot\!\nabla p .
+\end{aligned}
+\]
+
+Here \(L_{M3}\) is exactly the direct-u left-hand-side operator. The runtime-selected
+\(\nabla_r=\nabla_\perp\) or \(\nabla_r=\nabla\) is used in both transformed terms
+containing \(D_u\), and the complete shifted source enters both the Galerkin load and
+the SUPG strong residual. The solver reconstructs physical \(u\), \(\nabla u\), the
+note-(M2) current, and (for the full-gradient variant) physical \(J_\parallel/B\) before
+reporting diagnostics. The formulation is included in the configuration digest and
+structured solve records. `PrescribedCurrentProfile` carries the frozen \(F(p)\) and
+\(F'(p)\) coefficient functions plus explicit
+\(\nabla\cdot(F'\nabla_\perp p)\) and \(\nabla\cdot(F'\nabla p)\) coefficients. This
+avoids NGSolve's silent zero coordinate derivative for GridFunction-backed pressure
+gradients; the runtime variant selects the matching divergence.
+
+The manufactured comparison uses the nonconstant divergence-free field from milestones
+3.1–3.2, \(p=x+y\), \(F(p)=0.25+0.3p\), and
+\(\tilde u_*=\sin(\pi x)\sin(\pi y)\). The complete strong direct-u residual for
+\(u_*=F(p)+\tilde u_*\) prescribes the drive independently. Direct-u and reconstructed
+utilde solutions are compared on every mesh in
+`tests/manufactured/m3_utilde_rates.csv`; the automated gates require both formulations
+to clear the standard finest-pair \(p+0.8\) L2-rate threshold and their relative L2
+disagreement to remain below \(10^{-10}\).
+
+| Gradient variant | Degree 1 rate | Degree 2 rate | Degree 3 rate | Maximum relative direct/utilde disagreement |
+| --- | ---: | ---: | ---: | ---: |
+| ∇⊥ | 1.970 | 3.030 | 4.036 | 6.26e-16 |
+| full ∇ | 1.968 | 3.040 | 4.033 | 8.64e-15 |
+
+The finest degree-3 reconstructed-utilde L2 errors are 1.272e-6 (∇⊥) and 1.280e-6
+(full ∇), equal to their direct-u errors to the displayed precision. Free-DOF relative
+residuals over the table remain below 1.04e-15. A separate quadratic-pressure oracle
+\(p=x^2+xy+y^2\) keeps every shifted term nonzero and verifies each source norm against
+an independently transcribed expression to relative tolerance \(10^{-12}\):
+
+| Gradient variant | Advection source L2 | Diffusion source L2 | Reaction source L2 | Final-correction source L2 |
+| --- | ---: | ---: | ---: | ---: |
+| ∇⊥ | 7.820e-1 | 2.012e-1 | 1.207e-1 | 2.688e-2 |
+| full ∇ | 7.820e-1 | 2.400e-1 | 1.207e-1 | 3.064e-2 |
+
+This oracle also compares the reconstructed note-(M2) current pointwise with the
+direct-u solve and checks homogeneous utilde boundary values. Mutation checks confirmed
+that deleting the \(-F'(p)\mathbf B\cdot\nabla p\) source increases the L2 disagreement
+from roundoff to 1.037e-1, while replacing the selected perpendicular gradient in the
+profile flux by the full gradient raises it to 6.346e-3. Both mutations turn the suite
+red.
+
 ## Milestone 3.2 — complete-residual SUPG for M3
 
 `CurrentContinuitySolver` now uses the DESIGN §9.1 SUPG form by default, while
