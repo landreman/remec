@@ -28,12 +28,13 @@ present in canonical configuration digests, both structured solve events, and ch
 metadata.
 
 The primary physics oracle in `tests/unit/test_current_continuity.py` transcribes the
-strong form of (M3) directly with analytic coefficient derivatives. It chooses
+strong form of (M3) directly with analytic coefficient derivatives on the spatially
+varying, solenoidal frozen field used by the assembly check. It chooses
 \(u_*=\sin(\pi x)\sin(\pi y)\), then uses the explicit
 `magnetic_magnitude_gradient` input to prescribe the exact M3 drive. This is independent
 of the implementation's integration by parts and movement of reaction terms into the
 bilinear form. On an order-3 mesh with `maxh=0.0625`, the measured L² errors are
-1.215e-6 (`perpendicular`) and 1.216e-6 (`full`), below the single-mesh \(10^{-5}\)
+1.216e-6 for both variants, below the single-mesh \(10^{-5}\)
 gate. This is an exact-solution regression, not a convergence claim; the p/h sweep
 belongs to milestone 3.2.
 
@@ -50,7 +51,9 @@ source/reaction component is nonzero:
 Both residuals are below the automated \(10^{-11}\) gate. Pointwise tests independently
 reconstruct all three M2 current components and the full-gradient \(J_\parallel/B\)
 formula to absolute tolerance \(10^{-12}\). The shared smooth floor reports L² activity
-1.70e-16 and sampled minimum physical field magnitude 2.236.
+1.70e-16 and sampled minimum physical field magnitude \(\sqrt{5}=2.236\). A deliberate
+floor of 1.0 raises the activity to 1.241e-1 while leaving the physical minimum unchanged,
+so the diagnostic cannot pass as a hard-coded zero.
 
 Mutation checks: changing the drive factor \(+2\) to \(-3\) and flipping the reaction
 sign in both the implementation and the mirrored weak assembly check leaves that

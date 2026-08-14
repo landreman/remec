@@ -131,9 +131,17 @@ def solve_frozen_current_continuity(
     variant, the reported physical parallel current is
     ``J_parallel/B = u - (D_u/B_safe) b_safe.grad(u)``.
 
+    For the perpendicular variant, the symmetric DESIGN §9.1 form
+    ``grad_perp(v).grad_perp(u)`` is used rather than the note-literal single
+    projection ``grad(v).grad_perp(u)``. They differ only by
+    ``O(B_floor**2/B**2)`` because ``b_safe`` is not exactly unit, while the
+    symmetric convention preserves a positive diffusion block for later solvers.
+
     ``magnetic_magnitude_gradient`` normally supplies ``grad(|B|)`` from the same
     frozen field. It remains an explicit input so a strong-form manufactured test can
-    prescribe the M3 drive; production callers own that consistency.
+    prescribe the M3 drive; production callers own that consistency. This numerator
+    is the gradient of the true magnitude, while all inverse powers use ``B_safe`` as
+    required by DESIGN §6.
     """
     if polynomial_order < 1:
         raise ValueError("polynomial_order must be at least one")

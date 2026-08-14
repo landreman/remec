@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import json
+from dataclasses import replace
 from math import isfinite, sqrt
 from typing import Any
 
@@ -40,8 +41,9 @@ def _strong_manufactured_coefficients(
     variant: str,
 ) -> tuple[FrozenCurrentContinuityCoefficients, Any]:
     """Prescribe the M3 drive from the note's strong form for an analytic u."""
-    magnetic_field = ng.CoefficientFunction((1.0, 0.4, 2.0))
-    pressure_gradient = ng.CoefficientFunction((0.3, 1.2, 0.0))
+    frozen = _frozen_coefficients()
+    magnetic_field = frozen.magnetic_field
+    pressure_gradient = frozen.pressure_gradient
     current_diffusivity = 0.2
     magnetic_floor = 1.0e-8
     vacuum_permeability = 0.7
@@ -263,6 +265,27 @@ def test_gradient_variant_is_in_digest_logs_and_checkpoint_metadata() -> None:
     assert result.diagnostics["floor_activity_l2"] < 1.0e-12
     assert result.diagnostics["floor_activity_l2_squared"] < 1.0e-24
     assert result.diagnostics["minimum_field_magnitude"] > 2.0
+
+
+def test_m3_floor_diagnostic_is_live_and_reports_the_analytic_minimum() -> None:
+    """§6 diagnostics distinguish inactive and deliberately active smooth B floors."""
+    coefficients = _frozen_coefficients()
+    small_floor = CurrentContinuitySolver(polynomial_order=2).solve(Slab2D(maxh=0.25), coefficients)
+    active_floor = CurrentContinuitySolver(polynomial_order=2).solve(
+        Slab2D(maxh=0.25), replace(coefficients, magnetic_floor=1.0)
+    )
+
+    small_activity = small_floor.diagnostics["floor_activity_l2"]
+    active_activity = active_floor.diagnostics["floor_activity_l2"]
+    assert 0.0 < small_activity < 1.0e-12
+    assert active_activity > 1.0e10 * small_activity
+    assert active_activity > 0.05
+    assert small_floor.diagnostics["minimum_field_magnitude"] == pytest.approx(
+        sqrt(5.0), abs=1.0e-12
+    )
+    assert active_floor.diagnostics["minimum_field_magnitude"] == pytest.approx(
+        sqrt(5.0), abs=1.0e-12
+    )
 
 
 def test_direct_u_solver_preserves_the_prescribed_boundary_value() -> None:

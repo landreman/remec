@@ -152,13 +152,14 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   checkpoint metadata; with the full-∇ variant, diagnostics report
   J∥/B = u − (D_u/B)b·∇u.
   <br>Measured: macOS / CPython 3.12.2 / NGSolve 6.2.2606 — a strong-form
-  manufactured solution transcribed directly from (M3) has L² errors 1.215e-6
-  (∇⊥) and 1.216e-6 (full ∇); algebraic free-DOF relative residuals are 3.19e-17
+  manufactured solution transcribed directly from (M3) has L² error 1.216e-6
+  for both variants; algebraic free-DOF relative residuals are 3.19e-17
   and 2.12e-17. The frozen benchmark is exactly divergence-free, and its nonzero
   drive/reaction/final-correction L² norms are 4.246e-1, 1.47–1.61e-2, and
   1.232–1.239e-2. Pointwise M2 reconstruction and full-∇ J∥/B agree with independent
   formulas to 1e-12; the runtime choice round-trips through digest, structured logs,
-  and checkpoint metadata. B-floor activity is 1.70e-16 with sampled min |B| = 2.236.
+  and checkpoint metadata. B-floor activity is 1.70e-16 with sampled min |B| = 2.236;
+  setting the floor to 1.0 raises the live diagnostic to 1.241e-1.
   <br>Next: milestone 3.2 should add centralized SUPG with a complete strong residual
   for both variants. Retain the strong-form oracle: applying the same wrong drive factor
   and reaction sign to the implementation and weak assembly check raises its L² errors
