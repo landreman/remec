@@ -1,5 +1,74 @@
 # Verification records
 
+## Milestone 3.4 — resonant M3 layer scaling
+
+The note's local resonant reduction of (M3),
+
+\[
+i\,k_\parallel(x)B\,\hat u
+-D_u\frac{d^2\hat u}{dx^2}=\hat h,
+\qquad
+\delta\sim\left(\frac{D_u\bar R}{m|\iota'|B}\right)^{1/3},
+\]
+
+is tested on a periodic-\(y\) slab with
+\(\mathbf B=(0,20(x-1/2),10)\) and the fundamental resonant drive
+\(\hat h\sin(2\pi y)\). This gives the retained local balance
+\(i40\pi(x-1/2)\hat u-D_u\hat u''=\hat h\). The frozen verification interface
+injects this fixed drive through its explicit M3 drive numerator. The nondimensional
+\(\mu_0=10^{-8}\) isolates the reduced balance by making the first-derivative correction
+asymptotically negligible, exactly as in the note's layer analysis. The physical field
+is reconstructed through the preferred \(u=F+\tilde u\) path with \(F=0.2\), and the
+measured observable is the full width at half maximum of the fundamental Fourier
+amplitude of the reconstructed (M2) \(J_\parallel/B\), not the solved auxiliary field.
+
+The layer-aligned triangular mesh has 64 elements normal to the resonant surface and 16
+along its smooth periodic harmonic (2048 elements total), so
+\(h_\perp=1/64\). Degree-three H1 elements and the complete milestone-3.2 SUPG residual
+are used for both runtime gradient variants. The checked-in machine-readable scan is
+`tests/manufactured/m3_layer_scaling.csv`:
+
+| Gradient variant | \(D_u\) | Measured width | Normal elements across layer |
+| --- | ---: | ---: | ---: |
+| ∇⊥ | 0.005 | 0.139786 | 8.946 |
+| ∇⊥ | 0.010 | 0.176627 | 11.304 |
+| ∇⊥ | 0.020 | 0.223821 | 14.325 |
+| ∇⊥ | 0.040 | 0.285073 | 18.245 |
+| full ∇ | 0.005 | 0.139774 | 8.946 |
+| full ∇ | 0.010 | 0.176592 | 11.302 |
+| full ∇ | 0.020 | 0.223725 | 14.318 |
+| full ∇ | 0.040 | 0.284827 | 18.229 |
+
+Least-squares fits of \(\log\delta\) against \(\log D_u\) give exponents 0.342597
+(∇⊥) and 0.342227 (full ∇). The automated acceptance gate requires each exponent to
+lie within 0.04 of \(1/3\), every layer width to increase strictly with \(D_u\), and
+every measured row to agree with the recorded table within 5%. All widths clear the
+DESIGN §5 minimum of six normal element widths; the smallest has 8.946. Free-DOF
+relative residuals remain below 1.16e-16, sampled \(\min|\mathbf B|=10\), and the smooth
+field-floor activity is below 1e-12. A direct-u solve at \(D_u=0.01\) independently
+agrees with reconstructed utilde to 1e-10 in physical \(u\) and \(J_\parallel/B\), and
+to 1e-9 componentwise in the reconstructed (M2) current, for both variants.
+The profile is labeled `resonant-layer-constant-f-v1`; every transformed solve now
+requires such a stable caller-owned `PrescribedCurrentProfile.identifier`, exposes it
+on the result, and includes it in both the configuration digest and structured start/
+completion records. Changing only the identifier changes the digest, so later coupled
+checkpoints cannot silently substitute a different \(F(p)\) provenance record.
+
+`CurrentContinuitySolver.assess_layer_resolution` implements the production-facing
+resolution contract. It reports \(\delta/h_\perp\), warns with
+`UnresolvedCurrentLayerWarning` below `RuntimeOptions.min_layer_cells` (default 6), and
+raises `UnresolvedCurrentLayerError` in strict mode. The normal element width must be
+supplied from the local mesh metric; polynomial degree does not inflate the element
+count. Thus algebraic convergence and high-order degrees never substitute for a
+resolved physical layer.
+
+Mutation checks confirmed that halving the Galerkin \(D_u\nabla_rv\cdot\nabla_ru\)
+coefficient changes the smallest perpendicular width from 0.139786 to 0.111015 and
+turns the recorded-width test red. Doubling the reported normal element width changes
+an eight-element resolved diagnostic to four elements, emits the unresolved warning,
+and turns the unit contract red. Together these constrain both the M3 balance that
+produces the \(D_u^{1/3}\) layer and the independent §5 resolution accounting.
+
 ## Milestone 3.3 — transformed utilde formulation for M3
 
 `CurrentContinuitySolver.solve_utilde` implements the note's preferred split

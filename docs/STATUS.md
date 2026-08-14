@@ -206,9 +206,21 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   physical-u/M2 reconstruction when measuring the D_u^{1/3} layer width. Add a stable
   prescribed-profile identifier to coupled-run configuration/log provenance before
   checkpointing F(p).
-- [ ] **3.4** D_u^{1/3} layer scaling — `DESIGN.md` §9, §22 · note: (M3), §5.5
+- [x] **3.4** D_u^{1/3} layer scaling — `DESIGN.md` §9, §22 · note: (M3), §5.5
   <br>Acceptance: measured δ ∝ D_u^{1/3} for both gradient variants; resolution requirements documented.
-  <br>Measured: —
+  <br>Measured: macOS / CPython 3.12.2 / NGSolve 6.2.2606 — fitted physical-(M2)
+  `J_parallel/B` layer-width exponents are 0.342597 (∇⊥) and 0.342227 (full ∇),
+  within 0.04 of 1/3. Across D_u = 0.005 → 0.04, FWHM widths grow from
+  0.139786 → 0.285073 and 0.139774 → 0.284827, respectively; the layer-aligned mesh
+  resolves every row with 8.946–18.245 normal elements (required at least 6).
+  Free-DOF relative residuals stay below 1.16e-16 and direct-u/utilde physical-u,
+  M2-current, and J_parallel/B cross-checks pass. Prescribed F(p) identifiers now
+  participate in the configuration digest and structured solve records. See
+  `tests/manufactured/m3_layer_scaling.csv` and `docs/verification.md`.
+  <br>Next: milestone 3.5 can reuse the periodic resonant slab, physical-M2 Fourier
+  width observable, and explicit normal-element resolution gate. Add its field-
+  misaligned mesh and performance/iteration instrumentation without weakening the
+  default ∇⊥ path or treating polynomial degree as extra layer elements.
 - [ ] **3.5** Gradient-variant comparison study (∇⊥ vs full ∇) — `DESIGN.md` §9.4 · note: §5.5
   <br>Acceptance: on shared frozen-(B, p) benchmarks including a resonant layer and a
   field-misaligned mesh: measured O(ε_J) relative cross-variant agreement at fixed D_u

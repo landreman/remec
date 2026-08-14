@@ -1,5 +1,13 @@
 # NGSolve API notes
 
+- Milestone 3.4 (NGSolve 6.2.2606):
+  `ngsolve.meshes.MakeStructured2DMesh(periodic_y=True)` identifies the top and bottom
+  degrees of freedom but retains `bottom` and `top` in `mesh.GetBoundaries()`. A
+  periodic M3 harmonic must therefore select only the remaining physical Dirichlet
+  regions (`left|right`); including the helper's default four boundary names also
+  constrains the identified seam. Explicit `(nx, ny)` structured counts provide a
+  layer-aligned mesh without over-resolving the smooth periodic direction.
+
 - Milestone 3.3 (NGSolve 6.2.2606): the coordinate derivative of a component of
   `ngsolve.grad(GridFunction)` is the zero coefficient, so the transformed (M3) source
   must not form `div(F'(p) grad_r(p))` by calling `.Diff` on a GridFunction-backed
