@@ -1,5 +1,15 @@
 # NGSolve API notes
 
+- Milestone 3.3 (NGSolve 6.2.2606): the coordinate derivative of a component of
+  `ngsolve.grad(GridFunction)` is the zero coefficient, so the transformed (M3) source
+  must not form `div(F'(p) grad_r(p))` by calling `.Diff` on a GridFunction-backed
+  pressure gradient. `PrescribedCurrentProfile` therefore carries explicit
+  perpendicular- and full-gradient divergence coefficients, and the runtime variant
+  selects between them for the note-literal SUPG strong source. The symmetric Galerkin
+  source is moved directly as `-D_u grad_r(v).grad_r(F)` so it remains exactly paired
+  with the direct-u block. Analytic manufactured coefficient functions may construct
+  both strong divergences with coordinate `.Diff` before entering the solver.
+
 - Milestone 3.2 (NGSolve 6.2.2606): strong element-interior H¹ second derivatives are
   exposed as `ProxyFunction.Operator("hesse")` during assembly and
   `GridFunction.Operator("hesse")` for diagnostics. Calling `ngsolve.grad()` on an

@@ -38,15 +38,31 @@ class _FrozenCoefficients(Protocol):
     def vacuum_permeability(self) -> float: ...
 
 
+class _PrescribedCurrentProfile(Protocol):
+    @property
+    def value(self) -> Any: ...
+
+    @property
+    def pressure_derivative(self) -> Any: ...
+
+    @property
+    def perpendicular_gradient_divergence(self) -> Any: ...
+
+    @property
+    def full_gradient_divergence(self) -> Any: ...
+
+
 @dataclass(frozen=True, slots=True)
 class _CurrentContinuitySolution:
-    """Internal direct-u result for note equations (M2)--(M3)."""
+    """Internal direct-u or utilde result for note equations (M2)--(M3)."""
 
     _mesh: Any
     _field: Any
+    _solved_field: Any
     _gradient: Any
     _current: Any
     _parallel_current_over_field: Any
+    formulation: str
     polynomial_order: int
     regularization_gradient: RegularizationGradient
     stabilization: CurrentContinuityStabilization
@@ -59,8 +75,12 @@ class _CurrentContinuitySolution:
         return self._mesh
 
     def grid_function(self) -> Any:
-        """Return the internal direct-u GridFunction for weak-form verification."""
+        """Return the reconstructed physical-u field for verification integrals."""
         return self._field
+
+    def solved_grid_function(self) -> Any:
+        """Return the discrete solved variable: u directly, or homogeneous utilde."""
+        return self._solved_field
 
     def solution_at(self, x_coordinate: float, y_coordinate: float) -> float:
         """Evaluate u at a physical point in the slab."""
@@ -70,6 +90,12 @@ class _CurrentContinuitySolution:
         """Evaluate the two in-plane components of grad(u) at a physical point."""
         value = self._gradient(self._mesh(x_coordinate, y_coordinate))
         return float(value[0]), float(value[1])
+
+    def utilde_at(self, x_coordinate: float, y_coordinate: float) -> float:
+        """Evaluate the homogeneous utilde unknown after a transformed solve."""
+        if self.formulation != "utilde":
+            raise RuntimeError("utilde is only available after a transformed solve")
+        return float(self._solved_field(self._mesh(x_coordinate, y_coordinate)))
 
     def current_at(self, x_coordinate: float, y_coordinate: float) -> tuple[float, float, float]:
         """Evaluate the reconstructed (M2) current at a physical point."""
@@ -318,13 +344,14 @@ def solve_frozen_current_continuity(
     polynomial_order: int,
     coefficients: _FrozenCoefficients,
     runtime: RuntimeOptions | None = None,
+    prescribed_current_profile: _PrescribedCurrentProfile | None = None,
     boundary: str = "bottom|right|top|left",
     boundary_value: Any = 0.0,
     stabilization: CurrentContinuityStabilization = "none",
     quadrature_bonus_intorder: int = 12,
     residual_tolerance: float = 1.0e-11,
 ) -> _CurrentContinuitySolution:
-    r"""Solve the direct-u weak form of note equation (M3), optionally with SUPG.
+    r"""Solve direct-u (M3) or note Eq. ``utilde_equation``, optionally with SUPG.
 
     With ``grad_r`` selected at runtime, this assembles
 
@@ -364,6 +391,25 @@ def solve_frozen_current_continuity(
     ``minimum_field_magnitude`` is the minimum over mesh vertices and deterministic
     quadrature samples. It monitors DESIGN §5 invariant 4 but is a sampled upper bound
     on the true domain minimum, not a certified global bound.
+
+    When ``prescribed_current_profile`` supplies ``F = F(p)``, ``F_prime``, and the
+    explicit divergence of ``F_prime grad_r(p)`` for both runtime variants, the solved
+    field is homogeneous ``utilde`` and physical ``u = F + utilde``. Moving every
+    profile term to the right transcribes note Eq. ``utilde_equation`` as
+
+    ``L_M3(utilde) = drive - F_prime B.grad(p)
+    + div(D_u F_prime grad_r(p))
+    - mu0 F B.grad(p)/B_safe^2
+    + mu0 D_u F_prime grad_r(p).grad(p)/B_safe^2``.
+
+    The selected ``grad_r`` is used in both profile terms containing ``D_u``. In the
+    Galerkin load, the profile diffusion is moved in weak form as
+    ``-integral D_u grad_r(v).grad_r(F)``. This exactly matches the direct-u symmetric
+    perpendicular block ``grad(v).P^2.grad(u)`` even when the smooth floor makes
+    ``P = I - b_safe b_safe^T`` non-idempotent. The SUPG source and its diagnostic use
+    the note-literal strong single projection ``div(D_u P grad(F))``, preserving the
+    declared ``O(B_floor**2/B**2)`` Galerkin/SUPG convention. M2 current and
+    parallel-current diagnostics are reconstructed from physical ``u`` and ``grad(u)``.
     """
     if polynomial_order < 1:
         raise ValueError("polynomial_order must be at least one")
@@ -377,6 +423,17 @@ def solve_frozen_current_continuity(
         raise ValueError("the frozen M3 verification kernel supports the unit square only")
     if boundary != "bottom|right|top|left":
         raise ValueError("only the unit-square named Dirichlet boundary is supported")
+
+    if prescribed_current_profile is not None:
+        for name in (
+            "value",
+            "pressure_derivative",
+            "perpendicular_gradient_divergence",
+            "full_gradient_divergence",
+        ):
+            coefficient = getattr(prescribed_current_profile, name)
+            if getattr(coefficient, "dim", 1) != 1:
+                raise ValueError(f"prescribed_current_profile.{name} must be scalar")
 
     resolved_runtime = RuntimeOptions() if runtime is None else runtime
 
@@ -419,6 +476,49 @@ def solve_frozen_current_continuity(
         * ng.InnerProduct(regularized_trial, pressure_gradient)
         / safe_magnitude**2
     )
+    profile_gradient: Any | None = None
+    profile_source: Any = 0.0
+    profile_advection_source: Any = 0.0
+    profile_diffusion_source: Any = 0.0
+    profile_reaction_source: Any = 0.0
+    profile_final_correction_source: Any = 0.0
+    regularized_profile_gradient: Any | None = None
+    if prescribed_current_profile is not None:
+        profile_gradient = prescribed_current_profile.pressure_derivative * pressure_gradient
+        regularized_profile_gradient = _regularized_gradient(
+            profile_gradient,
+            direction,
+            resolved_runtime.regularization_gradient,
+        )
+        profile_advection_source = -prescribed_current_profile.pressure_derivative * b_dot_grad_p
+        profile_gradient_divergence = (
+            prescribed_current_profile.full_gradient_divergence
+            if resolved_runtime.regularization_gradient == "full"
+            else prescribed_current_profile.perpendicular_gradient_divergence
+        )
+        profile_diffusion_source = coefficients.current_diffusivity * profile_gradient_divergence
+        profile_reaction_source = (
+            -coefficients.vacuum_permeability
+            * prescribed_current_profile.value
+            * b_dot_grad_p
+            / safe_magnitude**2
+        )
+        profile_final_correction_source = (
+            coefficients.vacuum_permeability
+            * coefficients.current_diffusivity
+            * ng.InnerProduct(regularized_profile_gradient, pressure_gradient)
+            / safe_magnitude**2
+        )
+        profile_source = (
+            profile_advection_source
+            + profile_diffusion_source
+            + profile_reaction_source
+            + profile_final_correction_source
+        )
+    galerkin_source = (
+        drive + profile_advection_source + profile_reaction_source + profile_final_correction_source
+    )
+    strong_source = drive + profile_source
     quadrature = ng.dx(bonus_intorder=quadrature_bonus_intorder)
     galerkin_operator = (
         test * ng.InnerProduct(magnetic_field, trial_gradient)
@@ -430,7 +530,13 @@ def solve_frozen_current_continuity(
     bilinear_form = ng.BilinearForm(space)
     bilinear_form += galerkin_operator * quadrature
     linear_form = ng.LinearForm(space)
-    linear_form += drive * test * quadrature
+    linear_form += galerkin_source * test * quadrature
+    if regularized_profile_gradient is not None:
+        linear_form += (
+            -coefficients.current_diffusivity
+            * ng.InnerProduct(regularized_test, regularized_profile_gradient)
+            * quadrature
+        )
     supg_bilinear_form: Any | None = None
     supg_linear_form: Any | None = None
     tau: Any | None = None
@@ -470,7 +576,7 @@ def solve_frozen_current_continuity(
         )
         streamline_test = ng.InnerProduct(magnetic_field, test_gradient)
         supg_bilinear_integrand = tau * streamline_test * strong_operator
-        supg_linear_integrand = tau * streamline_test * drive
+        supg_linear_integrand = tau * streamline_test * strong_source
         bilinear_form += supg_bilinear_integrand * quadrature
         linear_form += supg_linear_integrand * quadrature
         supg_bilinear_form = ng.BilinearForm(space)
@@ -487,7 +593,8 @@ def solve_frozen_current_continuity(
             supg_bilinear_form.Assemble()
             supg_linear_form.Assemble()
         field = ng.GridFunction(space)
-        field.Set(boundary_value, definedon=mesh.Boundaries(boundary))
+        solved_boundary_value = 0.0 if prescribed_current_profile is not None else boundary_value
+        field.Set(solved_boundary_value, definedon=mesh.Boundaries(boundary))
         inverse = bilinear_form.mat.Inverse(free_dofs, inverse="umfpack")
         correction = field.vec.CreateVector()
         correction.data = inverse * (linear_form.vec - bilinear_form.mat * field.vec)
@@ -502,28 +609,35 @@ def solve_frozen_current_continuity(
             1.0, float(ng.Norm(free_source))
         )
 
-        in_plane_gradient = ng.grad(field)
-        field_gradient = _embedded_gradient(in_plane_gradient)
+        solved_in_plane_gradient = ng.grad(field)
+        solved_field_gradient = _embedded_gradient(solved_in_plane_gradient)
+        if prescribed_current_profile is not None and profile_gradient is not None:
+            physical_field = field + prescribed_current_profile.value
+            field_gradient = solved_field_gradient + profile_gradient
+        else:
+            physical_field = field
+            field_gradient = solved_field_gradient
         regularized_field_gradient = _regularized_gradient(
             field_gradient, direction, resolved_runtime.regularization_gradient
         )
         diamagnetic_current = ng.Cross(magnetic_field, pressure_gradient) / safe_magnitude**2
         current = (
-            field * magnetic_field
+            physical_field * magnetic_field
             + diamagnetic_current
             - coefficients.current_diffusivity * regularized_field_gradient
         )
         if resolved_runtime.regularization_gradient == "full":
             parallel_current_over_field = (
-                field
+                physical_field
                 - coefficients.current_diffusivity
                 * ng.InnerProduct(direction, field_gradient)
                 / safe_magnitude
             )
         else:
-            parallel_current_over_field = field
+            parallel_current_over_field = physical_field
 
-        solution_l2_squared = float(ng.Integrate(field**2, mesh, order=20))
+        solution_l2_squared = float(ng.Integrate(physical_field**2, mesh, order=20))
+        solved_variable_l2_squared = float(ng.Integrate(field**2, mesh, order=20))
         current_l2_squared = float(ng.Integrate(ng.InnerProduct(current, current), mesh, order=20))
         parallel_current_l2_squared = float(
             ng.Integrate(parallel_current_over_field**2, mesh, order=20)
@@ -536,8 +650,30 @@ def solve_frozen_current_continuity(
             / safe_magnitude**2
         )
         final_term_l2_squared = float(ng.Integrate(final_term**2, mesh, order=20))
-        reaction_term = coefficients.vacuum_permeability * field * b_dot_grad_p / safe_magnitude**2
+        reaction_term = (
+            coefficients.vacuum_permeability * physical_field * b_dot_grad_p / safe_magnitude**2
+        )
         reaction_term_l2_squared = float(ng.Integrate(reaction_term**2, mesh, order=20))
+        if prescribed_current_profile is not None:
+            profile_advection_source_l2_squared = float(
+                ng.Integrate(profile_advection_source**2, mesh, order=20)
+            )
+            profile_diffusion_source_l2_squared = float(
+                ng.Integrate(profile_diffusion_source**2, mesh, order=20)
+            )
+            profile_reaction_source_l2_squared = float(
+                ng.Integrate(profile_reaction_source**2, mesh, order=20)
+            )
+            profile_final_source_l2_squared = float(
+                ng.Integrate(profile_final_correction_source**2, mesh, order=20)
+            )
+            profile_total_source_l2_squared = float(ng.Integrate(profile_source**2, mesh, order=20))
+        else:
+            profile_advection_source_l2_squared = 0.0
+            profile_diffusion_source_l2_squared = 0.0
+            profile_reaction_source_l2_squared = 0.0
+            profile_final_source_l2_squared = 0.0
+            profile_total_source_l2_squared = 0.0
         direction_norm_defect = 1.0 - ng.InnerProduct(direction, direction)
         floor_activity_l2_squared = float(ng.Integrate(direction_norm_defect**2, mesh, order=20))
         physical_magnitude = ng.sqrt(ng.InnerProduct(magnetic_field, magnetic_field))
@@ -558,12 +694,25 @@ def solve_frozen_current_continuity(
                 resolved_runtime.regularization_gradient,
                 direction_gradient,
             )
+            solved_final_term = (
+                coefficients.vacuum_permeability
+                * coefficients.current_diffusivity
+                * ng.InnerProduct(
+                    _regularized_gradient(
+                        solved_field_gradient,
+                        direction,
+                        resolved_runtime.regularization_gradient,
+                    ),
+                    pressure_gradient,
+                )
+                / safe_magnitude**2
+            )
             strong_residual = (
-                ng.InnerProduct(magnetic_field, field_gradient)
+                ng.InnerProduct(magnetic_field, solved_field_gradient)
                 - coefficients.current_diffusivity * field_diffusion_divergence
                 + coefficients.vacuum_permeability * b_dot_grad_p * field / safe_magnitude**2
-                - final_term
-                - drive
+                - solved_final_term
+                - strong_source
             )
             supg_strong_residual_l2 = sqrt(
                 max(0.0, float(ng.Integrate(strong_residual**2, mesh, order=20)))
@@ -582,11 +731,17 @@ def solve_frozen_current_continuity(
 
     diagnostics = {
         "solution_l2": sqrt(max(0.0, solution_l2_squared)),
+        "solved_variable_l2": sqrt(max(0.0, solved_variable_l2_squared)),
         "current_l2": sqrt(max(0.0, current_l2_squared)),
         "parallel_current_over_field_l2": sqrt(max(0.0, parallel_current_l2_squared)),
         "m3_drive_l2": sqrt(max(0.0, drive_l2_squared)),
         "m3_final_correction_l2": sqrt(max(0.0, final_term_l2_squared)),
         "m3_reaction_l2": sqrt(max(0.0, reaction_term_l2_squared)),
+        "m3_profile_advection_source_l2": sqrt(max(0.0, profile_advection_source_l2_squared)),
+        "m3_profile_diffusion_source_l2": sqrt(max(0.0, profile_diffusion_source_l2_squared)),
+        "m3_profile_reaction_source_l2": sqrt(max(0.0, profile_reaction_source_l2_squared)),
+        "m3_profile_final_correction_source_l2": sqrt(max(0.0, profile_final_source_l2_squared)),
+        "m3_profile_total_source_l2": sqrt(max(0.0, profile_total_source_l2_squared)),
         "m3_supg_stabilization_norm": supg_stabilization_norm,
         "m3_supg_stabilization_relative_norm": supg_stabilization_relative_norm,
         "m3_supg_strong_residual_l2": supg_strong_residual_l2,
@@ -608,10 +763,12 @@ def solve_frozen_current_continuity(
 
     return _CurrentContinuitySolution(
         _mesh=mesh,
-        _field=field,
-        _gradient=in_plane_gradient,
+        _field=physical_field,
+        _solved_field=field,
+        _gradient=field_gradient,
         _current=current,
         _parallel_current_over_field=parallel_current_over_field,
+        formulation="utilde" if prescribed_current_profile is not None else "direct-u",
         polynomial_order=polynomial_order,
         regularization_gradient=resolved_runtime.regularization_gradient,
         stabilization=stabilization,

@@ -14,9 +14,11 @@ from remec.solvers.anisotropic_diffusion import (
     SpatialAnisotropicConductivity,
 )
 from remec.solvers.current_continuity import (
+    CurrentContinuityFormulation,
     CurrentContinuityResult,
     CurrentContinuitySolver,
     FrozenCurrentContinuityCoefficients,
+    PrescribedCurrentProfile,
 )
 
 __all__ = [
@@ -24,6 +26,7 @@ __all__ = [
     "AnisotropicDiffusionSolver",
     "AnisotropyPollutionError",
     "AnisotropyPollutionWarning",
+    "CurrentContinuityFormulation",
     "CurrentContinuityResult",
     "CurrentContinuitySolver",
     "CurrentContinuityStabilization",
@@ -33,5 +36,6 @@ __all__ = [
     "FloorSensitivityWarning",
     "FrozenCurrentContinuityCoefficients",
     "PollutionSafetyDiagnostic",
+    "PrescribedCurrentProfile",
     "SpatialAnisotropicConductivity",
 ]
