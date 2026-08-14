@@ -1,5 +1,52 @@
 # Verification records
 
+## Milestone 3.1 — direct-u frozen-field M3 kernel
+
+`CurrentContinuitySolver` implements the unstabilized direct-u weak form of note
+equation (M3) on frozen \((\mathbf B,p)\):
+
+\[
+\begin{aligned}
+\int_\Omega v\,\mathbf B\!\cdot\!\nabla u
+&+D_u\nabla_r v\!\cdot\!\nabla_r u
++\frac{\mu_0}{B_{\rm safe}^2}v u\,\mathbf B\!\cdot\!\nabla p\\
+&-\frac{\mu_0D_u}{B_{\rm safe}^2}
+v\,\nabla_r u\!\cdot\!\nabla p\,dV
+=\int_\Omega \frac{2v}{B_{\rm safe}^3}
+\mathbf B\!\cdot\!(\nabla p\times\nabla B)\,dV .
+\end{aligned}
+\]
+
+The runtime choice is `perpendicular` by default, with
+\(\nabla_r=\nabla_\perp\), or `full`, with \(\nabla_r=\nabla\). The same selected
+gradient reconstructs note equation (M2),
+\(\mathbf J=u\mathbf B+\mathbf B\times\nabla p/B_{\rm safe}^2-D_u\nabla_r u\).
+For the full-gradient variant the reported physical parallel-current diagnostic is
+\(J_\parallel/B=u-(D_u/B_{\rm safe})\mathbf b_{\rm safe}\cdot\nabla u\), not the
+auxiliary solved variable alone. The choice is included in `RuntimeOptions`, so it is
+present in canonical configuration digests, both structured solve events, and checkpoint
+metadata.
+
+`tests/unit/test_current_continuity.py` assembles the expected bilinear and linear forms
+independently of the solver implementation. On the shared order-2 frozen-coefficient
+unit-square case, every source/reaction component is nonzero:
+
+| Gradient variant | Free-DOF relative residual | M3 drive L² | Reaction L² | Final correction L² |
+| --- | ---: | ---: | ---: | ---: |
+| perpendicular | 2.60e-17 | 2.176e-1 | 1.647e-2 | 4.856e-3 |
+| full | 2.28e-17 | 2.176e-1 | 1.496e-2 | 6.118e-3 |
+
+Both residuals are below the automated \(10^{-11}\) gate. Pointwise tests independently
+reconstruct all three M2 current components and the full-gradient \(J_\parallel/B\)
+formula to absolute tolerance \(10^{-12}\). This milestone makes no discretization-
+convergence claim; the SUPG manufactured order scans belong to milestone 3.2.
+
+Mutation checks: deleting the final
+\(\mu_0D_u\nabla_r u\cdot\nabla p/B_{\rm safe}^2\) term raises the independently
+assembled residual to 5.76e-4 (`perpendicular`) and 7.14e-4 (`full`). Reconstructing
+M2 with full \(\nabla u\) while solving M3 with \(\nabla_\perp u\) changes a tested
+current component by 7.34e-3, so the matching-gradient contract also fails conspicuously.
+
 ## Milestone 2.4 — optional sharp cut-cell reference
 
 `CutCellVolumeReference` is the optional `remec[cutcell]` implementation of the note's
