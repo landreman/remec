@@ -24,12 +24,18 @@ class FrozenCurrentContinuityCoefficients:
     ``magnetic_magnitude_gradient`` is normally ``grad(|B|)`` derived from
     ``magnetic_field``. It is explicit so verification can inject a prescribed
     strong-form M3 drive; production callers are responsible for their consistency.
+    ``magnetic_field_gradient``, when supplied, is either NGSolve's native 2-by-3
+    vector gradient or the transposed 3-by-2 matrix ``(∂_x B_i, ∂_y B_i)`` required by
+    the perpendicular SUPG strong divergence. It is mandatory for a varying
+    GridFunction-backed magnetic field because NGSolve coordinate differentiation of
+    such a field silently returns zero.
     """
 
     magnetic_field: Any
     pressure_gradient: Any
     magnetic_magnitude_gradient: Any
     current_diffusivity: float
+    magnetic_field_gradient: Any | None = None
     magnetic_floor: float = 1.0e-12
     vacuum_permeability: float = 1.0
 

@@ -21,21 +21,40 @@ The perpendicular variant expands the complete variable-projector divergence as
 the element-interior Laplacian. Thus the SUPG residual contains parallel advection,
 diffusion and its coefficient derivatives, reaction, drive, and the final
 \(D_u\nabla_r u\cdot\nabla p\) correction for both runtime variants.
+For degree 1, the element-interior Hessian is identically zero, so the discrete strong
+diffusion residual contains only spatial projector derivatives (none in the full-∇
+variant); the checked-in strong-residual norm therefore plateaus. This limitation is
+explicit rather than hidden in a weaker gate: the bounded stabilization still measures
+the expected P1 L² rate, and all degrees use the repository-standard \(p+0.8\) gate.
 
-The single unit-tested parameter function uses \(h_p=h_\parallel/p\) and
+NGSolve coordinate differentiation silently returns zero for expressions backed by a
+`GridFunction`. A varying GridFunction magnetic field therefore must supply its native
+2-by-3 `grad(B)` (or a transposed 3-by-2 matrix). The solver constructs
+\(\partial_j(B_i/B_{\rm safe})\) from this matrix and rejects a varying field whose
+implicit coordinate derivative is silently zero. A unit test compares the resulting
+projector divergence with an independent analytic expression.
+
+The single unit-tested parameter function uses separate high-order streamline and
+diffusive scales, \(h_s=h_\parallel/p\) and \(h_d=h_K/p\):
 
 \[
-\tau=\left[\left(\frac{2|\mathbf B|}{h_p}\right)^2
-+\left(\frac{4D_u}{h_p^2}\right)^2\right]^{-1/2}.
+\tau=\left[\left(\frac{2|\mathbf B|}{h_s}\right)^2
++\left(\frac{4D_u}{h_d^2}\right)^2\right]^{-1/2}.
 \]
 
-It recovers \(h_p/(2|\mathbf B|)\) and \(h_p^2/(4D_u)\) in the respective limiting
+It recovers \(h_s/(2|\mathbf B|)\) and \(h_d^2/(4D_u)\) in the respective limiting
 cases. On the current isotropic `Slab2D` verification mesh,
-\(h_\parallel=h_K/|\mathbf b_{xy}|\). The stabilization is assembled separately as
+\(h_\parallel=h_K/|\mathbf b_{xy}|\), while the diffusive scale remains \(h_K\).
+This prevents the diffusive branch from diverging for a nearly out-of-plane field: as
+\(|\mathbf b_{xy}|\) decreases from 1 to 1e-3, sampled \(\tau_{\max}\) remains
+1.949e-3–1.953e-3 and the stabilized/unstabilized L² errors agree within 1e-6 at the
+smallest fraction for both variants. The stabilization is assembled separately as
 well as in the total operator; diagnostics record its free-DOF vector norm, the
 element-interior strong-residual L² norm, and the sampled minimum/maximum \(\tau\).
 The stabilization mode is included in the configuration digest and structured solve
-events.
+events. It deliberately remains solver-owned rather than part of `RuntimeOptions` while
+this frozen M3 kernel has no checkpointed solve state; milestone 3.3 must revisit that
+choice before M3 becomes part of a checkpointable coupled run.
 
 The smooth all-terms manufactured solution is
 \(u_*=\sin(\pi x)\sin(\pi y)\) on the nonconstant divergence-free frozen field from
@@ -44,20 +63,22 @@ checked-in table `tests/manufactured/m3_supg_rates.csv` is recomputed within 5% 
 
 | Gradient variant | Degree 1 finest rate | Degree 2 finest rate | Degree 3 finest rate |
 | --- | ---: | ---: | ---: |
-| ∇⊥ | 1.746 | 3.125 | 4.036 |
-| full ∇ | 1.755 | 3.171 | 4.050 |
+| ∇⊥ | 1.970 | 3.029 | 4.036 |
+| full ∇ | 1.968 | 3.039 | 4.033 |
 
 The automated gates require strict error decrease and a finest-pair L² rate above
-\(p+0.6\). Separate manufactured tests cover aligned advection with SUPG both on and
+\(p+0.8\). Separate manufactured tests cover aligned advection with SUPG both on and
 off, transverse diffusion, reaction/nonconstant-field terms, and the final correction;
 every case is parameterized over both regularization gradients.
 
 Mutation checks: deleting the final
 \(\mu_0D_u\nabla_r u\cdot\nabla p/B_{\rm safe}^2\) term from both Galerkin and SUPG
-operators raises the dedicated degree-3 L² errors from 1.387e-6 to 4.217e-2 (∇⊥) and
-from 1.386e-6 to 4.230e-2 (full ∇). Halving the centralized stabilization parameter
-makes its exact advection-limit test report 0.025 instead of 0.05. Both mutations turn
-the suite red.
+operators raises the dedicated degree-3 L² errors from 1.234e-6 to 4.217e-2 (∇⊥) and
+from 1.234e-6 to 4.230e-2 (full ∇). Deleting the strong diffusion divergence alone
+reduces the transverse-case assembled stabilization norm from 3.641e-7 to 6.348e-8
+(∇⊥) and from 2.131e-7 to 1.822e-8 (full ∇), violating its 5% pinned contract.
+Halving the centralized stabilization parameter makes its exact advection-limit test
+report 0.025 instead of 0.05. All three mutations turn the suite red.
 
 ## Milestone 3.1 — direct-u frozen-field M3 kernel
 

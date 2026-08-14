@@ -175,10 +175,14 @@ that dependency. Phase 7 may run in parallel with Phase 8.
 - [x] **3.2** SUPG + manufactured tests — `DESIGN.md` §9.1, §9.4 · note: (M3), §5.5
   <br>Acceptance: includes the test that fails conspicuously if the `D_u ∇ᵣu·∇p` term is dropped (`DESIGN.md` §22); all manufactured tests run for both gradient variants.
   <br>Measured: macOS / CPython 3.12.2 / NGSolve 6.2.2606 — complete-residual SUPG
-  finest-pair L² rates for degrees 1/2/3 are 1.746 / 3.125 / 4.036 with ∇⊥ and
-  1.755 / 3.171 / 4.050 with full ∇. Aligned-advection SUPG on/off and transverse-
+  finest-pair L² rates for degrees 1/2/3 are 1.970 / 3.029 / 4.036 with ∇⊥ and
+  1.968 / 3.039 / 4.033 with full ∇; every degree clears the standard `p + 0.8`
+  gate. P1 has zero element-interior Hessian, so the full-∇ strong diffusion residual
+  vanishes and ∇⊥ retains only projector derivatives; the bounded stabilization still
+  retains optimal L² rate.
+  Aligned-advection SUPG on/off and transverse-
   diffusion manufactured cases pass for both variants. In the dedicated final-term
-  case, the correct L² errors are 1.387e-6 / 1.386e-6 (∇⊥ / full ∇); deleting
+  case, the correct L² errors are 1.234e-6 / 1.234e-6 (∇⊥ / full ∇); deleting
   `D_u ∇ᵣu·∇p` raises them to 4.217e-2 / 4.230e-2. See
   `tests/manufactured/m3_supg_rates.csv` and `docs/verification.md`.
   <br>Next: milestone 3.3 should apply the direct-u/ũ transformation to the same

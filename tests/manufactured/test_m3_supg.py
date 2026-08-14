@@ -156,7 +156,7 @@ def test_supg_all_terms_manufactured_convergence(
 
     rates = [log(coarse / fine) / log(2.0) for coarse, fine in pairwise(errors)]
     assert errors[0] > errors[1] > errors[2]
-    assert rates[-1] > polynomial_order + 0.6
+    assert rates[-1] >= polynomial_order + 0.8
     assert rates[-1] == pytest.approx(
         recorded_rows[variant, polynomial_order, mesh_sizes[-1]]["l2_rate"], rel=0.05
     )
@@ -213,9 +213,65 @@ def test_transverse_diffusion_manufactured_case(variant: str) -> None:
         runtime=RuntimeOptions(regularization_gradient=variant),  # type: ignore[arg-type]
         stabilization="supg",
     )
-    solver.solve(Slab2D(maxh=0.125), coefficients, boundary_value=exact_u)
+    result = solver.solve(Slab2D(maxh=0.125), coefficients, boundary_value=exact_u)
 
     assert _l2_error(solver, exact_u) < 2.0e-5
+    expected_residual = {"perpendicular": 0.004035, "full": 0.004371}[variant]
+    assert result.diagnostics["m3_supg_strong_residual_l2"] == pytest.approx(
+        expected_residual, rel=0.05
+    )
+    expected_stabilization = {
+        "perpendicular": 3.6411e-7,
+        "full": 2.1310e-7,
+    }[variant]
+    assert result.diagnostics["m3_supg_stabilization_norm"] == pytest.approx(
+        expected_stabilization, rel=0.05
+    )
+
+
+@pytest.mark.parametrize("variant", ["perpendicular", "full"])
+def test_supg_stays_bounded_for_a_nearly_out_of_plane_field(variant: str) -> None:
+    r"""The M3 diffusive tau scale stays finite as the in-plane field tends to zero."""
+    exact_u = ng.sin(ng.pi * ng.x) * ng.sin(ng.pi * ng.y)
+    pressure_gradient = ng.CoefficientFunction((0.0, 1.0, 0.0))
+    tau_maxima: list[float] = []
+    for in_plane_fraction in (1.0, 0.01, 0.001):
+        magnetic_field = ng.CoefficientFunction(
+            (
+                in_plane_fraction,
+                0.0,
+                sqrt(1.0 - in_plane_fraction**2),
+            )
+        )
+        coefficients = _manufactured_coefficients(
+            variant,
+            magnetic_field=magnetic_field,
+            pressure_gradient=pressure_gradient,
+            exact_u=exact_u,
+            current_diffusivity=0.5,
+            vacuum_permeability=1.0,
+        )
+        runtime = RuntimeOptions(regularization_gradient=variant)  # type: ignore[arg-type]
+        unstabilized_solver = CurrentContinuitySolver(
+            polynomial_order=2,
+            runtime=runtime,
+            stabilization="none",
+        )
+        unstabilized_solver.solve(Slab2D(maxh=0.125), coefficients)
+        stabilized_solver = CurrentContinuitySolver(
+            polynomial_order=2,
+            runtime=runtime,
+            stabilization="supg",
+        )
+        stabilized = stabilized_solver.solve(Slab2D(maxh=0.125), coefficients)
+        unstabilized_error = _l2_error(unstabilized_solver, exact_u)
+        stabilized_error = _l2_error(stabilized_solver, exact_u)
+
+        tau_maxima.append(stabilized.diagnostics["m3_supg_tau_max"])
+        assert stabilized_error < 2.0 * unstabilized_error
+
+    assert max(tau_maxima) < 0.02
+    assert max(tau_maxima) < 2.0 * min(tau_maxima)
 
 
 @pytest.mark.parametrize("variant", ["perpendicular", "full"])

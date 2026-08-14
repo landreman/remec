@@ -4,8 +4,12 @@
   exposed as `ProxyFunction.Operator("hesse")` during assembly and
   `GridFunction.Operator("hesse")` for diagnostics. Calling `ngsolve.grad()` on an
   already differentiated H¹ proxy does not produce a Hessian, while differentiating a
-  proxy gradient component with `.Diff(ngsolve.x)` returns zero. Expand variable-tensor
-  divergences explicitly as `P_ij hesse(u)_ij + (∂_i P_ij) ∂_j u`.
+  proxy gradient component with `.Diff(ngsolve.x)` returns zero. Coordinate `.Diff`
+  also silently returns zero for a `GridFunction`; a varying GridFunction-backed B
+  must pass its native `ngsolve.grad(B)` to the M3 coefficient record. Expand
+  variable-tensor divergences explicitly as
+  `P_ij hesse(u)_ij + (∂_i P_ij) ∂_j u` and construct `∂_i P_ij` from that supplied
+  field gradient rather than differentiating the GridFunction expression tree.
 
 - Milestone 3.1 (NGSolve 6.2.2606): the nonsymmetric direct-u M3 matrix can use
   `bilinear_form.mat.Inverse(free_dofs, inverse="umfpack")`; solve a nonzero
