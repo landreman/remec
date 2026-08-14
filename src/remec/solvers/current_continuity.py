@@ -10,7 +10,11 @@ from remec.common.logging import JsonEventLogger
 from remec.common.serialization import configuration_digest
 from remec.fem._current_continuity import solve_frozen_current_continuity
 from remec.geometry.slab import Slab2D
-from remec.options import RegularizationGradient, RuntimeOptions
+from remec.options import (
+    CurrentContinuityStabilization,
+    RegularizationGradient,
+    RuntimeOptions,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,6 +48,7 @@ class CurrentContinuityResult:
 
     polynomial_order: int
     regularization_gradient: RegularizationGradient
+    stabilization: CurrentContinuityStabilization
     configuration_digest: str
     free_dof_residual_norm: float
     free_dof_relative_residual_norm: float
@@ -56,6 +61,8 @@ class CurrentContinuitySolver:
     The selected ``grad_r`` is used consistently in
     ``J = uB + B x grad(p)/B_safe^2 - D_u grad_r(u)`` and in the M3 weak form
     documented by :func:`remec.fem._current_continuity.solve_frozen_current_continuity`.
+    The DESIGN §9.1 baseline is ``stabilization="supg"``; ``"none"`` retains the
+    unstabilized Galerkin form for cross-verification.
     """
 
     def __init__(
@@ -63,12 +70,16 @@ class CurrentContinuitySolver:
         *,
         polynomial_order: int = 3,
         runtime: RuntimeOptions | None = None,
+        stabilization: CurrentContinuityStabilization = "supg",
         logger: JsonEventLogger | None = None,
     ) -> None:
         if polynomial_order < 1:
             raise ValueError("polynomial_order must be at least one")
+        if stabilization not in ("none", "supg"):
+            raise ValueError("stabilization must be 'none' or 'supg'")
         self.polynomial_order = polynomial_order
         self.runtime = RuntimeOptions() if runtime is None else runtime
+        self.stabilization = stabilization
         self.logger = logger
         self._internal_solution: Any = None
 
@@ -91,12 +102,14 @@ class CurrentContinuitySolver:
             "current_diffusivity": coefficients.current_diffusivity,
             "magnetic_floor": coefficients.magnetic_floor,
             "vacuum_permeability": coefficients.vacuum_permeability,
+            "stabilization": self.stabilization,
         }
         digest = configuration_digest(configuration)
         log_fields = {
             "configuration_digest": digest,
             "polynomial_order": self.polynomial_order,
             "regularization_gradient": self.runtime.regularization_gradient,
+            "stabilization": self.stabilization,
         }
         if self.logger is not None:
             self.logger.info("m3_solve_started", **log_fields)
@@ -108,6 +121,7 @@ class CurrentContinuitySolver:
             runtime=self.runtime,
             boundary=boundary,
             boundary_value=boundary_value,
+            stabilization=self.stabilization,
         )
         self._internal_solution = internal
         diagnostics = {
@@ -120,10 +134,12 @@ class CurrentContinuitySolver:
                 "m3_solve_completed",
                 **log_fields,
                 free_dof_relative_residual_norm=internal.free_dof_relative_residual_norm,
+                m3_supg_stabilization_norm=internal.diagnostics["m3_supg_stabilization_norm"],
             )
         return CurrentContinuityResult(
             polynomial_order=self.polynomial_order,
             regularization_gradient=self.runtime.regularization_gradient,
+            stabilization=self.stabilization,
             configuration_digest=digest,
             free_dof_residual_norm=internal.free_dof_residual_norm,
             free_dof_relative_residual_norm=internal.free_dof_relative_residual_norm,
