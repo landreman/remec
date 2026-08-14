@@ -80,6 +80,7 @@ def _manufactured_case(
         "perpendicular",
     )
     profile = PrescribedCurrentProfile(
+        identifier="quadratic-pressure-v1" if quadratic_pressure else "linear-pressure-v1",
         value=profile_value,
         pressure_derivative=0.3,
         perpendicular_gradient_divergence=(

@@ -18,8 +18,11 @@ from remec.fem._current_continuity import solve_frozen_current_continuity
 from remec.geometry.slab import Slab2D
 from remec.solvers.current_continuity import (
     CurrentContinuitySolver,
+    CurrentLayerResolutionDiagnostic,
     FrozenCurrentContinuityCoefficients,
     PrescribedCurrentProfile,
+    UnresolvedCurrentLayerError,
+    UnresolvedCurrentLayerWarning,
 )
 
 
@@ -354,25 +357,36 @@ def test_utilde_formulation_is_in_provenance_and_has_homogeneous_boundary_data()
         polynomial_order=2,
         logger=JsonEventLogger(stream),
     )
+    profile = PrescribedCurrentProfile(
+        identifier="constant-profile-v1",
+        value=0.3,
+        pressure_derivative=0.0,
+        perpendicular_gradient_divergence=0.0,
+        full_gradient_divergence=0.0,
+    )
     result = solver.solve_utilde(
         Slab2D(maxh=0.25),
         _frozen_coefficients(),
-        PrescribedCurrentProfile(
-            value=0.3,
-            pressure_derivative=0.0,
-            perpendicular_gradient_divergence=0.0,
-            full_gradient_divergence=0.0,
-        ),
+        profile,
     )
     records = [json.loads(line) for line in stream.getvalue().splitlines()]
 
     assert result.formulation == "utilde"
+    assert result.profile_identifier == "constant-profile-v1"
     assert solver.utilde_at(0.0, 0.5) == pytest.approx(0.0, abs=1.0e-12)
     assert solver.solution_at(0.0, 0.5) == pytest.approx(0.3, abs=1.0e-12)
     assert all(record["formulation"] == "utilde" for record in records)
+    assert all(record["profile_identifier"] == "constant-profile-v1" for record in records)
     assert all(record["configuration_digest"] == result.configuration_digest for record in records)
     assert result.diagnostics["m3_profile_advection_source_l2"] == 0.0
     assert result.diagnostics["m3_profile_diffusion_source_l2"] == 0.0
+
+    alternate = CurrentContinuitySolver(polynomial_order=2).solve_utilde(
+        Slab2D(maxh=0.25),
+        _frozen_coefficients(),
+        replace(profile, identifier="constant-profile-v2"),
+    )
+    assert alternate.configuration_digest != result.configuration_digest
 
 
 def test_prescribed_current_profile_rejects_vector_coefficients() -> None:
@@ -381,6 +395,7 @@ def test_prescribed_current_profile_rejects_vector_coefficients() -> None:
 
     with pytest.raises(ValueError, match="value"):
         PrescribedCurrentProfile(
+            identifier="vector-value-v1",
             value=vector,
             pressure_derivative=1.0,
             perpendicular_gradient_divergence=0.0,
@@ -388,8 +403,18 @@ def test_prescribed_current_profile_rejects_vector_coefficients() -> None:
         )
     with pytest.raises(ValueError, match="pressure_derivative"):
         PrescribedCurrentProfile(
+            identifier="vector-derivative-v1",
             value=1.0,
             pressure_derivative=vector,
+            perpendicular_gradient_divergence=0.0,
+            full_gradient_divergence=0.0,
+        )
+
+    with pytest.raises(ValueError, match="identifier"):
+        PrescribedCurrentProfile(
+            identifier="  ",
+            value=1.0,
+            pressure_derivative=0.0,
             perpendicular_gradient_divergence=0.0,
             full_gradient_divergence=0.0,
         )
@@ -419,3 +444,53 @@ def test_m3_options_and_coefficients_reject_invalid_physics() -> None:
             FrozenCurrentContinuityCoefficients(**values)
 
     assert isfinite(base.current_diffusivity)
+
+
+def test_m3_layer_resolution_gate_uses_the_six_element_invariant() -> None:
+    """DESIGN §5 warns, or fails in strict mode, below ``min_layer_cells``."""
+    solver = CurrentContinuitySolver(runtime=RuntimeOptions(min_layer_cells=6))
+
+    resolved = solver.assess_layer_resolution(
+        layer_width=0.12,
+        normal_element_width=0.015,
+    )
+    assert resolved == CurrentLayerResolutionDiagnostic(
+        layer_width=0.12,
+        normal_element_width=0.015,
+        cells_across_layer=8.0,
+        minimum_cells=6,
+        resolved=True,
+    )
+
+    with pytest.warns(UnresolvedCurrentLayerWarning, match="M3 current layer"):
+        unresolved = solver.assess_layer_resolution(
+            layer_width=0.05,
+            normal_element_width=0.01,
+        )
+    assert unresolved.cells_across_layer == pytest.approx(5.0)
+    assert not unresolved.resolved
+
+    with pytest.raises(UnresolvedCurrentLayerError, match="5.000"):
+        solver.assess_layer_resolution(
+            layer_width=0.05,
+            normal_element_width=0.01,
+            strict=True,
+        )
+
+
+@pytest.mark.parametrize(
+    ("layer_width", "normal_element_width"),
+    [(0.0, 0.1), (-0.1, 0.1), (float("nan"), 0.1), (0.1, 0.0)],
+)
+def test_m3_layer_resolution_gate_rejects_invalid_scales(
+    layer_width: float,
+    normal_element_width: float,
+) -> None:
+    """A reported layer count must be built from finite positive physical scales."""
+    solver = CurrentContinuitySolver()
+
+    with pytest.raises(ValueError, match="finite and positive"):
+        solver.assess_layer_resolution(
+            layer_width=layer_width,
+            normal_element_width=normal_element_width,
+        )
