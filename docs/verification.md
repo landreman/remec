@@ -1,5 +1,64 @@
 # Verification records
 
+## Milestone 3.2 — complete-residual SUPG for M3
+
+`CurrentContinuitySolver` now uses the DESIGN §9.1 SUPG form by default, while
+`stabilization="none"` retains the milestone-3.1 Galerkin form. For note equation (M3),
+the added residual term is
+
+\[
+\int_\Omega \tau\,(\mathbf B\!\cdot\!\nabla v)\left[
+\mathbf B\!\cdot\!\nabla u-\nabla\!\cdot(D_u\nabla_r u)
++\frac{\mu_0u}{B_{\rm safe}^2}\mathbf B\!\cdot\!\nabla p
+-\frac{\mu_0D_u}{B_{\rm safe}^2}\nabla_r u\!\cdot\!\nabla p
+-\frac{2}{B_{\rm safe}^3}\mathbf B\!\cdot(\nabla p\times\nabla B)
+\right]dV.
+\]
+
+The perpendicular variant expands the complete variable-projector divergence as
+\(P_{ij}\partial_{ij}u+(\partial_iP_{ij})\partial_j u\),
+\(P=I-\mathbf b_{\rm safe}\mathbf b_{\rm safe}^{T}\); the full-gradient variant uses
+the element-interior Laplacian. Thus the SUPG residual contains parallel advection,
+diffusion and its coefficient derivatives, reaction, drive, and the final
+\(D_u\nabla_r u\cdot\nabla p\) correction for both runtime variants.
+
+The single unit-tested parameter function uses \(h_p=h_\parallel/p\) and
+
+\[
+\tau=\left[\left(\frac{2|\mathbf B|}{h_p}\right)^2
++\left(\frac{4D_u}{h_p^2}\right)^2\right]^{-1/2}.
+\]
+
+It recovers \(h_p/(2|\mathbf B|)\) and \(h_p^2/(4D_u)\) in the respective limiting
+cases. On the current isotropic `Slab2D` verification mesh,
+\(h_\parallel=h_K/|\mathbf b_{xy}|\). The stabilization is assembled separately as
+well as in the total operator; diagnostics record its free-DOF vector norm, the
+element-interior strong-residual L² norm, and the sampled minimum/maximum \(\tau\).
+The stabilization mode is included in the configuration digest and structured solve
+events.
+
+The smooth all-terms manufactured solution is
+\(u_*=\sin(\pi x)\sin(\pi y)\) on the nonconstant divergence-free frozen field from
+milestone 3.1. Its complete strong (M3) residual prescribes the physical drive. The
+checked-in table `tests/manufactured/m3_supg_rates.csv` is recomputed within 5% in PR CI:
+
+| Gradient variant | Degree 1 finest rate | Degree 2 finest rate | Degree 3 finest rate |
+| --- | ---: | ---: | ---: |
+| ∇⊥ | 1.746 | 3.125 | 4.036 |
+| full ∇ | 1.755 | 3.171 | 4.050 |
+
+The automated gates require strict error decrease and a finest-pair L² rate above
+\(p+0.6\). Separate manufactured tests cover aligned advection with SUPG both on and
+off, transverse diffusion, reaction/nonconstant-field terms, and the final correction;
+every case is parameterized over both regularization gradients.
+
+Mutation checks: deleting the final
+\(\mu_0D_u\nabla_r u\cdot\nabla p/B_{\rm safe}^2\) term from both Galerkin and SUPG
+operators raises the dedicated degree-3 L² errors from 1.387e-6 to 4.217e-2 (∇⊥) and
+from 1.386e-6 to 4.230e-2 (full ∇). Halving the centralized stabilization parameter
+makes its exact advection-limit test report 0.025 instead of 0.05. Both mutations turn
+the suite red.
+
 ## Milestone 3.1 — direct-u frozen-field M3 kernel
 
 `CurrentContinuitySolver` implements the unstabilized direct-u weak form of note

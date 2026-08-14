@@ -172,9 +172,18 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   by +50% and +163%, so the certified-to-assembled comparison catches both.
   Before evolving-field studies, pair the floor-activity measurement with an
   observable-sensitivity warning/error gate.
-- [ ] **3.2** SUPG + manufactured tests — `DESIGN.md` §9.1, §9.4 · note: (M3), §5.5
+- [x] **3.2** SUPG + manufactured tests — `DESIGN.md` §9.1, §9.4 · note: (M3), §5.5
   <br>Acceptance: includes the test that fails conspicuously if the `D_u ∇ᵣu·∇p` term is dropped (`DESIGN.md` §22); all manufactured tests run for both gradient variants.
-  <br>Measured: —
+  <br>Measured: macOS / CPython 3.12.2 / NGSolve 6.2.2606 — complete-residual SUPG
+  finest-pair L² rates for degrees 1/2/3 are 1.746 / 3.125 / 4.036 with ∇⊥ and
+  1.755 / 3.171 / 4.050 with full ∇. Aligned-advection SUPG on/off and transverse-
+  diffusion manufactured cases pass for both variants. In the dedicated final-term
+  case, the correct L² errors are 1.387e-6 / 1.386e-6 (∇⊥ / full ∇); deleting
+  `D_u ∇ᵣu·∇p` raises them to 4.217e-2 / 4.230e-2. See
+  `tests/manufactured/m3_supg_rates.csv` and `docs/verification.md`.
+  <br>Next: milestone 3.3 should apply the direct-u/ũ transformation to the same
+  centralized SUPG residual and retain both `stabilization` and gradient-variant
+  provenance paths.
 - [ ] **3.3** ũ formulation — `DESIGN.md` §9.2, §9.4 · note: (M3), §5.5
   <br>Acceptance: agrees with direct-u; transformed source terms use the selected ∇ᵣ; verified for both variants.
   <br>Measured: —

@@ -1,5 +1,12 @@
 # NGSolve API notes
 
+- Milestone 3.2 (NGSolve 6.2.2606): strong element-interior H¹ second derivatives are
+  exposed as `ProxyFunction.Operator("hesse")` during assembly and
+  `GridFunction.Operator("hesse")` for diagnostics. Calling `ngsolve.grad()` on an
+  already differentiated H¹ proxy does not produce a Hessian, while differentiating a
+  proxy gradient component with `.Diff(ngsolve.x)` returns zero. Expand variable-tensor
+  divergences explicitly as `P_ij hesse(u)_ij + (∂_i P_ij) ∂_j u`.
+
 - Milestone 3.1 (NGSolve 6.2.2606): the nonsymmetric direct-u M3 matrix can use
   `bilinear_form.mat.Inverse(free_dofs, inverse="umfpack")`; solve a nonzero
   Dirichlet lift by applying that inverse to `linear_form.vec - mat * field.vec`.
