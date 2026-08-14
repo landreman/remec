@@ -17,7 +17,7 @@ from remec.solvers.current_continuity import (
     PrescribedCurrentProfile,
 )
 
-_DIFFUSIVITIES = (0.005, 0.01, 0.02, 0.04)
+_DIFFUSIVITIES = (0.0025, 0.005, 0.01, 0.02, 0.04)
 _NORMAL_ELEMENT_WIDTH = 1.0 / 64.0
 _RATE_TABLE = Path(__file__).with_name("m3_layer_scaling.csv")
 _REFINEMENT_TABLE = Path(__file__).with_name("m3_layer_mesh_refinement.csv")
@@ -240,8 +240,13 @@ def test_resonant_m3_layer_width_scales_as_diffusivity_to_one_third(variant: str
         widths.append(width)
 
     fitted_exponent = _log_log_slope(list(_DIFFUSIVITIES), widths)
+    lowest_pair_exponent = log(widths[1] / widths[0]) / log(_DIFFUSIVITIES[1] / _DIFFUSIVITIES[0])
+    highest_pair_exponent = log(widths[-1] / widths[-2]) / log(
+        _DIFFUSIVITIES[-1] / _DIFFUSIVITIES[-2]
+    )
     assert widths == sorted(widths)
     assert abs(fitted_exponent - 1.0 / 3.0) < 0.04
+    assert abs(lowest_pair_exponent - 1.0 / 3.0) < abs(highest_pair_exponent - 1.0 / 3.0)
     assert fitted_exponent == pytest.approx(
         recorded_rows[variant, _DIFFUSIVITIES[0]]["fitted_exponent"], abs=0.02
     )

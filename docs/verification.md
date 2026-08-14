@@ -21,6 +21,9 @@ asymptotically negligible, exactly as in the note's layer analysis. The physical
 is reconstructed through the preferred \(u=F+\tilde u\) path with \(F=0.2\), and the
 measured observable is the full width at half maximum of the fundamental Fourier
 amplitude of the reconstructed (M2) \(J_\parallel/B\), not the solved auxiliary field.
+The note's same `layer_width` line also gives a peak-amplitude scaling, but DESIGN §25
+defines milestone 3.4 by \(\delta\propto D_u^{1/3}\). This record therefore claims and
+tests only the width half of that line; it makes no peak-amplitude convergence claim.
 
 The layer-aligned triangular mesh has 64 elements normal to the resonant surface and 16
 along its smooth periodic harmonic (2048 elements total), so \(h_\perp=1/64\).
@@ -36,10 +39,12 @@ SUPG residual terms and their signs. The checked-in machine-readable scan is
 
 | Gradient variant | \(D_u\) | FWHM | Unit-prefactor inner scale | FWHM / inner scale | FWHM elements |
 | --- | ---: | ---: | ---: | ---: | ---: |
+| ∇⊥ | 0.0025 | 0.129309 | 0.027096 | 4.772 | 8.276 |
 | ∇⊥ | 0.005 | 0.163535 | 0.034139 | 4.790 | 10.466 |
 | ∇⊥ | 0.010 | 0.207292 | 0.043013 | 4.819 | 13.267 |
 | ∇⊥ | 0.020 | 0.263781 | 0.054193 | 4.867 | 16.882 |
 | ∇⊥ | 0.040 | 0.337937 | 0.068278 | 4.949 | 21.628 |
+| full ∇ | 0.0025 | 0.129302 | 0.027096 | 4.772 | 8.275 |
 | full ∇ | 0.005 | 0.163511 | 0.034139 | 4.790 | 10.465 |
 | full ∇ | 0.010 | 0.207215 | 0.043013 | 4.818 | 13.262 |
 | full ∇ | 0.020 | 0.263537 | 0.054193 | 4.863 | 16.866 |
@@ -47,9 +52,9 @@ SUPG residual terms and their signs. The checked-in machine-readable scan is
 
 The note specifies a proportional inner scale, not an FWHM convention. Taking the
 local balance's coefficient literally gives
-\(\delta_0=(D_u/(40\pi))^{1/3}\), which spans only 2.185--4.370 base-mesh elements.
+\(\delta_0=(D_u/(40\pi))^{1/3}\), which spans only 1.734--4.370 base-mesh elements.
 The reported operational layer width is explicitly the reconstructed-current FWHM,
-4.790--4.949 times \(\delta_0\). Consequently, the DESIGN §5 resolution diagnostic is
+4.772--4.949 times \(\delta_0\). Consequently, the DESIGN §5 resolution diagnostic is
 called here with the measured FWHM: the statement that every row clears six elements
 is an FWHM-based verdict, not a claim that the unit-prefactor estimate itself clears
 six. Its mesh independence is checked at the thinnest case in
@@ -57,15 +62,21 @@ six. Its mesh independence is checked at the thinnest case in
 
 | \((n_x,n_y)\) | Elements | Measured FWHM | FWHM elements |
 | --- | ---: | ---: | ---: |
-| (64, 16) | 2048 | 0.1635349031 | 10.466234 |
-| (96, 24) | 4608 | 0.1635371746 | 15.699569 |
+| (64, 16) | 2048 | 0.1293094217 | 8.275803 |
+| (96, 24) | 4608 | 0.1293169073 | 12.414423 |
 
-The two widths differ by \(1.389\times10^{-5}\) relative, so the minimum-resolution
+The two widths differ by \(5.789\times10^{-5}\) relative, so the minimum-resolution
 verdict does not depend on the base mesh. Least-squares fits of \(\log(\mathrm{FWHM})\)
-against \(\log D_u\) give exponents 0.348915 (∇⊥) and 0.347889 (full ∇). The automated
-acceptance gate requires each exponent to lie within 0.04 of \(1/3\), every layer width
-to increase strictly with \(D_u\), and every measured row to agree with the recorded
-table within 5%. Free-DOF relative residuals remain below \(4.36\times10^{-17}\),
+against \(\log D_u\) give exponents 0.346160 (∇⊥) and 0.345392 (full ∇). These are not
+presented as exact one-third laws: `fwhm_to_inner_scale` drifts monotonically over the
+finite-\(D_u\) scan. The adjacent exponent moves from 0.338771 at the lowest pair to
+0.357415 at the highest pair for ∇⊥ (0.338644 to 0.355391 for full ∇). Extending the
+scan downward from \(D_u=0.005\) to 0.0025 therefore moves the fit toward \(1/3\),
+evidence that the remaining positive residual is a finite-\(D_u\) effect. The automated
+gate checks that the lowest pair is closer to \(1/3\) than the highest pair, requires
+the global exponent to lie within 0.04 of \(1/3\), requires every layer width to
+increase strictly with \(D_u\), and compares every measured row with the recorded table
+within 5%. Free-DOF relative residuals remain below \(4.36\times10^{-17}\),
 sampled \(\min|\mathbf B|=10\), and the smooth field-floor activity is below 1e-12. A
 direct-u solve at \(D_u=0.01\) independently agrees with reconstructed utilde to 1e-10
 in physical \(u\) and \(J_\parallel/B\), and to 1e-9 componentwise in the reconstructed
@@ -82,14 +93,17 @@ resolution contract. It reports \(\delta/h_\perp\), warns with
 raises `UnresolvedCurrentLayerError` in strict mode. The normal element width must be
 supplied from the local mesh metric; polynomial degree does not inflate the element
 count. Thus algebraic convergence and high-order degrees never substitute for a
-resolved physical layer.
+resolved physical layer. This diagnostic is necessarily caller-invoked because the
+frozen solver cannot infer a physical \(\delta\); a later coupled production driver
+must call it after estimating both the layer width and its local normal mesh scale.
 
-Mutation checks confirmed that halving the Galerkin \(D_u\nabla_rv\cdot\nabla_ru\)
-coefficient changes the smallest perpendicular width from 0.163535 to 0.129504 and
-turns the recorded-width test red. Doubling the reported normal element width changes
-an eight-element resolved diagnostic to four elements, emits the unresolved warning,
-and turns the unit contract red. Together these constrain both the M3 balance that
-produces the \(D_u^{1/3}\) layer and the independent §5 resolution accounting.
+Mutation checks confirmed that, at \(D_u=0.005\), halving the Galerkin
+\(D_u\nabla_rv\cdot\nabla_ru\) coefficient changes the perpendicular width from
+0.163535 to 0.129504 and turns the recorded-width test red. Doubling the reported
+normal element width changes an eight-element resolved diagnostic to four elements,
+emits the unresolved warning, and turns the unit contract red. Together these
+constrain both the M3 balance that produces the \(D_u^{1/3}\) layer and the independent
+§5 resolution accounting.
 
 ## Milestone 3.3 — transformed utilde formulation for M3
 
