@@ -98,7 +98,8 @@ def _regularized_gradient(gradient: Any, direction: Any, variant: str) -> Any:
 def test_diamagnetic_divergence_identity_fixes_m3_drive_coefficient() -> None:
     """The note's divergence identity independently fixes the M3 drive to 2/B_safe³."""
     coefficients = _frozen_coefficients()
-    mesh = Slab2D(maxh=0.125).build_mesh()._mesh
+    slab = Slab2D(maxh=0.125)
+    mesh = slab.build_mesh()._mesh
     magnetic_field = coefficients.magnetic_field
     pressure_gradient = coefficients.pressure_gradient
     physical_magnitude = ng.sqrt(ng.InnerProduct(magnetic_field, magnetic_field))
@@ -130,6 +131,10 @@ def test_diamagnetic_divergence_identity_fixes_m3_drive_coefficient() -> None:
 
     assert abs(left) > 0.1
     assert left == pytest.approx(right, abs=1.0e-12)
+
+    result = CurrentContinuitySolver(polynomial_order=2).solve(slab, coefficients)
+    certified_drive_l2 = sqrt(float(ng.Integrate(drive**2, mesh, order=20)))
+    assert result.diagnostics["m3_drive_l2"] == pytest.approx(certified_drive_l2, rel=1.0e-12)
 
 
 @pytest.mark.parametrize("variant", ["perpendicular", "full"])
