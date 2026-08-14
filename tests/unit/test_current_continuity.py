@@ -22,7 +22,7 @@ from remec.solvers.current_continuity import (
 
 
 def _frozen_coefficients() -> FrozenCurrentContinuityCoefficients:
-    magnetic_field = ng.CoefficientFunction((1.0 + ng.x, 0.5 + ng.y, 2.0 + ng.x * ng.y))
+    magnetic_field = ng.CoefficientFunction((1.0 + ng.x, 0.5 - ng.y, 2.0 + ng.x * ng.y))
     pressure_gradient = ng.CoefficientFunction((1.0 + ng.y, 2.0 + ng.x, 0.0))
     magnitude = ng.sqrt(ng.InnerProduct(magnetic_field, magnetic_field))
     magnitude_gradient = ng.CoefficientFunction((magnitude.Diff(ng.x), magnitude.Diff(ng.y), 0.0))
@@ -36,6 +36,53 @@ def _frozen_coefficients() -> FrozenCurrentContinuityCoefficients:
     )
 
 
+def _strong_manufactured_coefficients(
+    variant: str,
+) -> tuple[FrozenCurrentContinuityCoefficients, Any]:
+    """Prescribe the M3 drive from the note's strong form for an analytic u."""
+    magnetic_field = ng.CoefficientFunction((1.0, 0.4, 2.0))
+    pressure_gradient = ng.CoefficientFunction((0.3, 1.2, 0.0))
+    current_diffusivity = 0.2
+    magnetic_floor = 1.0e-8
+    vacuum_permeability = 0.7
+    safe_magnitude = ng.sqrt(ng.InnerProduct(magnetic_field, magnetic_field) + magnetic_floor**2)
+    direction = magnetic_field / safe_magnitude
+    exact_u = ng.sin(ng.pi * ng.x) * ng.sin(ng.pi * ng.y)
+    exact_gradient = ng.CoefficientFunction((exact_u.Diff(ng.x), exact_u.Diff(ng.y), 0.0))
+    regularized_gradient = _regularized_gradient(exact_gradient, direction, variant)
+    diffusion_divergence = current_diffusivity * (
+        regularized_gradient[0].Diff(ng.x) + regularized_gradient[1].Diff(ng.y)
+    )
+    required_drive = (
+        ng.InnerProduct(magnetic_field, exact_gradient)
+        - diffusion_divergence
+        + vacuum_permeability
+        * exact_u
+        * ng.InnerProduct(magnetic_field, pressure_gradient)
+        / safe_magnitude**2
+        - vacuum_permeability
+        * current_diffusivity
+        * ng.InnerProduct(regularized_gradient, pressure_gradient)
+        / safe_magnitude**2
+    )
+    drive_direction = ng.Cross(magnetic_field, pressure_gradient)
+    magnitude_gradient = (
+        required_drive
+        * safe_magnitude**3
+        * drive_direction
+        / (2.0 * ng.InnerProduct(drive_direction, drive_direction))
+    )
+    coefficients = FrozenCurrentContinuityCoefficients(
+        magnetic_field=magnetic_field,
+        pressure_gradient=pressure_gradient,
+        magnetic_magnitude_gradient=magnitude_gradient,
+        current_diffusivity=current_diffusivity,
+        magnetic_floor=magnetic_floor,
+        vacuum_permeability=vacuum_permeability,
+    )
+    return coefficients, exact_u
+
+
 def _embedded_gradient(value: Any) -> Any:
     return ng.CoefficientFunction((value[0], value[1], 0.0))
 
@@ -47,10 +94,10 @@ def _regularized_gradient(gradient: Any, direction: Any, variant: str) -> Any:
 
 
 @pytest.mark.parametrize("variant", ["perpendicular", "full"])
-def test_direct_u_solution_satisfies_independently_assembled_m3_weak_form(
+def test_direct_u_solution_satisfies_expected_m3_weak_form_assembly(
     variant: str,
 ) -> None:
-    """(M3) contains advection, matching diffusion/reaction, and the full frozen drive."""
+    """The assembled (M3) system retains every nonzero weak-form component."""
     slab = Slab2D(maxh=0.25)
     coefficients = _frozen_coefficients()
     solution = solve_frozen_current_continuity(
@@ -59,6 +106,7 @@ def test_direct_u_solution_satisfies_independently_assembled_m3_weak_form(
         coefficients=coefficients,
         runtime=RuntimeOptions(regularization_gradient=variant),  # type: ignore[arg-type]
     )
+    mesh = solution.mesh()
     field = solution.grid_function()
     space = field.space
     trial, test = space.TnT()
@@ -109,6 +157,29 @@ def test_direct_u_solution_satisfies_independently_assembled_m3_weak_form(
     assert solution.diagnostics["m3_drive_l2"] > 1.0e-3
     assert solution.diagnostics["m3_reaction_l2"] > 1.0e-3
     assert solution.diagnostics["m3_final_correction_l2"] > 1.0e-3
+    magnetic_divergence = magnetic_field[0].Diff(ng.x) + magnetic_field[1].Diff(ng.y)
+    assert float(ng.Integrate(magnetic_divergence**2, mesh, order=8)) < 1.0e-24
+
+
+@pytest.mark.parametrize("variant", ["perpendicular", "full"])
+def test_strong_form_manufactured_solution_constrains_m3_signs_and_factors(
+    variant: str,
+) -> None:
+    """A strong-form (M3) oracle reproduces analytic u for both gradient variants."""
+    slab = Slab2D(maxh=0.0625)
+    coefficients, exact_u = _strong_manufactured_coefficients(variant)
+    solution = solve_frozen_current_continuity(
+        slab,
+        polynomial_order=3,
+        coefficients=coefficients,
+        runtime=RuntimeOptions(regularization_gradient=variant),  # type: ignore[arg-type]
+    )
+
+    error_l2 = sqrt(
+        float(ng.Integrate((solution.grid_function() - exact_u) ** 2, solution.mesh(), order=20))
+    )
+
+    assert error_l2 < 1.0e-5
 
 
 @pytest.mark.parametrize("variant", ["perpendicular", "full"])
@@ -121,7 +192,7 @@ def test_m2_current_and_parallel_diagnostic_use_the_selected_gradient(variant: s
     x_coordinate, y_coordinate = 0.4, 0.6
     u_value = solver.solution_at(x_coordinate, y_coordinate)
     du_dx, du_dy = solver.solution_gradient_at(x_coordinate, y_coordinate)
-    magnetic_field = (1.4, 1.1, 2.24)
+    magnetic_field = (1.4, -0.1, 2.24)
     pressure_gradient = (1.6, 2.4, 0.0)
     safe_magnitude = sqrt(sum(component**2 for component in magnetic_field) + 1.0e-16)
     direction = tuple(component / safe_magnitude for component in magnetic_field)
@@ -189,6 +260,9 @@ def test_gradient_variant_is_in_digest_logs_and_checkpoint_metadata() -> None:
     assert len(result.configuration_digest) == 64
     assert all(character in "0123456789abcdef" for character in result.configuration_digest)
     assert solver.diagnostics() == result.diagnostics
+    assert result.diagnostics["floor_activity_l2"] < 1.0e-12
+    assert result.diagnostics["floor_activity_l2_squared"] < 1.0e-24
+    assert result.diagnostics["minimum_field_magnitude"] > 2.0
 
 
 def test_direct_u_solver_preserves_the_prescribed_boundary_value() -> None:
@@ -212,6 +286,7 @@ def test_m3_options_and_coefficients_reject_invalid_physics() -> None:
     base = _frozen_coefficients()
     for field_name, value in (
         ("current_diffusivity", 0.0),
+        ("magnetic_floor", 0.0),
         ("magnetic_floor", -1.0),
         ("vacuum_permeability", float("nan")),
     ):

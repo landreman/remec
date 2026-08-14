@@ -4,7 +4,7 @@
   `bilinear_form.mat.Inverse(free_dofs, inverse="umfpack")`; solve a nonzero
   Dirichlet lift by applying that inverse to `linear_form.vec - mat * field.vec`.
   The resulting frozen order-2 verification systems have free-DOF relative residuals
-  below 3e-17 on macOS.
+  below 4e-17 on macOS.
 
 - Milestone 0.2 (NGSolve 6.2.2606): `ngsolve.SetNumThreads(int)` is available for
   process-global worker configuration; no `ngsolve.GetNumThreads` API is exposed.

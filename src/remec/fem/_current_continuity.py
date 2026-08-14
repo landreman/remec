@@ -90,6 +90,22 @@ def _regularized_gradient(gradient: Any, direction: Any, variant: Regularization
     return gradient - direction * ng.InnerProduct(direction, gradient)
 
 
+def _minimum_sampled_value(mesh: Any, coefficient: Any, integration_order: int) -> float:
+    """Return the minimum over mesh vertices and deterministic volume quadrature points."""
+    import ngsolve as ng
+    import numpy as np
+
+    vertex_values = [float(coefficient(mesh(*vertex.point))) for vertex in mesh.vertices]
+    element_types = {element.type for element in mesh.Elements(ng.VOL)}
+    rules = {
+        element_type: ng.IntegrationRule(element_type, integration_order)
+        for element_type in element_types
+    }
+    mapped_points = mesh.MapToAllElements(rules, ng.VOL)
+    quadrature_values = np.asarray(coefficient(mapped_points), dtype=float).reshape(-1)
+    return min(*vertex_values, float(np.min(quadrature_values)))
+
+
 def solve_frozen_current_continuity(
     slab: Slab2D,
     *,
@@ -114,6 +130,10 @@ def solve_frozen_current_continuity(
     ``J = u B + B x grad(p)/B_safe^2 - D_u grad_r(u)``. For the full-gradient
     variant, the reported physical parallel current is
     ``J_parallel/B = u - (D_u/B_safe) b_safe.grad(u)``.
+
+    ``magnetic_magnitude_gradient`` normally supplies ``grad(|B|)`` from the same
+    frozen field. It remains an explicit input so a strong-form manufactured test can
+    prescribe the M3 drive; production callers own that consistency.
     """
     if polynomial_order < 1:
         raise ValueError("polynomial_order must be at least one")
@@ -236,6 +256,12 @@ def solve_frozen_current_continuity(
         final_term_l2_squared = float(ng.Integrate(final_term**2, mesh, order=20))
         reaction_term = coefficients.vacuum_permeability * field * b_dot_grad_p / safe_magnitude**2
         reaction_term_l2_squared = float(ng.Integrate(reaction_term**2, mesh, order=20))
+        direction_norm_defect = 1.0 - ng.InnerProduct(direction, direction)
+        floor_activity_l2_squared = float(ng.Integrate(direction_norm_defect**2, mesh, order=20))
+        physical_magnitude = ng.sqrt(ng.InnerProduct(magnetic_field, magnetic_field))
+        minimum_field_magnitude = _minimum_sampled_value(
+            mesh, physical_magnitude, integration_order=20
+        )
 
     diagnostics = {
         "solution_l2": sqrt(max(0.0, solution_l2_squared)),
@@ -244,6 +270,9 @@ def solve_frozen_current_continuity(
         "m3_drive_l2": sqrt(max(0.0, drive_l2_squared)),
         "m3_final_correction_l2": sqrt(max(0.0, final_term_l2_squared)),
         "m3_reaction_l2": sqrt(max(0.0, reaction_term_l2_squared)),
+        "floor_activity_l2": sqrt(max(0.0, floor_activity_l2_squared)),
+        "floor_activity_l2_squared": floor_activity_l2_squared,
+        "minimum_field_magnitude": minimum_field_magnitude,
     }
     if not isfinite(free_dof_relative_residual_norm):
         raise RuntimeError("direct-u M3 solve produced a non-finite algebraic residual")

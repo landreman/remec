@@ -15,7 +15,12 @@ from remec.options import RegularizationGradient, RuntimeOptions
 
 @dataclass(frozen=True, slots=True)
 class FrozenCurrentContinuityCoefficients:
-    """Frozen coefficients required by the direct-u form of note equation (M3)."""
+    """Frozen coefficients required by the direct-u form of note equation (M3).
+
+    ``magnetic_magnitude_gradient`` is normally ``grad(|B|)`` derived from
+    ``magnetic_field``. It is explicit so verification can inject a prescribed
+    strong-form M3 drive; production callers are responsible for their consistency.
+    """
 
     magnetic_field: Any
     pressure_gradient: Any
@@ -27,8 +32,8 @@ class FrozenCurrentContinuityCoefficients:
     def __post_init__(self) -> None:
         if not isfinite(self.current_diffusivity) or self.current_diffusivity <= 0.0:
             raise ValueError("current_diffusivity must be finite and positive")
-        if not isfinite(self.magnetic_floor) or self.magnetic_floor < 0.0:
-            raise ValueError("magnetic_floor must be finite and non-negative")
+        if not isfinite(self.magnetic_floor) or self.magnetic_floor <= 0.0:
+            raise ValueError("magnetic_floor must be finite and positive")
         if not isfinite(self.vacuum_permeability) or self.vacuum_permeability <= 0.0:
             raise ValueError("vacuum_permeability must be finite and positive")
 

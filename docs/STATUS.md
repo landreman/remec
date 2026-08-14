@@ -151,16 +151,19 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   and the final `D_u ∇ᵣu·∇p` term; the choice recorded in config digest, logs, and
   checkpoint metadata; with the full-∇ variant, diagnostics report
   J∥/B = u − (D_u/B)b·∇u.
-  <br>Measured: macOS / CPython 3.12.2 / NGSolve 6.2.2606 — an independently
-  assembled frozen-coefficient weak form gives free-DOF relative residuals
-  2.60e-17 (∇⊥) and 2.28e-17 (full ∇). The nonzero M3 drive, reaction, and final
-  correction have L² norms 2.176e-1, 1.50–1.65e-2, and 4.86–6.12e-3. Pointwise
-  M2 reconstruction and full-∇ J∥/B agree with independent formulas to 1e-12;
-  the runtime choice round-trips through digest, structured logs, and checkpoint metadata.
+  <br>Measured: macOS / CPython 3.12.2 / NGSolve 6.2.2606 — a strong-form
+  manufactured solution transcribed directly from (M3) has L² errors 1.215e-6
+  (∇⊥) and 1.216e-6 (full ∇); algebraic free-DOF relative residuals are 3.19e-17
+  and 2.12e-17. The frozen benchmark is exactly divergence-free, and its nonzero
+  drive/reaction/final-correction L² norms are 4.246e-1, 1.47–1.61e-2, and
+  1.232–1.239e-2. Pointwise M2 reconstruction and full-∇ J∥/B agree with independent
+  formulas to 1e-12; the runtime choice round-trips through digest, structured logs,
+  and checkpoint metadata. B-floor activity is 1.70e-16 with sampled min |B| = 2.236.
   <br>Next: milestone 3.2 should add centralized SUPG with a complete strong residual
-  for both variants. Retain the independent unstabilized residual oracle: deleting the
-  final M3 correction raises its residual to 5.76e-4 (∇⊥) / 7.14e-4 (full ∇), and
-  mixing full ∇ into only the M2 flux changes a perpendicular-current component by 7.34e-3.
+  for both variants. Retain the strong-form oracle: applying the same wrong drive factor
+  and reaction sign to the implementation and weak assembly check raises its L² errors
+  to 1.287 (∇⊥) / 1.284 (full ∇), while deleting the final M3 correction from the
+  implementation also makes the algebraic assembly check fail.
 - [ ] **3.2** SUPG + manufactured tests — `DESIGN.md` §9.1, §9.4 · note: (M3), §5.5
   <br>Acceptance: includes the test that fails conspicuously if the `D_u ∇ᵣu·∇p` term is dropped (`DESIGN.md` §22); all manufactured tests run for both gradient variants.
   <br>Measured: —

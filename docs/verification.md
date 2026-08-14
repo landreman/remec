@@ -27,25 +27,38 @@ auxiliary solved variable alone. The choice is included in `RuntimeOptions`, so 
 present in canonical configuration digests, both structured solve events, and checkpoint
 metadata.
 
-`tests/unit/test_current_continuity.py` assembles the expected bilinear and linear forms
-independently of the solver implementation. On the shared order-2 frozen-coefficient
-unit-square case, every source/reaction component is nonzero:
+The primary physics oracle in `tests/unit/test_current_continuity.py` transcribes the
+strong form of (M3) directly with analytic coefficient derivatives. It chooses
+\(u_*=\sin(\pi x)\sin(\pi y)\), then uses the explicit
+`magnetic_magnitude_gradient` input to prescribe the exact M3 drive. This is independent
+of the implementation's integration by parts and movement of reaction terms into the
+bilinear form. On an order-3 mesh with `maxh=0.0625`, the measured L² errors are
+1.215e-6 (`perpendicular`) and 1.216e-6 (`full`), below the single-mesh \(10^{-5}\)
+gate. This is an exact-solution regression, not a convergence claim; the p/h sweep
+belongs to milestone 3.2.
+
+A secondary algebraic assembly check mirrors the intended weak form and verifies that
+the direct solve satisfies it. It is not treated as an independent physics oracle. Its
+shared order-2 frozen-coefficient unit-square field is exactly divergence-free, and every
+source/reaction component is nonzero:
 
 | Gradient variant | Free-DOF relative residual | M3 drive L² | Reaction L² | Final correction L² |
 | --- | ---: | ---: | ---: | ---: |
-| perpendicular | 2.60e-17 | 2.176e-1 | 1.647e-2 | 4.856e-3 |
-| full | 2.28e-17 | 2.176e-1 | 1.496e-2 | 6.118e-3 |
+| perpendicular | 3.19e-17 | 4.246e-1 | 1.615e-2 | 1.239e-2 |
+| full | 2.12e-17 | 4.246e-1 | 1.467e-2 | 1.232e-2 |
 
 Both residuals are below the automated \(10^{-11}\) gate. Pointwise tests independently
 reconstruct all three M2 current components and the full-gradient \(J_\parallel/B\)
-formula to absolute tolerance \(10^{-12}\). This milestone makes no discretization-
-convergence claim; the SUPG manufactured order scans belong to milestone 3.2.
+formula to absolute tolerance \(10^{-12}\). The shared smooth floor reports L² activity
+1.70e-16 and sampled minimum physical field magnitude 2.236.
 
-Mutation checks: deleting the final
-\(\mu_0D_u\nabla_r u\cdot\nabla p/B_{\rm safe}^2\) term raises the independently
-assembled residual to 5.76e-4 (`perpendicular`) and 7.14e-4 (`full`). Reconstructing
-M2 with full \(\nabla u\) while solving M3 with \(\nabla_\perp u\) changes a tested
-current component by 7.34e-3, so the matching-gradient contract also fails conspicuously.
+Mutation checks: changing the drive factor \(+2\) to \(-3\) and flipping the reaction
+sign in both the implementation and the mirrored weak assembly check leaves that
+secondary check green, but the strong-form oracle fails with L² errors 1.287
+(`perpendicular`) and 1.284 (`full`). Deleting the final
+\(\mu_0D_u\nabla_r u\cdot\nabla p/B_{\rm safe}^2\) term from the implementation also
+makes the algebraic assembly check fail. Reconstructing M2 with a gradient different
+from the one selected for M3 makes the pointwise current contract fail conspicuously.
 
 ## Milestone 2.4 — optional sharp cut-cell reference
 
