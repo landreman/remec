@@ -333,20 +333,24 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   than inferring regularity from a per-D_u manufactured family.
   <br>Measured: macOS / CPython 3.12.2 / NGSolve 6.2.2606 — on one fixed
   resonant `(B,p,s,I₀,drive)` state, D_u = 0.04 → 0.02 → 0.01 reduces the relative
-  physical-u cross-variant difference from 2.0022e-2 → 1.0421e-2 → 5.1697e-3,
-  with difference/ε_J = 1.0011 / 1.0421 / 1.0339 and adjacent decay rates 0.942 /
-  1.011. Both variants independently realize the same I₀ below 2.0e-17 relative;
-  ‖D_uG′∇ᵣs‖₂ falls 1.7217e-2 → 4.3043e-3 and maximum |⟨ũ⟩| stays below
-  1.74e-16, so the fixed target is admissible. At D_u=0.02, the ∇⊥/full layer FWHM
-  values are 0.41047 / 0.40698 (9.85 / 9.77 normal cells), both have one radial
-  turning point, and full ∇ lowers fifth-harmonic parallel-noise transfer by 4.48%.
-  On a 22.5° field-misaligned 20² → 28² mesh scan, coarse-to-fine relative L² changes
-  are 1.9625e-2 / 1.6215e-2 and the fine cross-variant difference is 2.9210e-2.
-  Each frozen solve uses one A assembly/factorization, five direct response solves,
-  zero Krylov/preconditioner iterations, and zero cross-call reuse; measured full-∇
-  frozen-step times are 4.3% (resonant) and 7.6% (misaligned) lower, but the nonlinear
-  cache opportunity is not yet implemented. The evidence does not justify changing
-  the default from ∇⊥. See `tests/manufactured/m3_gradient_du_limit.csv`,
+  physical-u cross-variant difference from 2.0190e-2 → 1.0481e-2 → 5.1877e-3,
+  with difference/ε_J = 1.0095 / 1.0481 / 1.0375 and adjacent decay rates 0.946 /
+  1.015. Both variants independently realize the same I₀ below 1.41e-17 relative;
+  the multiplier-current norm falls from about 1.55e-2 → 4.00e-3 and maximum
+  |⟨ũ⟩| stays below 1.74e-16, so the fixed target is admissible. Its nonuniform
+  ∇φ makes the regularizing toroidal-current norm nonzero and variant-distinct
+  (1.104e-2 / 9.878e-3 at D_u=0.02). At that D_u, the ∇⊥/full layer FWHM values
+  are 0.41047 / 0.40698 (9.85 / 9.77 normal cells), both have one radial turning
+  point, and full ∇ lowers fifth-harmonic parallel-noise transfer by 4.48%; all scan
+  rows clear six FWHM cells. On aligned and 22.5°-misaligned 20² → 28² controls,
+  coarse-to-fine changes are 1.4068e-2 / 1.2687e-2 and 1.9625e-2 / 1.6215e-2,
+  giving misalignment amplifications of 1.395 / 1.278. Each frozen solve records one
+  A assembly/factorization, five direct responses, and four within-call factorization
+  reuses; Krylov iterations are not applicable and the preconditioner is none.
+  Separated bordered-solve timings favor full ∇ by 0.78% (resonant) and 3.88%
+  (misaligned), but single-run wall times are volatile and cross-iteration reuse is not
+  implemented. The evidence does not justify changing the default from ∇⊥. See
+  `tests/manufactured/m3_gradient_du_limit.csv`,
   `tests/manufactured/m3_gradient_misalignment.csv`, and `docs/verification.md`.
   <br>Next: Phase 4 starts the compatible de Rham magnetic kernel. Preserve the runtime
   gradient selection and its independently reconstructed physical (M2) current through

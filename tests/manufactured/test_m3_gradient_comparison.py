@@ -35,6 +35,7 @@ def _recorded_du_rows() -> dict[tuple[str, float], dict[str, float]]:
                     "cross_variant_relative_l2",
                     "cross_variant_over_epsilon_j",
                     "multiplier_current_l2",
+                    "regularizing_toroidal_current_l2",
                     "layer_fwhm",
                     "radial_turning_points",
                     "parallel_noise_transfer",
@@ -47,11 +48,11 @@ def _recorded_du_rows() -> dict[tuple[str, float], dict[str, float]]:
         }
 
 
-def _recorded_misalignment_rows() -> dict[str, dict[str, float]]:
+def _recorded_misalignment_rows() -> dict[tuple[str, str], dict[str, float]]:
     """Read the checked-in field/mesh misalignment comparison."""
     with _MISALIGNMENT_TABLE.open(newline="") as table_file:
         return {
-            row["variant"]: {
+            (row["variant"], row["alignment"]): {
                 name: float(row[name])
                 for name in (
                     "mesh_field_misalignment_degrees",
@@ -59,6 +60,8 @@ def _recorded_misalignment_rows() -> dict[str, dict[str, float]]:
                     "fine_elements",
                     "coarse_to_fine_relative_l2",
                     "cross_variant_relative_l2",
+                    "misalignment_amplification",
+                    "multiplier_current_l2",
                     "minimum_shell_radial_cells",
                     "minimum_shell_mollifier_widths",
                 )
@@ -105,7 +108,9 @@ def _resonant_comparison_case(
     geometry = FrozenCurrentConstraintGeometry(
         level_set=1.0 - ng.x,
         level_set_gradient=ng.CoefficientFunction((-1.0, 0.0, 0.0)),
-        toroidal_angle_gradient=ng.CoefficientFunction((0.0, 0.0, 1.0)),
+        toroidal_angle_gradient=ng.CoefficientFunction(
+            (0.4, 0.3 * ng.sin(2.0 * ng.pi * ng.y), 1.0)
+        ),
     )
     profile = AnalyticToroidalCurrentProfile(
         enclosed_current_function=lambda s: (
@@ -119,19 +124,22 @@ def _resonant_comparison_case(
 
 def _misaligned_comparison_case(
     diffusivity: float,
+    *,
+    angle_degrees: float,
 ) -> tuple[
     FrozenCurrentContinuityCoefficients,
     FrozenCurrentConstraintGeometry,
     AnalyticToroidalCurrentProfile,
 ]:
-    r"""Return a fixed state whose in-plane field is 22.5 degrees off mesh edges.
+    r"""Return a fixed state with a controlled in-plane field/mesh angle.
 
     The structured triangular mesh has edge directions at 0, 45, and 90 degrees.
-    This constant field bisects the first two directions, giving the largest possible
-    nearest-edge angular misalignment for that mesh family.  The explicit frozen
-    ``(M3)`` drive is independent of ``D_u`` and of ``grad_r``.
+    At 22.5 degrees this constant field bisects the first two directions, giving the
+    largest possible nearest-edge angular misalignment for that mesh family; zero
+    degrees is its aligned control.  The explicit frozen ``(M3)`` drive is independent
+    of ``D_u`` and of ``grad_r``.
     """
-    angle = pi / 8.0
+    angle = angle_degrees * pi / 180.0
     magnetic_field = ng.CoefficientFunction((cos(angle), sin(angle), 1.5))
     pressure_gradient = ng.CoefficientFunction((0.4, 0.0, 0.0))
     magnetic_floor = 1.0e-10
@@ -319,15 +327,16 @@ def test_constrained_comparison_reports_cost_and_invariant_diagnostics(
     r"""The shared-``I_0`` study exposes cost plus DESIGN §5 invariants 4--6."""
     required_diagnostics = {
         "a_assemblies",
-        "a_assembly_reuses",
         "a_factorizations",
         "a_factorization_reuses",
         "a_response_solves",
-        "a_linear_iterations",
-        "a_preconditioner_applications",
-        "assembly_wall_seconds",
+        "a_assembly_wall_seconds",
+        "linear_form_assembly_wall_seconds",
+        "diagnostic_assembly_wall_seconds",
         "factorization_and_response_wall_seconds",
-        "frozen_iteration_wall_seconds",
+        "bordered_solve_wall_seconds",
+        "diagnostics_wall_seconds",
+        "total_wall_seconds",
         "minimum_field_magnitude",
         "floor_activity_l2",
     }
@@ -344,19 +353,20 @@ def test_constrained_comparison_reports_cost_and_invariant_diagnostics(
         assert result.diagnostics["minimum_shell_radial_cells"] >= 3.0
         assert result.diagnostics["minimum_shell_mollifier_widths"] >= 2.0
         assert result.diagnostics["floor_activity_l2"] < 1.0e-12
-        assert result.diagnostics["assembly_wall_seconds"] > 0.0
+        assert result.diagnostics["a_assembly_wall_seconds"] > 0.0
+        assert result.diagnostics["linear_form_assembly_wall_seconds"] > 0.0
+        assert result.diagnostics["diagnostic_assembly_wall_seconds"] > 0.0
         assert result.diagnostics["factorization_and_response_wall_seconds"] > 0.0
+        assert result.diagnostics["diagnostics_wall_seconds"] > 0.0
         assert (
-            result.diagnostics["frozen_iteration_wall_seconds"]
-            > result.diagnostics["assembly_wall_seconds"]
+            result.diagnostics["total_wall_seconds"]
+            > result.diagnostics["bordered_solve_wall_seconds"]
         )
         assert result.diagnostics["a_assemblies"] == 1.0
-        assert result.diagnostics["a_assembly_reuses"] == 0.0
         assert result.diagnostics["a_factorizations"] == 1.0
-        assert result.diagnostics["a_factorization_reuses"] == 0.0
+        assert result.diagnostics["a_factorization_reuses"] == 4.0
         assert result.diagnostics["a_response_solves"] == 5.0
-        assert result.diagnostics["a_linear_iterations"] == 0.0
-        assert result.diagnostics["a_preconditioner_applications"] == 0.0
+        assert result.diagnostics["regularizing_toroidal_current_l2"] > 1.0e-4
 
     coefficients, geometry, profile = _resonant_comparison_case(0.02)
     _, active_floor_result = _solve_case(
@@ -412,6 +422,10 @@ def test_fixed_state_variants_are_o_epsilon_j_and_have_one_common_limit(
                 expected["multiplier_current_l2"],
                 rel=5.0e-6,
             )
+            assert result.diagnostics["regularizing_toroidal_current_l2"] == pytest.approx(
+                expected["regularizing_toroidal_current_l2"],
+                rel=5.0e-6,
+            )
             multiplier_norms[variant].append(result.diagnostics["multiplier_current_l2"])
 
     convergence_rate = log(differences[-2] / differences[-1]) / log(2.0)
@@ -429,11 +443,14 @@ def test_resonant_layer_records_smearing_oscillation_and_parallel_noise(
     r"""Both variants resolve one monotone layer; full grad damps the injected noise."""
     recorded = _recorded_du_rows()
     observables = {
-        variant: _resonant_layer_observables(resonant_scan[0.02][variant][0])
+        (variant, diffusivity): _resonant_layer_observables(resonant_scan[diffusivity][variant][0])
+        for diffusivity in (0.04, 0.02, 0.01)
         for variant in ("perpendicular", "full")
     }
-    perpendicular_width, perpendicular_turns, perpendicular_noise = observables["perpendicular"]
-    full_width, full_turns, full_noise = observables["full"]
+    perpendicular_width, perpendicular_turns, perpendicular_noise = observables[
+        "perpendicular", 0.02
+    ]
+    full_width, full_turns, full_noise = observables["full", 0.02]
 
     assert perpendicular_width * 24.0 >= 6.0
     assert full_width * 24.0 >= 6.0
@@ -441,69 +458,89 @@ def test_resonant_layer_records_smearing_oscillation_and_parallel_noise(
     assert perpendicular_turns == 1
     assert full_turns == 1
     assert full_noise < perpendicular_noise
-    for variant, (width, turns, noise) in observables.items():
-        expected = recorded[variant, 0.02]
+    for (variant, diffusivity), (width, turns, noise) in observables.items():
+        expected = recorded[variant, diffusivity]
+        assert width * 24.0 >= 6.0
         assert width == pytest.approx(expected["layer_fwhm"], rel=5.0e-3)
         assert turns == int(expected["radial_turning_points"])
         assert noise == pytest.approx(expected["parallel_noise_transfer"], rel=5.0e-3)
 
 
-def test_field_misalignment_sensitivity_converges_under_h_refinement() -> None:
-    r"""A 22.5-degree field/mesh mismatch is measured by a common-grid h comparison."""
+def test_field_misalignment_sensitivity_has_an_aligned_control() -> None:
+    r"""A 22.5-degree field/mesh mismatch is compared with a zero-degree control."""
     recorded = _recorded_misalignment_rows()
-    solutions: dict[str, dict[str, tuple[ConstrainedCurrentContinuitySolver, Any]]] = {}
-    for variant in ("perpendicular", "full"):
-        solutions[variant] = {
-            "coarse": _solve_case(
-                _misaligned_comparison_case(0.01),
-                variant,
-                subdivisions=(20, 20),
-            ),
-            "fine": _solve_case(
-                _misaligned_comparison_case(0.01),
-                variant,
-                subdivisions=(28, 28),
-            ),
-        }
+    solutions: dict[
+        str,
+        dict[str, dict[str, tuple[ConstrainedCurrentContinuitySolver, Any]]],
+    ] = {}
+    for alignment, angle_degrees in (("aligned", 0.0), ("misaligned", 22.5)):
+        solutions[alignment] = {}
+        for variant in ("perpendicular", "full"):
+            solutions[alignment][variant] = {
+                "coarse": _solve_case(
+                    _misaligned_comparison_case(0.01, angle_degrees=angle_degrees),
+                    variant,
+                    subdivisions=(20, 20),
+                ),
+                "fine": _solve_case(
+                    _misaligned_comparison_case(0.01, angle_degrees=angle_degrees),
+                    variant,
+                    subdivisions=(28, 28),
+                ),
+            }
 
     sensitivities = {
-        variant: _relative_l2_difference(
-            solutions[variant]["coarse"][0],
-            solutions[variant]["fine"][0],
+        (alignment, variant): _relative_l2_difference(
+            solutions[alignment][variant]["coarse"][0],
+            solutions[alignment][variant]["fine"][0],
         )
+        for alignment in ("aligned", "misaligned")
         for variant in ("perpendicular", "full")
     }
-    fine_cross_variant = _relative_l2_difference(
-        solutions["perpendicular"]["fine"][0],
-        solutions["full"]["fine"][0],
-    )
+    cross_variant = {
+        alignment: _relative_l2_difference(
+            solutions[alignment]["perpendicular"]["fine"][0],
+            solutions[alignment]["full"]["fine"][0],
+        )
+        for alignment in ("aligned", "misaligned")
+    }
 
-    for variant in ("perpendicular", "full"):
-        result = solutions[variant]["fine"][1]
-        expected = recorded[variant]
-        assert result.constraint_relative_residual_norm < 1.0e-10
-        assert result.diagnostics["minimum_shell_radial_cells"] >= 3.0
-        assert result.diagnostics["minimum_shell_mollifier_widths"] >= 2.0
-        assert sensitivities[variant] < 0.02
-        assert expected["mesh_field_misalignment_degrees"] == 22.5
-        assert solutions[variant]["coarse"][0]._solution().mesh().ne == int(
-            expected["coarse_elements"]
-        )
-        assert solutions[variant]["fine"][0]._solution().mesh().ne == int(expected["fine_elements"])
-        assert sensitivities[variant] == pytest.approx(
-            expected["coarse_to_fine_relative_l2"],
-            rel=5.0e-3,
-        )
-        assert fine_cross_variant == pytest.approx(
-            expected["cross_variant_relative_l2"],
-            rel=5.0e-3,
-        )
-        assert result.diagnostics["minimum_shell_radial_cells"] == pytest.approx(
-            expected["minimum_shell_radial_cells"],
-            rel=5.0e-3,
-        )
-        assert result.diagnostics["minimum_shell_mollifier_widths"] == pytest.approx(
-            expected["minimum_shell_mollifier_widths"],
-            rel=5.0e-3,
-        )
-    assert fine_cross_variant < 0.03
+    for alignment, angle_degrees in (("aligned", 0.0), ("misaligned", 22.5)):
+        for variant in ("perpendicular", "full"):
+            result = solutions[alignment][variant]["fine"][1]
+            expected = recorded[variant, alignment]
+            amplification = sensitivities["misaligned", variant] / sensitivities["aligned", variant]
+            assert result.constraint_relative_residual_norm < 1.0e-10
+            assert result.diagnostics["minimum_shell_radial_cells"] >= 3.0
+            assert result.diagnostics["minimum_shell_mollifier_widths"] >= 2.0
+            assert expected["mesh_field_misalignment_degrees"] == angle_degrees
+            assert solutions[alignment][variant]["coarse"][0]._solution().mesh().ne == int(
+                expected["coarse_elements"]
+            )
+            assert solutions[alignment][variant]["fine"][0]._solution().mesh().ne == int(
+                expected["fine_elements"]
+            )
+            assert sensitivities[alignment, variant] == pytest.approx(
+                expected["coarse_to_fine_relative_l2"],
+                rel=5.0e-3,
+            )
+            assert cross_variant[alignment] == pytest.approx(
+                expected["cross_variant_relative_l2"],
+                rel=5.0e-3,
+            )
+            assert amplification == pytest.approx(
+                expected["misalignment_amplification"],
+                rel=5.0e-3,
+            )
+            assert result.diagnostics["multiplier_current_l2"] == pytest.approx(
+                expected["multiplier_current_l2"],
+                rel=5.0e-3,
+            )
+            assert result.diagnostics["minimum_shell_radial_cells"] == pytest.approx(
+                expected["minimum_shell_radial_cells"],
+                rel=5.0e-3,
+            )
+            assert result.diagnostics["minimum_shell_mollifier_widths"] == pytest.approx(
+                expected["minimum_shell_mollifier_widths"],
+                rel=5.0e-3,
+            )
