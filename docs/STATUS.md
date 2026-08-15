@@ -278,9 +278,9 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   <br>Next: milestone 3.6 should pass its independently reconstructed physical M2
   component samples to `mollified_shell_current_moments`, reuse the exact shared s
   field, and compare those diagnostic rows—not its C_u/C_G matrices—with the input
-  `ToroidalCurrentProfile`. Its shell grid must satisfy the enforced local three-radial-
-  cell resolution check, independent of the chosen mollifier width. The deprecated
-  F-shift path is deliberately absent
+  `ToroidalCurrentProfile`. Its shell grid must satisfy both enforced local resolution
+  checks: at least three radial cells and at least two mapped mollifier widths per
+  shell. The deprecated F-shift path is deliberately absent
   from `remec.solvers` exports but remains in its implementation module for the required
   two-F cancellation negative control.
 - [ ] **3.6** Constrained unknown-G bordered M3–M3b solve — `DESIGN.md` §9.1–§9.4 · note: §5.4, (M2)–(M3b), §9

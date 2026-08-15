@@ -14,7 +14,7 @@ class VolumeMapConsistencyWarning(RuntimeWarning):
     """A mandatory §12.3 volume-map diagnostic exceeded its configured tolerance."""
 
 
-def _compact_moment_matched_heaviside(
+def compact_moment_matched_heaviside(
     argument: NDArray[np.float64],
 ) -> NDArray[np.float64]:
     """Evaluate the shared compact ``H_epsilon`` kernel from ``(mollified_V)``."""
@@ -258,7 +258,7 @@ class MollifiedVolumeMap:
         result = np.empty_like(levels)
         for index, level in enumerate(levels):
             argument = (values - level) / widths
-            smooth_step = _compact_moment_matched_heaviside(argument)
+            smooth_step = compact_moment_matched_heaviside(argument)
             result[index] = float(np.dot(weights, smooth_step))
         return result
 

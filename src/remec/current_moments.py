@@ -10,7 +10,7 @@ from typing import Literal
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
-from remec.level_set import MollifiedVolumeMap, _compact_moment_matched_heaviside
+from remec.level_set import MollifiedVolumeMap, compact_moment_matched_heaviside
 
 CurrentComponent = Literal["parallel", "diamagnetic", "regularizing", "total"]
 
@@ -102,15 +102,18 @@ def mollified_shell_current_moments(
             "normalized-volume samples must match the volume map's quadrature ordering"
         )
     cell_widths = volume_map.quadrature_normalized_cell_widths
+    mollifier_widths = volume_map.quadrature_normalized_mollifier_widths
     for left, right in pairwise(edges):
         in_shell = (normalized_volume >= left) & (normalized_volume <= right)
-        cells_across_shell = (
-            0.0 if not np.any(in_shell) else (right - left) / float(np.max(cell_widths[in_shell]))
-        )
-        if cells_across_shell < 3.0 * (1.0 - 5.0e-3):
+        if not np.any(in_shell) or (right - left) / float(np.max(cell_widths[in_shell])) < 3.0:
             raise ValueError(
                 "shell partition is unresolved: every shell must span at least three "
                 "local radial-cell widths"
+            )
+        if (right - left) / float(np.max(mollifier_widths[in_shell])) < 2.0:
+            raise ValueError(
+                "shell partition is unresolved: every shell must span at least two "
+                "local mapped mollifier widths"
             )
 
     component_samples = {
@@ -123,7 +126,7 @@ def mollified_shell_current_moments(
     membership[-1] = 1.0
     for index, edge in enumerate(edges[1:-1], start=1):
         argument = (edge - normalized_volume) / widths
-        membership[index] = _compact_moment_matched_heaviside(argument)
+        membership[index] = compact_moment_matched_heaviside(argument)
 
     factor = 1.0 / (2.0 * pi)
     cumulative_parallel = factor * membership @ (weights * component_samples["parallel"])

@@ -64,12 +64,16 @@ $H_\epsilon(\chi-\chi(s_k))$ only at the mollifier consistency order, and the me
 moment convergence remains second order. Both volume-map construction and shell
 moments call the same kernel helper so a future kernel change cannot make them drift.
 
-Shell resolution is checked locally and independently of the configured mollifier
-width: the chi half-width is divided by `spatial_width_cells` to recover one radial-
-cell width, mapped into s, and compared with each shell at its own quadrature samples.
-At 96 radial cells, the marginal 16-shell partition passes this three-cell guard and
-has a maximum total-current error of $2.085\times10^{-5}$; a finer unresolved partition
-is rejected.
+Shell resolution is checked locally against both relevant scales. The chi half-width
+is divided by `spatial_width_cells` to recover one radial-cell width, mapped into s,
+and each shell must span at least three such local widths. Each shell must also span
+at least two local mapped mollifier widths, preventing a wider smoothing kernel from
+passing the cell-count check while smearing across a shell. At 96 radial cells, the
+marginal 15-shell equal-volume partition has a maximum total-current error of
+$2.085\times10^{-5}$. A graded 18-shell partition demonstrates that the local check,
+unlike a global-maximum-width check, retains resolved inner shells with a
+$2.084\times10^{-5}$ error. Tests with mollifier widths of 0.5, 1.5, and 2.0 radial
+cells independently pin both guards.
 
 The manufactured axisymmetric surrogate uses a circular poloidal section, analytic
 radial M2 projections, and an integrated toroidal angle. At 96 radial cells and

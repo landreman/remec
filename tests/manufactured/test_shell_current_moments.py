@@ -18,7 +18,11 @@ _RATE_TABLE = Path(__file__).with_name("shell_current_moment_rates.csv")
 
 
 def _circular_toroidal_surrogate(
-    radial_cells: int, quadrature_order: int, *, radius: float = 1.0
+    radial_cells: int,
+    quadrature_order: int,
+    *,
+    radius: float = 1.0,
+    spatial_width_cells: float = 1.0,
 ) -> tuple[MollifiedVolumeMap, M2ToroidalCurrentSamples]:
     """Return polar-cell quadrature for an axisymmetric circular toroidal surrogate."""
     nodes, weights = np.polynomial.legendre.leggauss(quadrature_order)
@@ -43,7 +47,7 @@ def _circular_toroidal_surrogate(
             weights=volume_weights,
             element_sizes=np.full_like(chi, radius / radial_cells),
         ),
-        spatial_width_cells=1.0,
+        spatial_width_cells=spatial_width_cells,
         levels=257,
     )
     samples = M2ToroidalCurrentSamples(
@@ -140,12 +144,47 @@ def test_shell_edges_must_be_a_resolved_partition_of_normalized_volume() -> None
 
 
 def test_marginal_local_three_cell_shell_partition_remains_accurate() -> None:
-    """The local §9.2 guard accepts 16 resolved shells without a global-width cap."""
+    """The strict local §9.2 guard accepts 15 resolved equal-volume shells."""
     volume_map, samples = _circular_toroidal_surrogate(96, 6)
-    edges = np.linspace(0.0, 1.0, 17)
+    edges = np.linspace(0.0, 1.0, 16)
     result = mollified_shell_current_moments(volume_map, samples, edges)
     expected = _analytic_cumulative(edges)["total"]
     assert np.max(np.abs(result.cumulative("total") - expected)) < 3.0e-5
+
+
+def test_graded_partition_uses_local_not_global_radial_cell_widths() -> None:
+    """A resolved graded shell grid is not rejected by an unrelated outer width."""
+    volume_map, samples = _circular_toroidal_surrogate(96, 6)
+    edges = np.linspace(0.0, 1.0, 19) ** 1.2
+    normalized_volume = volume_map.quadrature_normalized_volume
+    cell_widths = volume_map.quadrature_normalized_cell_widths
+    local_ratios = []
+    for left, right in pairwise(edges):
+        in_shell = (normalized_volume >= left) & (normalized_volume <= right)
+        local_ratios.append((right - left) / float(np.max(cell_widths[in_shell])))
+    assert min(local_ratios) > 3.0
+    assert float(np.min(np.diff(edges))) / float(np.max(cell_widths)) < 2.0
+
+    result = mollified_shell_current_moments(volume_map, samples, edges)
+    expected = _analytic_cumulative(edges)["total"]
+    assert np.max(np.abs(result.cumulative("total") - expected)) < 3.0e-5
+
+
+def test_shell_guard_resolves_cells_and_mollifier_independently() -> None:
+    """Neither a small nor a large configured mollifier can bypass the §9.2 guard."""
+    narrow_map, narrow_samples = _circular_toroidal_surrogate(96, 6, spatial_width_cells=0.5)
+    with pytest.raises(ValueError, match="radial-cell"):
+        mollified_shell_current_moments(narrow_map, narrow_samples, np.linspace(0.0, 1.0, 17))
+
+    default_map, default_samples = _circular_toroidal_surrogate(96, 6, spatial_width_cells=1.5)
+    edges = np.linspace(0.0, 1.0, 16)
+    result = mollified_shell_current_moments(default_map, default_samples, edges)
+    expected = _analytic_cumulative(edges)["total"]
+    assert np.max(np.abs(result.cumulative("total") - expected)) < 5.0e-5
+
+    wide_map, wide_samples = _circular_toroidal_surrogate(96, 6, spatial_width_cells=2.0)
+    with pytest.raises(ValueError, match="mollifier"):
+        mollified_shell_current_moments(wide_map, wide_samples, edges)
 
 
 def test_current_samples_must_retain_the_volume_map_quadrature_order() -> None:
