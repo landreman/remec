@@ -290,6 +290,14 @@ class ConstrainedCurrentContinuitySolver:
         value: tuple[float, float, float] = self._solution().current_at(x_coordinate, y_coordinate)
         return value
 
+    def parallel_current_over_field_at(
+        self,
+        x_coordinate: float,
+        y_coordinate: float,
+    ) -> float:
+        r"""Return physical ``J_parallel/B``; full grad includes the ``utilde`` correction."""
+        return float(self._solution().parallel_current_over_field_at(x_coordinate, y_coordinate))
+
 
 @dataclass(frozen=True, slots=True)
 class PrescribedCurrentProfile:

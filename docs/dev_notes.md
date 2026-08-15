@@ -19,6 +19,11 @@
   `bilinear_form.mat.Inverse(free_dofs, inverse="umfpack")` object can be reused for
   the base right-hand side and all A-inverse-P response vectors before forming the
   small dense Schur complement.
+  `mesh(x_array, y_array)` returns a batched set of mesh points accepted by a
+  GridFunction, so fields solved on two separately built but geometrically identical
+  meshes can be evaluated on one common `MapToAllElements` quadrature rule. Use that
+  route for an actual cross-mesh L² difference instead of substituting a stable point
+  sample for an N-shell convergence norm.
 
 - Milestone 3.4 (NGSolve 6.2.2606):
   `ngsolve.meshes.MakeStructured2DMesh(periodic_y=True)` registers a top/bottom mesh

@@ -303,19 +303,23 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   1.063e-16 (M3b). At p=2, 20 → 28 subdivisions gives physical-u L² rates 2.0041
   (∇⊥) and 2.0042 (full ∇); the p=1 → 2 errors decrease from 3.379e-4 → 2.016e-4
   and 3.869e-4 → 2.054e-4, with the p=3 results at the second-order mollified-shell
-  ceiling. Doubling 4 → 8 shells moves the sampled solution by only 6.99e-6 and
-  7.33e-6 relatively while every shell spans 3.991 local cells/mollifier widths.
-  Two distinct I₀ profiles realize their independently evaluated currents below 1e-10;
-  two old F profiles with one edge value cancel below 1e-10. At fixed I₀,
-  D_u=0.08 → 0.04 → 0.02 reduces ‖D_uG′∇ᵣs‖₂ from 0.387514 → 0.193757 →
-  0.0968786, with zero shell-mean ũ in the aligned regular-limit oracle and M3b
-  residual 3.49e-16. See `tests/manufactured/m3_constrained_rates.csv`,
+  ceiling. Doubling 4 → 8 shells changes the physical field by 2.145e-4 (∇⊥) and
+  2.176e-4 (full ∇) in relative L² while every finest shell spans 3.991 local
+  cells/mollifier widths. Two distinct I₀ profiles on the nondegenerate coupled state
+  realize their independently evaluated currents below 1e-10; both G couplings and a
+  nonzero ũ are exercised. Two old F profiles with one edge value cancel below 1e-10.
+  In a fixed-I₀ family with D_u-dependent bounded G′, D_u=0.08 → 0.04 → 0.02 reduces
+  ‖D_uG′∇ᵣs‖₂ from 2.850e-2 → 1.361e-2 → 6.750e-3 (∇⊥) and 2.874e-2 →
+  1.372e-2 → 6.804e-3 (full ∇); maximum |⟨ũ⟩| falls from 3.987e-2 to 9.379e-3.
+  The constrained path reports physical J∥/B, including the full-gradient ũ correction.
+  See `tests/manufactured/m3_constrained_rates.csv`,
   `tests/manufactured/m3_constrained_du_scan.csv`, and `docs/verification.md`.
   <br>Next: milestone 3.7 should retain this exact shared-s/PCHIP construction and
   independent current evaluator, use genuinely field-misaligned/resonant benchmarks
-  (the aligned D_u oracle cannot distinguish variants), and record reuse/iteration,
-  oscillation, smearing, misalignment, and parallel-noise metrics without changing the
-  default ∇⊥ choice absent an ADR.
+  and record reuse/iteration, oscillation, smearing, misalignment, and parallel-noise
+  metrics without changing the default ∇⊥ choice absent an ADR. The p=2 → 3 plateau is
+  the inherited second-order mollified-shell ceiling; the §12.4 cut-cell reference is
+  the route for deciding whether sharper shell integration removes it.
 - [ ] **3.7** Gradient-variant comparison study (∇⊥ vs full ∇), constrained formulation — `DESIGN.md` §9.4 · note: §5.5
   <br>Acceptance: on shared frozen-(B,p,s,I₀) benchmarks including a resonant layer and a
   field-misaligned mesh: each variant realizes the same I₀(s); measured O(ε_J) relative

@@ -81,6 +81,7 @@ class _ConstrainedCurrentContinuitySolution:
     _g_profile: Any
     _g_gradient: Any
     _current: Any
+    _parallel_current_over_field: Any
     _moments: ShellCurrentMoments
     polynomial_order: int
     regularization_gradient: RegularizationGradient
@@ -123,6 +124,14 @@ class _ConstrainedCurrentContinuitySolution:
         """Evaluate the reconstructed physical note-``(M2)`` current."""
         value = self._current(self._mesh(x_coordinate, y_coordinate))
         return float(value[0]), float(value[1]), float(value[2])
+
+    def parallel_current_over_field_at(
+        self,
+        x_coordinate: float,
+        y_coordinate: float,
+    ) -> float:
+        r"""Evaluate physical ``J_parallel/B`` from constrained note equation ``(M2)``."""
+        return float(self._parallel_current_over_field(self._mesh(x_coordinate, y_coordinate)))
 
 
 def _pchip_volume_coordinate(
@@ -626,6 +635,15 @@ def solve_constrained_current_continuity(
     diamagnetic_current = ng.Cross(magnetic_field, pressure_gradient) / safe_magnitude**2
     regularizing_current = -coefficients.current_diffusivity * regularized_utilde_gradient
     physical_current = parallel_current + diamagnetic_current + regularizing_current
+    if resolved_runtime.regularization_gradient == "full":
+        parallel_current_over_field = (
+            physical_u
+            - coefficients.current_diffusivity
+            * ng.InnerProduct(direction, utilde_gradient)
+            / safe_magnitude
+        )
+    else:
+        parallel_current_over_field = physical_u
     independent_moments = _component_moments(
         volume_map,
         edges,
@@ -722,6 +740,7 @@ def solve_constrained_current_continuity(
         "multiplier_current_l2": l2(ng.InnerProduct(multiplier_current, multiplier_current)),
         "g_advection_coupling_l2": l2(g_advection_coupling**2),
         "g_reaction_coupling_l2": l2(g_reaction_coupling**2),
+        "parallel_current_over_field_l2": l2(parallel_current_over_field**2),
         "parallel_toroidal_current_l2": sqrt(float(np.dot(weights, parallel_samples**2))),
         "diamagnetic_toroidal_current_l2": sqrt(float(np.dot(weights, diamagnetic_samples**2))),
         "regularizing_toroidal_current_l2": sqrt(float(np.dot(weights, regularizing_samples**2))),
@@ -766,6 +785,7 @@ def solve_constrained_current_continuity(
         _g_profile=g_profile,
         _g_gradient=g_gradient,
         _current=physical_current,
+        _parallel_current_over_field=parallel_current_over_field,
         _moments=independent_moments,
         polynomial_order=polynomial_order,
         regularization_gradient=resolved_runtime.regularization_gradient,

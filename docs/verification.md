@@ -39,6 +39,18 @@ current reconstruction, and the multiplier-current diagnostic. $C_G$ contains on
 $G\mathbf B\cdot\nabla\phi$; adding a separate $D_uG'\nabla_rs$ term there would
 double count the constrained closure.
 
+The parallel-current diagnostic is taken from the reconstructed physical current. For
+the perpendicular closure it is $J_\parallel/B=u$; for the full-gradient closure it is
+
+\[
+\frac{J_\parallel}{B}=u-\frac{D_u}{B_{\rm safe}}
+\mathbf b_{\rm safe}\cdot\nabla\tilde u.
+\]
+
+The public point evaluator and its L² diagnostic therefore never report auxiliary $u$
+as physical parallel current in the full-gradient variant. The manufactured suite
+checks the point evaluator independently against $\mathbf J\cdot\mathbf B/B^2$.
+
 The normalized-volume coefficient used by the $G$ basis is the exact monotone PCHIP
 from `MollifiedVolumeMap`, transcribed interval by interval together with its analytic
 gradient. Its mapped-quadrature samples agree with the shell evaluator's shared
@@ -69,23 +81,43 @@ shell ceiling rather than an algebraic-solve limit. Across the h/p rows, the lar
 M3 relative residual is $1.131\times10^{-16}$ and the largest independently evaluated
 M3b relative residual is $1.063\times10^{-16}$.
 
-Doubling the shell count from 4 to 8 on a $32\times32$ mesh moves the sampled physical
-solution by only $6.99\times10^{-6}$ (perpendicular) and $7.33\times10^{-6}$ (full)
-relatively. The eight-shell grid spans 3.991 local radial-cell widths and 3.991 mapped
-mollifier widths per shell, above the enforced minima of three and two. Two distinct
-$I_0(s)$ profiles are realized by independently reconstructed cumulative currents to
-the $10^{-10}$ solver gate for both variants; the historical negative control also
-confirms that two distinct old $F(p)$ shifts with the same boundary value reconstruct
-the same physical $u$ below $10^{-10}$.
+Doubling the shell count from 4 to 8 on a $32\times32$ mesh changes the physical field
+by $2.145\times10^{-4}$ (perpendicular) and $2.176\times10^{-4}$ (full) in relative L²,
+evaluated on one common order-20 mapped-quadrature rule. The former point sample moves
+by $6.99\times10^{-6}$ and $7.33\times10^{-6}$, respectively, but is retained only as
+a secondary reproducibility value rather than the convergence norm. The eight-shell
+grid spans 3.991 local radial-cell widths and 3.991 mapped mollifier widths per shell,
+at the lower edge of the required 3–4-cell resolution. Two distinct $I_0(s)$ profiles
+are realized by independently reconstructed cumulative currents to the $10^{-10}$
+solver gate for both variants on the coupled state with $\mathbf B\cdot\nabla s\ne0$,
+$\mathbf B\cdot\nabla p\ne0$, and nonzero $\tilde u$. The base profile also reproduces
+the analytic physical $u$ below $5\times10^{-4}$, so deleting the G-advection coupling
+turns this positive control red. The historical negative control confirms that two
+distinct old $F(p)$ shifts with the same boundary value reconstruct the same physical
+$u$ below $10^{-10}$.
 
 The fixed-$I_0$ regular-limit scan is recorded in
-`tests/manufactured/m3_constrained_du_scan.csv`. For both variants,
-$D_u=0.08\to0.04\to0.02$ reduces
-$\|D_uG'\nabla_rs\|_2=0.387514\to0.193757\to0.0968786$, exactly linearly, while
-the maximum shell mean of $\tilde u$ is zero for this aligned regular-limit oracle and
-the independent M3b relative residual is $3.49\times10^{-16}$. This benchmark checks
-selection of the one-dimensional mode at fixed current; milestone 3.7 owns the
-nontrivial cross-variant $D_u\to0$ comparison.
+`tests/manufactured/m3_constrained_du_scan.csv`. It uses a nondegenerate manufactured
+family with both G couplings nonzero, one analytic $I_0(s)$ shared by every $D_u$, a
+bounded G profile that genuinely changes with $D_u$, and a shell-mean $\tilde u$
+correction proportional to $D_u$. For $D_u=0.08\to0.04\to0.02$,
+$\|D_uG'\nabla_rs\|_2$ decreases
+$2.8498\times10^{-2}\to1.3611\times10^{-2}\to6.7504\times10^{-3}$ (perpendicular)
+and $2.8744\times10^{-2}\to1.3721\times10^{-2}\to6.8044\times10^{-3}$ (full).
+The maximum shell $|\langle\tilde u\rangle|$ simultaneously falls from
+$3.9866\times10^{-2}$ to $9.3790\times10^{-3}$ (perpendicular) and from
+$3.9875\times10^{-2}$ to $9.3877\times10^{-3}$ (full). The largest M3 and M3b
+relative residuals in this scan are $1.096\times10^{-16}$ and $7.186\times10^{-17}$.
+This is the regular-limit check; milestone 3.7 owns the broader resonant/misaligned
+cross-variant comparison.
+
+The final M3b evaluation is independent in the specific §9.2 sense that it resamples
+the reconstructed physical M2 current and never reuses assembled $C_u/C_G$ rows. Its
+roundoff-level residual certifies consistency between solve rows and reconstruction and
+therefore catches omitted or mismatched current components. Because both paths apply
+the same linear mollified-shell functional to the same quadrature convention, it cannot
+detect a common-mode error in that functional; the hand-derived analytic $I_0$ oracle
+in the coupled manufactured case supplies that separate physics check.
 
 Mutation checks on the first coupled h-row gave the following conspicuous failures:
 
@@ -97,6 +129,13 @@ Mutation checks on the first coupled h-row gave the following conspicuous failur
   M3b residual to $1.160\times10^{-2}$ or $3.304\times10^{-4}$, respectively; and
 - reconstructing M2 with diffusion on full $u$ instead of $\tilde u$ raised the
   independent M3b residual to $4.746\times10^{-4}$.
+
+After replacing the formerly degenerate mandatory controls, the reviewer mutation that
+deletes $\mathbf B\cdot\nabla G$ now also turns all four two-$I_0$/regular-limit test
+instances red: the two-profile base-case errors rise to $5.783\times10^{-2}$
+(perpendicular) and $5.855\times10^{-2}$ (full), while the $D_u=0.08$ multiplier norms
+move from $2.850\times10^{-2}$ to $4.525\times10^{-2}$ and from $2.874\times10^{-2}$
+to $4.634\times10^{-2}$, respectively.
 
 ## Milestone 3.5 — normalized profiles and shell-current moments
 
