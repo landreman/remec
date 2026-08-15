@@ -1,10 +1,23 @@
 # remec — software design and implementation plan
 
-**Status:** accepted initial architecture (synthesis of two independent design drafts; see Appendix A for adjudications)
+**Status:** accepted architecture, revised 2026-08-15 for the constrained current-profile model
 **Primary backend:** Netgen/NGSolve
 **Primary language:** Python
 **Primary initial mode:** interpretive, fixed closed boundary
-**Mathematical source of truth:** `docs/20260814-01_Regularized_3D_MHD_equilibrium.tex` (referred to throughout as **"the note"**; labels (M1)–(M4b) and section numbers refer to it)
+**Mathematical source of truth:** `docs/20260815-01_Regularized_3D_MHD_equilibrium.tex`
+(referred to throughout as **"the note"**; labels (M1)–(M4b) and note section
+numbers refer to that file)
+
+> **Superseded current-profile model.** The 2026-08-14 note and the original version
+> of this plan incorrectly treated a prescribed split `u = F(p) + ũ` as a way to
+> specify the mean current. At finite `D_u` that substitution is only a change of
+> variables: for fixed edge data the reconstructed physical `u` is independent of the
+> interior shape of `F`. It MUST NOT be used as a current-profile input. The revised
+> model uses `u = G(s) + ũ`, makes `G(s)` an unknown, applies the regularizing flux to
+> `ũ`, and determines `G` from the enclosed-toroidal-current constraint (M3b). Existing
+> milestone-3.3/3.4 `F(p)` code and tests are historical kernel verification and the
+> required negative control for the corrected formulation; they are not a production
+> closure. Section 25 and `STATUS.md` put the corrective work before any coupled solve.
 
 ---
 
@@ -83,9 +96,12 @@ abstraction in Section 20).
 ### 3.3 Physical scope of the first usable solver
 
 The first usable coupled solver **MUST** target: interpretive mode; a fixed, closed
-boundary with **B**·n̂ = 0; prescribed toroidal flux Ψ_t; prescribed p₀(V) with
-p₀(V_Ω) = p_b; prescribed net-parallel-current profile F(p); manually specified
-regularization/transport coefficients; one shared-memory node.
+boundary with **B**·n̂ = 0; prescribed toroidal flux Ψ_t; prescribed pressure profile
+p₀(s) with p₀(1) = p_b; prescribed cumulative enclosed-toroidal-current profile I₀(s)
+with I₀(0) = 0; manually specified regularization/transport coefficients; one
+shared-memory node. Both user profiles use the normalized enclosed-volume coordinate
+s = V/V_Ω ∈ [0, 1]. The mean-current profile G(s) is a solved multiplier, not a user
+input.
 
 Explicitly deferred: predictive pressure evolution with a physical heating source
 (the solver is shared, but predictive mode is not a v1 deliverable); nonzero **B**·n̂ at
@@ -117,7 +133,7 @@ High-order continuous Galerkin is the **baseline**, not the final proof of robus
 remec **MUST NOT** claim reliable support for a given anisotropy ratio merely because
 linear residuals converge: support requires a numerical-perpendicular-diffusion
 measurement showing artificial cross-field diffusion comfortably below the requested
-physical κ⊥ (Section 9.3). The architecture MUST permit a later asymptotic-preserving
+physical κ⊥ (Section 8.3). The architecture MUST permit a later asymptotic-preserving
 (AP) two-field formulation; before remec claims robust operation near the physical range
 κ∥/κ⊥ ~ 10⁸–10¹⁰, an AP method or an equally convincing alternative MUST be implemented
 and compared against the standard formulation.
@@ -131,54 +147,67 @@ and compared against the standard formulation.
 | D3 | A internal, B = Ψ_t B_h + ∇×A, B public | Discrete ∇·(∇×A) = 0 at roundoff; Ψ_t exact via harmonic basis | none anticipated |
 | D4 | Anisotropic baseline: high-order CG + direct measurement of pollution; AP as required later milestone | High order controls pollution at moderate ε_κ (NIMROD: p ≥ 3 non-aligned); AP addresses ε_κ→0 conditioning/accuracy | Claims at ε_κ ≲ 10⁻⁸, or iterative-solver conditioning blocks production sizes |
 | D5 | M3 baseline: CG + SUPG; upwind-DG fallback | Layers kept ≥ ~6 cells by policy, where SUPG-CG behaves; far fewer DOFs | Oscillations or layer smearing during D_u continuation |
-| D6 | Linear solves: direct factorization permitted (and default) for 2D/axisymmetric/small-3D verification; iterative + preconditioning is the planned production 3D path; never assemble the coupled Jacobian | Direct is robust to anisotropy conditioning and fastest to correctness at small scale, but does not scale to multi-million-DOF 3D blocks | Configurable DOF threshold; preconditioner benchmark program (Sec. 9.5) |
+| D6 | Linear solves: direct factorization permitted (and default) for 2D/axisymmetric/small-3D verification; iterative + preconditioning is the planned production 3D path; never assemble the coupled Jacobian | Direct is robust to anisotropy conditioning and fastest to correctness at small scale, but does not scale to multi-million-DOF 3D blocks | Configurable DOF threshold; preconditioner benchmark program (Sec. 8.5) |
 | D7 | V_χ: gradient-scaled mollified Heaviside (differentiable) for solves; volume-uniform tabulation; monotone PCHIP inverse; optional ngsxfem cut-cell reference | Note Sec. 8; Tornberg–Engquist consistency; histogram is non-differentiable | none |
-| D8 | Divergence-free H(div) current projection between (M2) and Ampère, correction monitored | Pointwise J is not div-conforming; Ampère needs a compatible RHS | Correction fails to converge under refinement → mixed u–J formulation |
-| D9 | Picard as named operator objects; Newton reuses them as preconditioner blocks | Note Sec. 9.1 | none |
+| D8 | Divergence-free H(div) current projection between (M2) and Ampère, preserving the (M3b) shell-current moments; correction monitored | Pointwise J is not div-conforming; Ampère needs a compatible RHS and must see the prescribed I₀(s) | Divergence or shell-moment correction fails to converge under refinement → mixed u–J formulation |
+| D9 | Picard as named operator objects; Newton reuses them as preconditioner blocks | Note §9 (fixed-point cycle) | none |
 | D10 | Interpretive first-class; predictive a variant of the same solver | Note's priority; positivity automatic via composition | none |
 | D11 | Fixed closed boundary v1; BC layer represents general g = B·n̂ internally but the physical model rejects g ≠ 0 | Nonzero g is a distinct open-field-line model class needing sheath physics (note Sec. 6) | SOL milestone |
 | D12 | Nondimensional FEM core with a `Normalization` object; SI only at user-facing adapters | Scale separation (κ∥/κ⊥ ~ 10¹⁰, enormous SI κ values) wrecks matrix scaling; the note's knobs (ε_κ, ε_J) are dimensionless | none |
 | D13 | Meshes built for element quality (robust curved tet/prism first), NOT from the source equilibrium's flux-coordinate map; deformation-of-a-reference-mesh structure retained | Flux maps degenerate at the axis and shear badly under strong shaping; remec solutions need not retain imported surfaces | Multi-block prism/hex upgrade for high-order efficiency |
-| D14 | Newton: Stage A = JFNK with Picard-block preconditioning; Stage B = exact symbolic local Jacobian + explicit low-rank nonlocal V_χ term | JFNK is lowest-risk first; the BSpline transplant mechanism (Sec. 13.5) makes Stage B's local part nearly free | none |
+| D14 | Newton: Stage A = JFNK with Picard-block preconditioning; Stage B = exact symbolic local Jacobian + explicit low-rank level-set terms from V_χ and (M3b) | JFNK is lowest-risk first; the BSpline transplant mechanism (Sec. 12.5) makes the pressure block's local part nearly free; the current border has only O(10–100) one-dimensional unknowns | none |
 | D15 | Transport coefficients implemented from the note's Sec. 10.2 formulas; PlasmaPy test-only | Few lines; avoids heavy dependency with an API under development | none |
 | D16 | Axisymmetric R–Z as a true reduced formulation, early; 3D-axisymmetric cross-check where feasible | Most sensitive end-to-end verification (GS + 1D transport); fastest dev platform; independent check of the note's Sec. 11 reduction | none |
 | D17 | Derivatives deferred but architected for: pure residuals, transpose actions, fixed reference mesh, smooth V_χ only, JVP/VJP interfaces | Converged-state adjoint reuses the Newton Jacobian transpose | Optimization use case materializes |
-| D18 | M3 regularization gradient runtime-selectable: ∇⊥ (default) or full ∇ (isotropic variant), applied consistently across (M2)/(M3); comparison study required (Sec. 9.4, milestone 3.5) | Note §5.5: variants agree to O(ε_J); full ∇ gives a fixed SPD **B**-independent Laplacian (assembly/preconditioner reuse, monotone stencils, no ∂op/∂**B** Newton block, damps parallel grid noise); ∇⊥ is the derived kinetic closure and preserves u = J∥/B exactly | Measured evidence of a clear winner → change the default via ADR |
+| D18 | M3 regularization gradient runtime-selectable: ∇⊥ (default) or full ∇ (isotropic variant), applied consistently across (M2)/(M3)/(M3b); comparison study required (Sec. 9.4, milestone 3.7) | Note §5.5: variants agree to O(ε_J); full ∇ gives a fixed SPD **B**-independent Laplacian (assembly/preconditioner reuse, monotone stencils, no ∂op/∂**B** Newton block, damps parallel grid noise); ∇⊥ is the derived kinetic closure and preserves u = J∥/B exactly | Measured evidence of a clear winner → change the default via ADR |
+| D19 | User pressure and toroidal-current profiles share the normalized-volume coordinate s ∈ [0,1]; no dimensional-volume profile API and no implicit unit detection | Geometry-independent inputs, stable endpoints, direct correspondence between p₀(s) and I₀(s), and unambiguous restart/import semantics | none |
+| D20 | Mean current is imposed by the constrained closure: unknown G(s), flux −D_u∇ᵣũ, and shellwise (M3b) constraints; the old prescribed F(p) split is prohibited as an input closure | Note §5.4 proves the old substitution cancels from physical u at finite D_u; the bordered system restores the classical current freedom without violating ∇·J = 0 | A different current observable is requested (for example ⟨J∥B⟩); add it behind a separately verified constraint type, never by reviving F(p) |
 
 ---
 
 ## 4. Governing model (summary; the note is authoritative)
 
 With **b** = **B**/B, ∇⊥f = ∇f − **b**(**b**·∇f), K = κ⊥I + (κ∥ − κ⊥)**bb**ᵀ,
-ε_κ = κ⊥/κ∥:
+ε_κ = κ⊥/κ∥, V_Ω = ∫_Ωd³r, and
+
+> s(**r**) = V_χ(χ(**r**))/V_Ω ∈ [0, 1]
+
+in interpretive mode (axis/core s = 0, boundary s = 1):
 
 - **(M1)** ∇·**B** = 0, μ₀**J** = ∇×**B**.
-- **(M2)** **J** = u**B** + (**B**×∇p)/B² − D_u ∇⊥u.
-- **(M3)** **B**·∇u − ∇·(D_u∇⊥u) = (2/B³)**B**·(∇p×∇B) − (μ₀u/B²)**B**·∇p
-  + (μ₀D_u/B²)∇⊥u·∇p. The final right-hand-side term is part of the model and
+- **Constrained current split:** u = G(s) + ũ. G(s) is an unknown one-dimensional
+  multiplier with G(1) = u_b; it is not the prescribed current profile. The user input
+  is the cumulative enclosed toroidal current I₀(s).
+- **(M2)** **J** = u**B** + (**B**×∇p)/B² − D_u ∇⊥ũ.
+- **(M3)** **B**·∇u − ∇·(D_u∇⊥ũ) = (2/B³)**B**·(∇p×∇B) − (μ₀u/B²)**B**·∇p
+  + (μ₀D_u/B²)∇⊥ũ·∇p. The final right-hand-side term is part of the model and
   **MUST NOT** be omitted: it is required for (M3) to be exactly ∇·**J** = 0 for the
   current (M2), which is what makes Ampère's law integrable.
+- **(M3b)** I_tor(s) = (1/2π)∫_{s(**r'**)<s} **J**·∇φ d³r′ = I₀(s),
+  0 < s ≤ 1, I₀(0) = 0. This equation determines G(s). I₀ is cumulative enclosed
+  toroidal current, not u, J∥, a toroidal-current density, or the Grad–Shafranov
+  toroidal-field function.
 - **(M2/M3 regularization-gradient variants — note §5.5):** the regularizing gradient
   ∇ᵣ in (M2) and (M3) is runtime-selectable between ∇⊥ (default; the note's derived
-  closure) and the full ∇ (isotropic variant): **J** = u**B** + (**B**×∇p)/B² − D_u∇ᵣu
-  and **B**·∇u − ∇·(D_u∇ᵣu) = (2/B³)**B**·(∇p×∇B) − (μ₀u/B²)**B**·∇p
-  + (μ₀D_u/B²)∇ᵣu·∇p. The same ∇ᵣ MUST be used in the (M2) flux, the (M3) left-hand
+  closure) and the full ∇ (isotropic variant): **J** = u**B** + (**B**×∇p)/B² − D_u∇ᵣũ
+  and **B**·∇u − ∇·(D_u∇ᵣũ) = (2/B³)**B**·(∇p×∇B) − (μ₀u/B²)**B**·∇p
+  + (μ₀D_u/B²)∇ᵣũ·∇p. The same ∇ᵣ MUST be used in the (M2) flux, the (M3) left-hand
   side, and the (M3) final right-hand-side term — a mixed pairing leaves an O(D_u)
   residual in ∇·**J** and MUST be treated as an error. With ∇ᵣ = ∇, u is the auxiliary
-  solved field and J∥/B = u − (D_u/B)**b**·∇u; diagnostics and bootstrap-type F(p)
-  closures MUST use the reconstructed **J**. Requirements and the comparison program
+  solved field and J∥/B = u − (D_u/B)**b**·∇ũ; diagnostics, (M3b), and
+  bootstrap/ohmic models supplying I₀(s) MUST use the reconstructed **J**. Requirements and the comparison program
   are in Section 9.4. This licence is specific to (M3); it does **not** extend to
   (M4a)/(M4).
 - **(M4a)** ∇·(K∇χ) = −S_ref, S_ref > 0 (default S_ref = 1 after nondimensionalization).
-- **(M4b)** p(**r**) = p₀(V_χ(χ(**r**))), V_χ(χ̂) = ∫_Ω H(χ − χ̂) d³r. No independent
-  pressure DOFs exist in interpretive mode.
+- **(M4b)** p(**r**) = p₀(s(**r**)), s(**r**) = V_χ(χ(**r**))/V_Ω, and
+  V_χ(χ̂) = ∫_Ω H(χ − χ̂)d³r. The user supplies p₀ on exactly [0,1], with p₀(1)=p_b;
+  no independent pressure DOFs exist in interpretive mode.
 - **(M4)** predictive: the same operator applied to p with a physical source S_p ≥ 0.
 
-**Boundary conditions (v1):** **B**·n̂ = 0, Ψ_t prescribed, χ = 0, u = F(p_b) on ∂Ω.
-The preferred solved variable for (M3) is ũ = u − F(p) with homogeneous data ũ = 0; the
-transformed source terms **MUST** be transcribed from the note's Eq. (utilde_equation)
-— an agent MUST NOT improvise them. Until that transcription is verified, an early kernel
-MAY solve directly for u with Dirichlet data u = F(p_b).
+**Boundary conditions (v1):** **B**·n̂ = 0, Ψ_t prescribed, χ = 0, ũ = 0, and
+G(1) = u_b on ∂Ω (u_b = 0 for a wall in vacuum). The preferred and production solved
+variable for (M3) is ũ = u − G(s). An early direct-u kernel with G ≡ 0 remains a valid
+special-case verification operator, but it cannot accept a nontrivial current profile.
 
 **Nonzero B·n̂:** the boundary API SHOULD eventually represent prescribed
 g = **B**·n̂ with ∮g dA = 0, but this is not merely another fixed-boundary option: open
@@ -195,8 +224,9 @@ layers resolved, scan ε_κ and D_u, extrapolate with the known scalings.
 Character of the sub-problems: (M4a) self-adjoint elliptic, extremely anisotropic —
 the central numerical risk; (M3) nonsymmetric advection–diffusion, first order along
 **b**, elliptic transverse, hypoelliptic (uniformly elliptic in the full-∇ variant of
-note §5.5); (M1)+(M2) div–curl/curl–curl; (M4b) explicit
-nonlocal composition, local + low-rank linearization.
+note §5.5), with a small one-dimensional border from (M3b); (M1)+(M2)
+div–curl/curl–curl; (M4b) explicit nonlocal composition, local + low-rank
+linearization.
 
 ---
 
@@ -205,24 +235,29 @@ nonlocal composition, local + low-rank linearization.
 1. **Magnetic divergence:** ∇_h·(∇_h×A_h) = 0 algebraically to roundoff; a regression
    test MUST measure this independently of nonlinear convergence.
 2. **Current continuity:** raw (M2) currents are projected to a discretely
-   divergence-free H(div) field (Sec. 11); the relative projection correction
+   divergence-free H(div) field (Sec. 10); the relative projection correction
    ‖J_h − J_raw‖/‖J_raw‖ MUST be recorded and MUST converge to zero under refinement —
    a large or non-convergent correction means the M3 discretization and M2
    reconstruction are inconsistent.
-3. **Profile realization:** the transplant MUST reproduce p₀(V) to
-   quadrature/interpolation accuracy; test the layer-cake identity
-   ∫φ(p)d³r = ∫φ(p₀(V))dV for a spline family of test functions φ, and the endpoint
-   identities V_χ(0) = V_Ω, V_χ(max χ) = 0.
-4. **Positivity/boundedness:** interpretive p MUST remain within the range of p₀ at all
+3. **Pressure-profile realization:** the transplant MUST reproduce p₀(s) to
+   quadrature/interpolation accuracy; test the normalized layer-cake identity
+   ∫φ(p)d³r = V_Ω∫₀¹φ(p₀(s))ds for a spline family of test functions φ, and the
+   endpoint identities V_χ(0) = V_Ω, V_χ(max χ) = 0.
+4. **Toroidal-current-profile realization:** the physical current from (M2), and the
+   projected current passed to Ampère, MUST satisfy I_tor(s)=I₀(s) to their stated
+   tolerances. Report cumulative and shellwise residuals, the toroidal variation of
+   cross-section current, ⟨ũ⟩_s, and ‖D_uG′(s)∇ᵣs‖. A small M3 residual alone does not
+   demonstrate this invariant.
+5. **Positivity/boundedness:** interpretive p MUST remain within the range of p₀ at all
    iterates. Monitor min/max p, min B, whether any B-floor is active, and monotonicity
    of the fitted V_χ and of p₀.
-5. **Resolved layers:** a converged algebraic solve is not a resolved solution. Estimate
+6. **Resolved layers:** a converged algebraic solve is not a resolved solution. Estimate
    and report the number of local element widths across w_c and δ; a production run
    MUST warn (strict mode: fail) when either falls below `min_layer_cells`
    (default 6).
-6. **Global balances** (note Sec. 6, "Global consistency checks"): total power
-   (∫S_ref or ∫S_p^eff = Γ(0)) vs. boundary heat flux; net toroidal current through a
-   poloidal cross-section vs. the value encoded in F; toroidal flux error vs. Ψ_t.
+7. **Global balances** (note §6, "Global consistency checks"): total power
+   (∫S_ref or ∫S_p^eff = Γ(0)) vs. boundary heat flux; I_tor(s) vs. I₀(s) on all
+   reported shells (including I_tor(1), the total current); toroidal flux error vs. Ψ_t.
 
 ---
 
@@ -253,11 +288,13 @@ and the same diagnostic.
 ### 7.1 Spaces
 
 Baseline: χ (and predictive p) and ũ in continuous H¹, default order 3; orders 3–5 MUST
-be supported for anisotropy studies. A in `HCurl`; projected **B** and **J** stored in
-`HDiv` when a stored field is required; `L2` for divergence constraints/diagnostics;
-scalar H¹ gauge multiplier chosen to form a stable mixed pair. Mesh geometry order
-comparable to the FE order (curved elements). Static condensation (`condense=True`)
-SHOULD be used for high-order spaces where it helps.
+be supported for anisotropy studies. Represent G(s) in a one-dimensional piecewise-linear
+or cubic B-spline basis on 16–64 equal-volume shells initially, with G(1)=u_b eliminated
+from the free coefficients. A in `HCurl`; projected **B** and **J** stored in `HDiv` when
+a stored field is required; `L2` for divergence constraints/diagnostics; scalar H¹ gauge
+multiplier chosen to form a stable mixed pair. Mesh geometry order comparable to the FE
+order (curved elements). Static condensation (`condense=True`) SHOULD be used for
+high-order spaces where it helps.
 
 **De Rham pairing caution:** the exact space/order pairing that yields the commuting
 discrete sequence MUST be established by small de Rham-sequence tests (∇, ∇×, ∇· mapping
@@ -381,39 +418,78 @@ field-split alternatives belong to the PETSc branch evaluation.)
 
 ---
 
-## 9. Regularized current-continuity solver (M3)
+## 9. Regularized current-continuity and profile-constraint solver (M3–M3b)
 
 ### 9.1 Weak form and SUPG
 
-Unstabilized: ∫v **B**·∇u + ∫D_u ∇ᵣv·∇ᵣu = ∫v R(B, p, u, D_u), with R the complete
-right-hand side of (M3) and ∇ᵣ the selected regularization gradient (∇⊥ by default,
-full ∇ as the isotropic variant; Sec. 9.4); every B⁻¹ uses B_safe. The baseline adds SUPG stabilization
-with streamline direction **b**. Requirements: the strong residual used in SUPG MUST
-include the parallel advection term, the transverse diffusion, and **every** source and
-reaction term (including coefficient derivatives implied by the strong divergence where
-needed); the stabilization parameter MUST live in one centralized, unit-tested function
-depending on element size along the field, |**B**|, transverse diffusion, and polynomial
-order; the stabilization contribution MUST be separately reported in diagnostics.
+For frozen (**B**, p, s), solve for (ũ, G) with u = G(s)+ũ. The unstabilized ũ weak form is
 
-### 9.2 ũ formulation
+> ∫v **B**·∇ũ + ∫D_u ∇ᵣv·∇ᵣũ = ∫v[(2/B³)**B**·(∇p×∇B)
+> − (μ₀u/B²)**B**·∇p + (μ₀D_u/B²)∇ᵣũ·∇p − G′(s)**B**·∇s].
 
-Prefer ũ = u − F(p) (homogeneous BC). The transformed equation MUST be transcribed from
-the note's Eq. (utilde_equation) and verified line-by-line against the direct-u
-formulation on a manufactured case (the two MUST agree to discretization accuracy).
+Here ∇ᵣ is the selected regularization gradient (∇⊥ by default, full ∇ as the
+isotropic variant; Sec. 9.4), and every B⁻¹ uses B_safe. The baseline adds SUPG
+stabilization with streamline direction **b**. The strong residual used in SUPG MUST
+include parallel advection, diffusion, every source and reaction term, and the complete
+G-dependent term (including coefficient derivatives implied by the strong divergence
+where needed). The stabilization parameter MUST live in one centralized, unit-tested
+function depending on element size along the field, |**B**|, transverse diffusion, and
+polynomial order; the stabilization contribution MUST be separately reported.
+
+### 9.2 Constrained mean-current formulation and shell discretization
+
+The production formulation is ũ = u − G(s), with homogeneous ũ boundary data and G an
+unknown. The regularizing flux MUST act on ũ, never on full u. In particular, the
+implementation MUST NOT carry over the old `F(p)` profile-diffusion source
+∇·(D_uF′∇ᵣp): that term belongs only to an algebraic reparameterization of the
+unconstrained equation and does not impose a physical current profile.
+
+Define
+
+> I_tor(s) = (1/2π)∫_{s(**r**)<s} **J**·∇φ d³r,
+
+using the physical (M2) current including diamagnetic and regularizing contributions.
+For nodes 0=s₀<…<s_N=1, impose the N local shell equations
+
+> (1/2π)∫_{s_{j−1}<s(**r**)<s_j} **J**·∇φ d³r
+> = I₀(s_j)−I₀(s_{j−1}),  j=1,…,N.
+
+The shell integrals MUST reuse the mollified or cut-cell/layer-cake machinery of
+Section 12; they MUST NOT classify elements by a nodal histogram. Choose shell spacing
+so each shell spans at least 3–4 radial cells and do not represent structure in I₀′ below
+the resolved δ or w_c. Double N as a convergence check.
+
+Discretized M3 and M3b form the square bordered system
+
+> [A P; C_u C_G][ũ; g] = [f; ΔI₀].
+
+The production solve uses a Schur complement with the existing A-solver/preconditioner;
+N is expected to be O(10–100). The note's response-based fixed-point update for G MAY be
+used as a prototype, but the coupled bordered solve is the production path. Checkpoints
+store the prescribed I₀(s), shell grid/basis, solved G coefficients, u_b, and constraint
+residuals. `G` or its coefficients MUST NOT appear in the public input-profile API.
+
+Mandatory correction tests are: (1) with fixed (**B**,p,D_u) and equal edge values, two
+old prescribed F(p) shifts reconstruct the same u to solver tolerance; (2) two distinct
+I₀(s) inputs return their respective enclosed currents; (3) deleting the
+−G′**B**·∇s term or applying diffusion to u instead of ũ fails; (4) constraint and M3
+residuals converge under h/p and shell refinement; and (5) a D_u scan holds I_tor fixed
+while D_uG′∇ᵣs and the appropriate mean-ũ correction vanish in the regular limit. Run
+these for both gradient variants.
 
 ### 9.3 DG fallback and linear solvers
 
 If SUPG oscillates or smears the D_u^{1/3} layer, implement upwind interior-penalty DG
-conforming to the same solver interface and sharing the manufactured solutions. The M3
-block is nonsymmetric: GMRES with a native preconditioner, or direct within the
-Section 21 policy. At least one manufactured test MUST fail conspicuously if the last
-(μ₀D_u/B²)∇ᵣu·∇p term of (M3) is omitted; this test MUST run for both gradient
-variants.
+conforming to the same solver interface and sharing the manufactured solutions. The
+bordered M3–M3b block is nonsymmetric: GMRES with a native block preconditioner, or
+direct within the Section 21 policy. At least one manufactured test MUST fail
+conspicuously if the last (μ₀D_u/B²)∇ᵣũ·∇p term of (M3) is omitted; this test MUST run
+for both gradient variants.
 
 ### 9.4 Regularization-gradient variants (∇⊥ vs. full ∇)
 
-The note's derived closure is the transverse −D_u∇⊥u; note §5.5 licenses an isotropic
-variant −D_u∇u that is equivalent to the order of the retained physics (variant
+The note's derived closure is the transverse −D_u∇⊥ũ; note §5.5 licenses an isotropic
+variant −D_u∇ũ that is equivalent to the order of the retained physics (variant
 solutions differ by O(ε_J) relative) and is expected to be numerically simpler: for
 constant D_u it is a fixed SPD Laplacian independent of the evolving **B** (assembly,
 factorization, and preconditioner reuse across nonlinear iterations; monotone stencils
@@ -427,34 +503,33 @@ Requirements:
 - The M3 solver MUST implement both variants behind one runtime option, e.g.
   `regularization_gradient="perpendicular" | "full"`, default `"perpendicular"` (the
   note is authoritative for the physical model; changing the default requires an ADR
-  citing the milestone-3.5 measurements).
+  citing the milestone-3.7 measurements).
 - The selected ∇ᵣ MUST be applied consistently in: the (M2) constitutive flux and the
   J_raw construction (Sec. 10); the (M3) weak form; the SUPG strong residual; the final
-  (μ₀D_u/B²)∇ᵣu·∇p right-hand-side term; and the ũ-transformation source terms
-  transcribed from Eq. (utilde_equation) (with ∇ᵣ replacing ∇⊥ in its
-  ∇·(D_u F′(p)∇⊥p) term). Mixing operators between any of these breaks exact
-  ∇·**J** = 0 at O(D_u) and MUST be treated as an implementation error, not a
-  tolerance issue.
+  (μ₀D_u/B²)∇ᵣũ·∇p right-hand-side term; the (M3b) physical-current integrals; and the
+  multiplier current D_uG′∇ᵣs implicit in −D_u∇ᵣũ. Mixing operators between any of
+  these breaks exact ∇·**J** = 0 at O(D_u) and MUST be treated as an implementation
+  error, not a tolerance issue.
 - The choice MUST be recorded in the run configuration digest, structured logs, and
   checkpoint metadata.
-- With `"full"`, u is the auxiliary solved variable; J∥/B = u − (D_u/B)**b**·∇u MUST be
-  the quantity reported by parallel-current diagnostics and consumed by bootstrap-type
-  F(p) closures.
-- All Section 9.1–9.3 manufactured tests, and the D_u^{1/3} layer-scaling
-  demonstration, MUST pass for both variants.
-- **Comparison study (milestone 3.5):** on shared frozen-(**B**, p) benchmarks
+- With `"full"`, u is an auxiliary reconstructed field; J∥/B = u −
+  (D_u/B)**b**·∇ũ MUST be the quantity reported by parallel-current diagnostics and
+  consumed by bootstrap/ohmic models that supply I₀(s).
+- All Section 9.1–9.3 manufactured tests, the constrained-profile tests, and the
+  D_u^{1/3} layer-scaling demonstration MUST pass for both variants.
+- **Comparison study (milestone 3.7):** on shared frozen-(**B**, p, s, I₀) benchmarks
   (including a resonant-layer case and a deliberately field-misaligned mesh), measure
   and record as machine-readable tables: (a) the relative difference between the two
   converged solutions at fixed D_u, verifying the O(ε_J) expectation and common
-  D_u → 0 limits; (b) assembly/refactorization counts and wall time per nonlinear
-  iteration; (c) linear-iteration counts and preconditioner behavior; (d) presence of
-  oscillations / monotonicity violations and layer smearing; (e) sensitivity to
-  mesh–field misalignment (the ∇⊥ tensor discretization incurs spurious parallel
-  diffusion ≤ ~D_u × misalignment error — Günter et al., Sharma–Hammett — which the
-  full-∇ variant accepts by construction); (f) damping of parallel grid-scale noise.
-  Results go in `docs/verification.md`. Because the two variants share no
-  discretization of the regularizing term, their agreement is also a strong
-  cross-verification of the M3 kernel itself.
+  D_u → 0 limits while each retains I_tor=I₀; (b) assembly/refactorization counts and
+  wall time per nonlinear iteration; (c) linear-iteration counts and preconditioner
+  behavior; (d) presence of oscillations / monotonicity violations and layer smearing;
+  (e) sensitivity to mesh–field misalignment (the ∇⊥ tensor discretization incurs
+  spurious parallel diffusion ≤ ~D_u × misalignment error — Günter et al.,
+  Sharma–Hammett — which the full-∇ variant accepts by construction); (f) damping of
+  parallel grid-scale noise. Results go in `docs/verification.md`. Because the two
+  variants share no discretization of the regularizing term, their agreement is also a
+  strong cross-verification of the M3 kernel itself.
 - **Scope limitation:** this licence is specific to (M3), where parallel transport is
   advective with an O(1) coefficient so added parallel diffusion is subdominant by
   ε_J k∥L̄ ≪ 1. It MUST NOT be applied to (M4a)/(M4), where both directions are
@@ -465,14 +540,18 @@ Requirements:
 
 ## 10. Current construction and divergence-free projection
 
-Construct J_raw = u**B** + (**B**×∇p)/B_safe² − D_u∇ᵣu at quadrature points, where ∇ᵣ
+Construct J_raw = u**B** + (**B**×∇p)/B_safe² − D_u∇ᵣũ at quadrature points, where ∇ᵣ
 MUST match the regularization gradient selected for the M3 solve (Sec. 9.4), with each
 term separately accessible for diagnostics/output. Then solve the constrained
 projection: (J_h, v) + (λ_h, ∇·v) = (J_raw, v), (∇·J_h, q) = 0, with J_h ∈ H(div),
 natural J_h·n̂ = 0 on the closed boundary, and explicit handling of any global current
-component not fixed by the local constraint. Diagnostics MUST include divergence norm
-before/after, relative projection correction, net current integrals, and the Ampère
-compatibility residual. The projection is linear ⇒ differentiable ⇒ safe inside Newton.
+component not fixed by the local constraint. The projection MUST also preserve the N
+shell-current moments ΔI₀ used by (M3b), either as explicit projection constraints or to
+a tolerance demonstrated to converge faster than the field error; a divergence-free
+projected current with the wrong I_tor(s) is unacceptable. Diagnostics MUST include
+divergence norm before/after, relative projection correction, cumulative and shellwise
+current residuals before/after, and the Ampère compatibility residual. The projection is
+linear ⇒ differentiable ⇒ safe inside Newton.
 If the correction does not converge rapidly under refinement, replace the sequential
 M3-plus-projection construction with a mixed solve coupling u, **J**, and the
 continuity multiplier (ADR required).
@@ -494,7 +573,7 @@ interface.
 
 ---
 
-## 12. Level-set volume map and pressure transplant
+## 12. Level-set volume map and normalized profile inputs
 
 ### 12.1 Interface (independent of the nonlinear solver)
 
@@ -535,31 +614,51 @@ the same interface for: accurate final V_χ evaluation; verification of the moll
 method; separatrix/critical-level studies; layer-cake moments. `ngsxfem` MUST remain an
 optional extra so the minimal installation stays simple.
 
-### 12.5 Profiles and the transplant mechanism
+### 12.5 Normalized pressure/current profiles and the transplant mechanism
 
 ```python
-class VolumeProfile(Protocol):
-    def value(self, volume): ...
-    def derivative(self, volume): ...
-    def validate(self, total_volume, edge_value=None): ...
+class PressureProfile(Protocol):
+    def value(self, normalized_volume): ...
+    def derivative(self, normalized_volume): ...  # dp_0/ds
+    def validate(self, edge_value=None): ...
+
+class ToroidalCurrentProfile(Protocol):
+    def enclosed_current(self, normalized_volume): ...
+    def derivative(self, normalized_volume): ...  # dI_0/ds
+    def validate(self): ...
 ```
 
-Implementations: tabulated monotone profile; analytic callable; spline; normalized
-profile on s = V/V_Ω. p₀ MUST be non-increasing on [0, V_Ω] with p₀(V_Ω) = p_b; the
-interpretive edge-vacuum plateau (note Sec. 7.3) is simply a p₀ constant for V ≥ V_p.
-The composed map g = p₀∘V_χ SHOULD be represented as a monotone 1D spline wrapped as a
-differentiable NGSolve 1D CoefficientFunction (`BSpline`) applied to χ, so that p,
-∇p = g′(χ)∇χ, and the **local** Newton linearization g′(χ)δχ all flow through symbolic
-differentiation automatically.
+Every public profile is defined on exactly s ∈ [0,1], regardless of the domain's SI or
+nondimensional volume. APIs MUST NOT infer whether an input array means V or s from its
+range, and MUST NOT expose parallel dimensional-volume and normalized-volume modes.
+The milestone-2.2 `VolumeProfile` implementations currently use dimensional V; milestone
+3.5 MUST migrate/rename them, their tests, and their serialization contract explicitly.
+
+Implement pressure and current profiles as tabulated callables and analytic/spline
+variants. p₀ MUST be non-increasing with p₀(1)=p_b. I₀ is cumulative enclosed toroidal
+current with I₀(0)=0 and I₀(1) equal to total plasma current; do not impose monotonicity,
+because reversed-current profiles are admissible, but require adequate smoothness and
+resolution for the selected G basis. The interpretive edge-vacuum plateau (note §7.3)
+is p₀ constant for s≥s_p; I₀ is constant over the same exterior shells (note §7.4).
+
+The composed map g(χ)=p₀(V_χ(χ)/V_Ω) SHOULD be represented as a monotone 1D spline
+wrapped as a differentiable NGSolve 1D CoefficientFunction (`BSpline`) applied to χ, so
+that p, ∇p=g′(χ)∇χ, and the **local** Newton linearization g′(χ)δχ flow through symbolic
+differentiation automatically. The same evaluated s field and shell boundaries MUST be
+shared by the p₀ transplant, I₀ constraints, transport profiles, and diagnostics; agents
+MUST NOT build separate volume-label conventions for pressure and current.
 
 ### 12.6 Linearization
 
-δp = g′(χ)δχ (local) + p₀′(V_χ)·δV_χ (nonlocal; dense along level sets, low rank in the
-tabulation-level index; one level-set-averaging pass per application, built from the
-H_ε′w_i data). Picard does not need this derivative. The Newton milestone MUST provide
-either (a) a finite-difference JVP of the complete smooth residual (Stage A), or (b) the
-exact local Jacobian plus the explicit low-rank nonlocal JVP (Stage B). The histogram
-volume map MUST NOT be used in Newton (discontinuous under small coefficient changes).
+δp=p₀′(s)δs, with δs=δ[V_χ(χ)]/V_Ω: a local composition term plus a nonlocal term dense
+along level sets and low rank in the tabulation-level index (one level-set-averaging pass
+per application, built from the H_ε′w_i data). Picard does not need this derivative.
+Newton also needs the variation of G(s), ∇s, the mollified shell weights, and the M3b
+current integrals with respect to χ and **A**. The Newton milestone MUST provide either
+(a) a finite-difference JVP of the complete smooth residual, including all M3b rows
+(Stage A), or (b) the exact local Jacobian plus explicit low-rank nonlocal actions for
+both the pressure composition and current shells (Stage B). The histogram volume map
+MUST NOT be used in Newton (discontinuous under small coefficient changes).
 
 ---
 
@@ -568,21 +667,24 @@ volume map MUST NOT be used in Newton (discontinuous under small coefficient cha
 ### 13.1 Cycle (per iterate k)
 
 1. form **B**^k, **b**^k; 2. evaluate transport coefficients on the state; 3. solve
-(M4a) for χ^k; 4. build V_{χ^k}; 5. p^k = p₀(V_{χ^k}(χ^k)); (optionally apply the
-under-relaxed, positivity-floored S_ref source-refinement update of note Sec. 6.4
-item iii before step 3); 6. solve (M3) for ũ^k, set u^k = F(p^k) + ũ^k; 7. build
-J_raw^k; 8. project to divergence-free J_h^k; 9. magnetic update for A_candidate;
-10. damping or Anderson; 11. residuals, physical diagnostics, layer-resolution
-diagnostics; 12. checkpoint at the configured cadence.
+(M4a) for χ^k; 4. build V_{χ^k} and the shared normalized label
+s^k=V_{χ^k}(χ^k)/V_Ω; 5. set p^k=p₀(s^k) (optionally apply the under-relaxed,
+positivity-floored S_ref source-refinement update of note §6.2 item (iii) before step
+3); 6. solve the bordered (M3)–(M3b) system for (ũ^k,G^k), set
+u^k=G^k(s^k)+ũ^k, and require the shell-current residual to pass; 7. build J_raw^k;
+8. project to divergence-free J_h^k while preserving the (M3b) shell moments;
+9. magnetic update for A_candidate; 10. damping or Anderson; 11. residuals, physical
+diagnostics, layer-resolution diagnostics; 12. checkpoint at the configured cadence.
 
 ### 13.2 Convergence criteria and norms
 
 Convergence MUST require more than a small state update. Default stopping logic
-requires ALL of: normalized M1/Ampère, M3, and M4a residuals below tolerance; state
-update norm below tolerance; profile-transplant error below tolerance; divergence and
-flux invariants within tolerances; no active numerical floors materially affecting the
-solution. Use physically scaled per-block norms; a raw Euclidean norm over concatenated
-DOFs MUST NOT determine convergence (blocks differ in units, counts, and scales).
+requires ALL of: normalized M1/Ampère, M3, M3b, and M4a residuals below tolerance;
+state update norm below tolerance; pressure-transplant and enclosed-current-profile
+errors below tolerance; divergence and flux invariants within tolerances; no active
+numerical floors materially affecting the solution. Use physically scaled per-block
+norms; a raw Euclidean norm over concatenated DOFs MUST NOT determine convergence
+(blocks differ in units, counts, and scales).
 
 ### 13.3 Damping and Anderson
 
@@ -607,9 +709,10 @@ are stable.
 
 ### 14.2 State and residual
 
-Interpretive Newton state x = (A, χ, ũ, gauge variables), with p eliminated through the
-composition; a later mixed state MAY add **J** and a continuity multiplier. The residual
-MUST be a pure function of immutable inputs, current state, mesh/spaces, and
+Interpretive Newton state x = (A, χ, ũ, g, gauge variables), where g contains the free
+coefficients of G(s), p is eliminated through p₀(s), and the residual includes one M3b
+row per shell. A later mixed state MAY add **J** and a continuity multiplier. The
+residual MUST be a pure function of immutable inputs, current state, mesh/spaces, and
 continuation parameters.
 
 ### 14.3 Two-stage Jacobian plan
@@ -621,9 +724,10 @@ factorizations/solvers), applied in Picard order.
 
 **Stage B — hybrid exact:** NGSolve symbolic local linearization
 (`AssembleLinearization`; the BSpline transplant makes the local composition term
-automatic) plus the explicit low-rank nonlocal V_χ JVP (12.6); supply transpose actions
-when sensitivity work begins. The coupled Jacobian MUST NOT be assembled as a single
-matrix; per-block preconditioner matrices are fine.
+automatic) plus explicit low-rank nonlocal actions for V_χ, G(s), and the M3b shell
+integrals (12.6); supply transpose actions when sensitivity work begins. The coupled
+Jacobian MUST NOT be assembled as a single matrix; per-block preconditioner matrices
+and the small dense G Schur complement are fine.
 
 ### 14.4 Globalization and continuation
 
@@ -747,12 +851,16 @@ depend only on `netCDF4`/`h5py`.
   for general or remeshed domains; it is an initialization-only cost.
 
 **Compatible import pipeline:** (1) evaluate **B** in physical components; (2) project
-into the divergence-conforming representation (preserving normal flux / discrete
-divergence); (3) separate the harmonic flux component; (4) reconstruct A by the
-gauge-fixed curl-constrained solve (same operator as Sec. 7.3 with RHS
-(B_target, ∇×v)); (5) initialize p₀(V) from the source equilibrium's own pressure and
-V(s) — do NOT keep any inherited flux coordinate as a permanent remec coordinate;
-(6) u ≈ **J**·**B**/B²; (7) one consistent M3 solve before coupled iteration. The
+  into the divergence-conforming representation (preserving normal flux / discrete
+  divergence); (3) separate the harmonic flux component; (4) reconstruct A by the
+  gauge-fixed curl-constrained solve (same operator as Sec. 7.3 with RHS
+  (B_target, ∇×v)); (5) initialize p₀(s) from the source equilibrium's pressure and
+  normalized enclosed volume; (6) derive cumulative I₀(s) by integrating the source
+  equilibrium's full toroidal current over the same normalized-volume shells — do not
+  mistake a source `iota`, `I(ψ)`, J∥, or current-density array for I₀; (7) use the
+  imported current only as an initial guess for G and ũ; (8) run one constrained
+  (M3)–(M3b) solve before coupled iteration. Do NOT keep any inherited flux coordinate
+  as a permanent remec coordinate. The
 importer MUST report transfer errors in: magnetic divergence; boundary normal field;
 toroidal flux; magnetic energy; Ampère residual where source current is available.
 Bundle one coarse `wout` and one coarse DESC file (< 1 MB each) as regression inputs;
@@ -771,7 +879,8 @@ solver options, and output MUST be retained):
 
 ```python
 from remec import (EquilibriumProblem, FixedClosedBoundary, ManualTransport,
-                   PicardOptions, SolverOptions, TabulatedVolumeProfile)
+                   PicardOptions, SolverOptions, TabulatedPressureProfile,
+                   TabulatedToroidalCurrentProfile)
 from remec.geometry import SmoothSolidTorus3D
 from remec.io import load_vmec
 
@@ -781,9 +890,11 @@ geometry = SmoothSolidTorus3D.from_fourier_boundary(initial.boundary,
 problem = EquilibriumProblem(
     geometry=geometry,
     boundary=FixedClosedBoundary(toroidal_flux=initial.toroidal_flux),
-    pressure_profile=TabulatedVolumeProfile(normalized_volume=initial.s,
-                                            pressure=initial.pressure),
-    current_profile=initial.current_profile,
+    pressure_profile=TabulatedPressureProfile(
+        normalized_volume=initial.s, pressure=initial.pressure),
+    toroidal_current_profile=TabulatedToroidalCurrentProfile(
+        normalized_volume=initial.s,
+        enclosed_toroidal_current=initial.enclosed_toroidal_current),
     transport=ManualTransport(kappa_parallel=1.0, epsilon_kappa=1e-6, D_u=1e-4),
     initial_state=initial,
 )
@@ -807,10 +918,12 @@ solution is actually constructed.
 Beyond the invariant monitors of Section 5, the diagnostics package MUST provide the
 note's interpretive-mode consistency outputs: the effective source
 S_p^eff = g′(χ)S_ref − g″(χ)∇χ·K·∇χ (note Eq. Seff) and its level-set variance; the
-implied 1D source S̄₀(V) = −d[G(V)p₀′(V)]/dV and total power Γ(0) (admissibility checks
-on p₀); the geometric conductance G(V) (note Eq. conductance) — flagging flattened
-regions where G is enormous; a field-line tracer with Poincaré sections (SciPy ODE on
-the H(div) **B**) for topology visualization; and layer-width estimators for w_c and δ.
+implied 1D source expressed consistently in s (including the required V_Ω factors) and
+total power Γ(0) (admissibility checks on p₀); the geometric conductance from note Eq.
+(conductance), named `pressure_conductance` in software so it cannot be confused with
+the mean-current multiplier G(s); I_tor(s)−I₀(s), shell residuals, toroidal variation,
+⟨ũ⟩_s, G(s), and D_uG′∇ᵣs; a field-line tracer with Poincaré sections (SciPy ODE on the
+H(div) **B**) for topology visualization; and layer-width estimators for w_c and δ.
 These feed the Section 5 balance checks and the verification battery.
 
 ---
@@ -823,7 +936,7 @@ remec/
 ├── LICENSE
 ├── pyproject.toml
 ├── docs/
-│   ├── 20260814-01_Regularized_3D_MHD_equilibrium.tex
+│   ├── 20260815-01_Regularized_3D_MHD_equilibrium.tex
 │   ├── DESIGN.md
 │   ├── equations.md              # transcribed weak forms with note eq. references
 │   ├── verification.md           # test matrix and current regression numbers
@@ -888,17 +1001,21 @@ level-set volume, and I/O MUST remain separable.
 ## 22. Verification strategy (part of the architecture)
 
 **Unit tests:** parallel/perpendicular projection identities; K symmetry and
-eigenvalues (κ∥ along **b**, κ⊥ transverse); profile monotonicity and consistency;
+eigenvalues (κ∥ along **b**, κ⊥ transverse); normalized-profile domain/endpoints,
+pressure monotonicity, current-profile semantics, and rejection of dimensional-volume
+inputs;
 normalization/unit conversions; Braginskii formulas (vs. PlasmaPy, test-only); B_safe;
 Anderson algebra; mollifiers and their derivatives; checkpoint round-trips.
 
 **Manufactured solutions:** scalar diffusion — isotropic Poisson; constant oblique
 anisotropy; spatially varying anisotropy direction; curved geometry; periodic domain;
 closed field lines; island topology; convergence measured in L² and energy norms.
-M3 — pure aligned advection; transverse diffusion; reaction terms with **B**·∇p; the
-final D_u∇ᵣu·∇p term (with a test that fails conspicuously if it is dropped);
-nonconstant B; SUPG on/off; both regularization-gradient variants (∇⊥ and full ∇;
-Sec. 9.4), with cross-variant agreement at O(ε_J) at fixed D_u and a common D_u → 0
+M3–M3b — pure aligned advection; transverse diffusion; reaction terms with **B**·∇p;
+the final D_u∇ᵣũ·∇p term (with a test that fails conspicuously if it is dropped);
+nonconstant B; SUPG on/off; the −G′**B**·∇s coupling; shellwise toroidal-current
+moments; the two-F negative control and two-I₀ positive control from Sec. 9.2; both
+regularization-gradient variants (∇⊥ and full ∇; Sec. 9.4), with cross-variant agreement
+at O(ε_J) at fixed D_u, exact realization of the same I₀(s), and a common D_u → 0
 limit. Magnetics — discrete ∇·∇× = 0; manufactured curl–curl;
 gauge null-space handling; boundary normal-field condition; harmonic field + toroidal
 flux; current projection + Ampère compatibility. Level sets — analytic circle/sphere;
@@ -910,8 +1027,9 @@ cut-cell comparison.
 anisotropy scans nightly.
 
 **End-to-end and physics regressions (nightly):** axisymmetric benchmark — reduction to
-classical Grad–Shafranov + p = p₀(V(ψ)) in the appropriate limit, and reduced-vs-3D
-axisymmetric agreement where feasible; one island chain with w_c ∝ ε_κ^{1/4}
+classical Grad–Shafranov with p=p₀(s(ψ)) and I_tor=I₀(s(ψ)) in the appropriate limit,
+including two distinct current targets, and reduced-vs-3D axisymmetric agreement where
+feasible; one island chain with w_c ∝ ε_κ^{1/4}
 (Fitzpatrick threshold); current layer with δ ∝ D_u^{1/3} and bounded J∥;
 chaotic-layer pressure flattening; nested-surface limit; interpretive→predictive
 consistency (a predictive run driven by the recovered S_p^eff returns the interpretive
@@ -950,19 +1068,25 @@ resolution estimates; timing by block; memory estimate; checkpoint locations; co
 NGSolve versions, git commit, platform. Randomized tests/meshes store their seeds.
 
 Checkpoints MUST include: mesh (or lossless reference), FE order/space definitions, all
-accepted state vectors, harmonic basis and flux coefficients, normalization, input
-profiles, transport parameters, iteration history, versions/platform/threads, and the
-saved iterate's diagnostics — under a schema version; readers MUST reject unsupported
-future major versions clearly. HDF5 for structured data; VTK/VTU for visualization only
-(never a restart format).
+accepted state vectors, harmonic basis and flux coefficients, normalization, p₀(s) and
+I₀(s) inputs with an explicit `normalized_volume` coordinate-kind tag, G basis/knots and
+coefficients, transport parameters, iteration history, versions/platform/threads, and
+the saved iterate's diagnostics — under a schema version. When a persisted payload first
+carries profiles, it MUST use this new contract; any already-persisted schema that
+encodes dimensional-V or prescribed-F semantics requires a schema-version increment.
+The current metadata-only envelope need not be bumped merely to reserve future fields.
+Readers MUST reject rather than reinterpret ambiguous legacy current-profile state, and
+reject unsupported future major versions clearly. HDF5 for structured
+data; VTK/VTU for visualization only (never a restart format).
 
 Domain-specific exceptions: `InvalidProfileError`, `MeshQualityError`,
 `FluxCompatibilityError`, `UnresolvedLayerError`, `AnisotropyPollutionError`,
 `NonlinearConvergenceError`, `CheckpointVersionError`,
 `UnsupportedBoundaryPhysicsError`. Never continue silently after: a nonmonotone volume
 map; an inverted element; a failed harmonic-flux construction; incompatible net boundary
-flux; a singular linear solve; NaN/Inf in state or residual; a profile evaluated outside
-its volume interval. Under-resolution warnings are acceptable in exploratory runs;
+flux; a singular linear solve or bordered Schur complement; NaN/Inf in state or
+residual; a profile evaluated outside s∈[0,1]; unresolved shell data; or an (M3b)
+constraint residual above tolerance. Under-resolution warnings are acceptable in exploratory runs;
 strict mode turns them into errors.
 
 ---
@@ -988,38 +1112,54 @@ and refinement.** 1.4 closed-field and island frozen-field tests. 1.5 refactor i
 `AnisotropicDiffusionSolver` interface without changing results.
 
 **Phase 2 — level-set volume and transplant.** 2.1 mollified V_χ with analytic
-circle/sphere tests and monotone tabulation. 2.2 profiles + transplant with exact
+circle/sphere tests and monotone tabulation. 2.2 pressure profile + transplant with exact
 enclosed-volume and layer-cake tests. 2.3 differentiable map (JVP vs. finite
-differences). 2.4 optional ngsxfem cut-cell reference and comparison.
+differences). 2.4 optional ngsxfem cut-cell reference and comparison. These milestones
+were completed using a dimensional-V `VolumeProfile`; the normalization migration is
+owned by 3.5 and MUST NOT be mistaken for completed normalized-profile support.
 
-**Phase 3 — M3 kernel.** 3.1 direct-u weak form with all terms on frozen (**B**, p),
+**Phase 3 — M3–M3b kernel.** 3.1 direct-u weak form with all terms on frozen (**B**, p),
 with both regularization gradients (∇⊥ default and full ∇; Sec. 9.4) selectable at
-runtime and threaded consistently through every D_u term. 3.2 SUPG + manufactured
-tests, run for both variants. 3.3 ũ formulation transcribed and verified against
-direct-u (both variants). 3.4 D_u^{1/3} layer-scaling demonstration and resolution
-requirements (both variants). 3.5 gradient-variant comparison study per Sec. 9.4 and
-note §5.5: measured O(ε_J) cross-variant agreement at fixed D_u, common D_u → 0 limit,
-and a machine-readable performance/robustness comparison (assembly reuse, linear-solver
-behavior, monotonicity, misalignment sensitivity, parallel grid-noise damping) recorded
-in `docs/verification.md`; the default remains ∇⊥ unless changed by an ADR citing
-these measurements.
+runtime and threaded consistently through every D_u term; after the 2026-08-15 revision
+this is the G≡0 special-case kernel. 3.2 SUPG + manufactured tests, run for both
+variants. 3.3 historical `u=F(p)+ũ` algebraic-shift equivalence, retained only as kernel
+verification and as the negative control proving that prescribed F does not change
+physical u. 3.4 D_u^{1/3} layer-scaling demonstration and resolution requirements (both
+variants), which remains valid because smooth G does not change the leading local layer
+balance. 3.5 migrate both profile APIs/checkpoints to normalized s∈[0,1], add
+`ToroidalCurrentProfile` for cumulative I₀(s), and implement verified mollified
+shell-current moments. 3.6 implement the constrained unknown-G bordered (M3)–(M3b)
+solve of Sec. 9.2 for both variants, including the two-F negative control, two-I₀
+positive control, constraint/mutation tests, Schur complement, and D_u/shell-resolution
+scans. 3.7 gradient-variant comparison study per Sec. 9.4 and note §5.5 on the corrected
+constrained formulation: measured O(ε_J) cross-variant agreement at fixed D_u, common
+D_u→0 limit at fixed I₀(s), and a machine-readable performance/robustness comparison
+(assembly reuse, bordered linear-solver behavior, monotonicity, misalignment sensitivity,
+parallel grid-noise damping) recorded in `docs/verification.md`; the default remains ∇⊥
+unless changed by an ADR citing these measurements.
 
 **Phase 4 — compatible magnetic kernel.** 4.1 de Rham space/order-pairing tests.
 4.2 gauge-fixed curl–curl with manufactured magnetostatics. 4.3 harmonic flux field on
-a simple analytic torus. 4.4 divergence-free current projection + diagnostics.
+a simple analytic torus. 4.4 divergence-free current projection + diagnostics,
+including preservation of the (M3b) shell-current moments in the current passed to
+Ampère.
 
-**Phase 5 — reduced end-to-end solver.** 5.1 axisymmetric reduced model per the note's
-Sec. 11. 5.2 damped Picard connecting χ → transplant → M3 → current → magnetics.
+**Phase 5 — reduced end-to-end solver.** 5.1 axisymmetric reduced model per note §11,
+including the normalized p₀(s), I₀(s), and the enclosed-current relation of §11.2.
+5.2 damped Picard connecting χ → shared s → p₀(s) transplant → bordered M3–M3b →
+moment-preserving current projection → magnetics.
 5.3 Anderson with fallback and history tests. 5.4 staged continuation in pressure
-amplitude, D_u, anisotropy. Acceptance: axisymmetric benchmark vs. Grad–Shafranov +
-p₀(V(ψ)) within tolerance.
+amplitude, D_u, anisotropy. Acceptance: axisymmetric benchmark vs. Grad–Shafranov with
+both p=p₀(s(ψ)) and I_tor=I₀(s(ψ)) within tolerance for at least two current profiles.
 
 **Phase 6 — 3D fixed boundary.** 6.1 periodic-torus end-to-end benchmark. 6.2 smooth
 solid-torus mesh (simple torus, then shaped Fourier boundary, geometry-error report).
-6.3 VMEC/VMEC++ reader + initialization. 6.4 DESC reader. 6.5 reproducible finite-β
-fixed-boundary stellarator example with Poincaré/isobar/S_p^eff/G(V) diagnostics;
-nested-surface case reproduces p = p₀(V(ψ)) to O(ε_κ); island case shows flattening
-with measured w_c ∝ ε_κ^{1/4} (nightly).
+6.3 Poincaré data generation, persistence, and plotting. 6.4 VMEC/VMEC++ reader and
+initialization of p₀(s) and cumulative I₀(s). 6.5 DESC reader with the same normalized
+profile contract. 6.6 reproducible finite-β fixed-boundary stellarator example with
+Poincaré/isobar/S_p^eff/pressure-conductance and I_tor−I₀ diagnostics; nested-surface
+case reproduces p=p₀(s(ψ)) and I_tor=I₀(s(ψ)) to the stated asymptotic/discretization
+tolerances; island case shows flattening with measured w_c∝ε_κ^{1/4} (nightly).
 
 **Phase 7 — extreme-anisotropy upgrade.** 7.1 literature-derived AP prototype (ADR
 first) on the Phase 1 tests. 7.2 closed-field AP verification (anisotropy-independent
@@ -1027,10 +1167,12 @@ or substantially improved conditioning/accuracy). 7.3 AP as an interchangeable �
 in Picard. (Independent of Phase 8; may proceed in parallel. Required before any claim
 of robust operation at ε_κ ≲ 10⁻⁸.)
 
-**Phase 8 — Newton.** 8.1 pure side-effect-free residual refactor. 8.2 JFNK prototype
-with Picard-block preconditioning. 8.3 exact local linearization via symbolic
-differentiation. 8.4 nonlocal low-rank V_χ JVP. 8.5 pseudo-transient globalization and
-Picard→Newton switchover; Picard/Newton agreement test.
+**Phase 8 — Newton.** 8.1 pure side-effect-free residual refactor including G
+coefficients and M3b rows. 8.2 JFNK prototype with Picard-block/bordered preconditioning.
+8.3 exact local linearization via symbolic differentiation. 8.4 nonlocal low-rank JVPs
+for V_χ, p₀(s), G(s), and mollified shell-current constraints. 8.5 pseudo-transient
+globalization and Picard→Newton switchover; Picard/Newton agreement includes p₀ and I₀
+realization.
 
 **Phase 9 — PETSc experiment.** Separate branch; never blocks native releases.
 Benchmark installation, CI complexity, KSP/SNES robustness, memory, time-to-solution,
@@ -1046,8 +1188,9 @@ demonstrated necessary.
 **Release definitions.** `remec 0.1` (first scientifically useful): pip install on
 Linux/macOS without compiler/MPI; 2D slab + axisymmetric; high-order anisotropic χ
 solver with pollution benchmark; differentiable V_χ + exact transplant to stated
-tolerance; complete M3 with SUPG and both regularization-gradient variants (Sec. 9.4);
-compatible magnetics + current projection; damped
+tolerance for p₀(s); complete bordered M3–M3b with prescribed I₀(s), solved G(s), SUPG,
+and both regularization-gradient variants (Sec. 9.4); compatible magnetics +
+shell-moment-preserving current projection; damped
 Picard; restartable checkpoints; D_u/ε_κ scans; documented axisymmetric end-to-end
 verification; clear under-resolution warnings. (A 3D demonstration is desirable but not
 required if toroidal magnetics are not yet sufficiently verified.) `remec 0.2`: smooth
@@ -1063,6 +1206,13 @@ sensitivities.
 Before changing code, an agent MUST: (1) read this document; (2) read the relevant note
 section; (3) identify the current milestone; (4) state which equations and invariants
 the change affects; (5) add or update tests before claiming completion.
+
+For any current-profile work, agents MUST begin with note §5.4 and this plan §9.2. They
+MUST treat `PrescribedCurrentProfile`, `u=F(p)+ũ`, and the corresponding profile-source
+terms in the current code as superseded production design. Those artifacts MAY be
+retained only behind an explicitly legacy/private verification path until milestone 3.6
+uses them for the required cancellation negative control. Do not rename F to G without
+adding the M3b constraints: G is an unknown, not an input.
 
 Agents MUST: make small, reviewable changes; preserve equation labels in
 docstrings/comments and include the mathematical formulas for nontrivial forms; use
@@ -1097,8 +1247,9 @@ is ambiguous, open a focused issue or ADR rather than making an undocumented cho
 3. **Harmonic flux / gauge in complex topology:** dedicated simple-torus milestone;
    explicit cut surfaces where needed; topology diagnostics; no shaped-stellarator runs
    before validation.
-4. **Discrete M2/M3 incompatibility:** projection with monitored correction; escalate to
-   a mixed u–J formulation if the correction does not converge.
+4. **Discrete M2/M3/M3b incompatibility:** projection with monitored correction and
+   preserved shell moments; escalate to a mixed u–J formulation if either divergence or
+   I_tor(s) correction does not converge.
 5. **V_χ near critical levels:** gradient-scaled mollification; monotone inverse;
    cut-cell reference; volume-based sampling; dedicated separatrix tests.
 6. **Strongly shaped mesh quality:** robust tets first; geometry-error diagnostics;
@@ -1108,12 +1259,18 @@ is ambiguous, open a focused issue or ADR rather than making an undocumented cho
    necessary.
 8. **Newton complexity:** Picard first; pure residual architecture; JFNK before the
    exact nonlocal Jacobian; pseudo-transient continuation; optional PETSc branch.
+9. **Current border ill-conditioned or under-resolved:** equal-volume shell grid with at
+   least 3–4 radial cells per shell; N-doubling study; response-weight scaling; small
+   Schur complement; report singular values/condition estimate; never regularize a bad
+   solve by relaxing the I_tor tolerance.
 
 ---
 
 ## 28. References and resources
 
-**Project sources:** the note (`docs/20260814-01_...tex`); this document; ADRs.
+**Project sources:** the note (`docs/20260815-01_Regularized_3D_MHD_equilibrium.tex`);
+this document; ADRs. The 2026-08-14 note is retained only as historical provenance and
+MUST NOT be used for implementation decisions.
 
 **NGSolve:** documentation (docu.ngsolve.org) — TaskManager, H(curl)/H(div) tutorial,
 periodic meshes/spaces, nonlinear problems and `AssembleLinearization`; `ngsxfem`
@@ -1149,8 +1306,8 @@ PlasmaPy (test-only), Gmsh (optional).
 remec is built as a sequence of independently verifiable mathematical operators, not as
 one large equilibrium solver. The central success criterion is not that a nonlinear
 iteration returns a field. It is that the returned field satisfies the compatible
-magnetic and current constraints, realizes the prescribed pressure-versus-volume profile,
-resolves the regularization layers, and has artificial cross-field transport
+magnetic and current constraints, realizes the prescribed p₀(s) and I₀(s) profiles on
+normalized enclosed volume, resolves the regularization layers, and has artificial cross-field transport
 demonstrably below the physical transport being modeled.
 
 ---

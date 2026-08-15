@@ -9,6 +9,17 @@ the submitted PR (or merged), with its required checks green.  The milestone's `
 change is part of its implementation PR; merging that PR requires no follow-up ledger
 edit.
 
+> **2026-08-15 model revision — read before choosing work.** The August 14
+> `u=F(p)+ũ` current-profile prescription is mathematically ineffective at finite
+> `D_u` and is superseded by note §5.4 and `DESIGN.md` §9.2. Completed milestones
+> 3.1–3.4 remain valid verification of the unconstrained/G≡0 M3 kernel, SUPG, and local
+> layer scaling. Milestone 3.3's F-shift is retained only as the negative control showing
+> that changing F does not change physical u; it is not current-profile support. The next
+> work is 3.5 (normalized p₀(s)/I₀(s) contracts and shell moments), then 3.6 (unknown-G
+> bordered M3–M3b). Do not begin the gradient comparison, now 3.7, or any coupled phase
+> until both corrective milestones pass. The authoritative note is
+> `docs/20260815-01_Regularized_3D_MHD_equilibrium.tex`; the August 14 note is historical.
+
 A milestone may only start when every milestone in the previous phase is `[x]` on the
 target integration branch (`DESIGN.md` §25). A `[x]` on an unmerged PR does not satisfy
 that dependency. Phase 7 may run in parallel with Phase 8.
@@ -63,7 +74,7 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   <br>Next: milestone 1.4 can reuse the translated Sovinec field
   b = (∂yψ, −∂xψ)/|∇ψ| and should add an independent analytic-island field rather
   than treating this pollution regression as the full closed-field/island suite.
-- [x] **1.4** Closed-field and island frozen-field tests — `DESIGN.md` §8.3, §22 · note: §4, §7
+- [x] **1.4** Closed-field and island frozen-field tests — `DESIGN.md` §8.3, §22 · note: §4.3
   <br>Acceptance: finite-anisotropy closed-field response; independent analytic-island
   manufactured convergence in L² and K-energy norms; smooth field-null handling.
   <br>Measured: macOS / CPython 3.12.2 / NGSolve 6.2.2606 — island finest-pair degree 1:
@@ -97,7 +108,7 @@ that dependency. Phase 7 may run in parallel with Phase 8.
 
 ## Phase 2 — level-set volume and transplant
 
-- [x] **2.1** Mollified V_χ — `DESIGN.md` §12.1, §12.2 · note: §6
+- [x] **2.1** Mollified V_χ — `DESIGN.md` §12.1, §12.2 · note: §8.2, §8.4
   <br>Acceptance: analytic circle/sphere; monotone tabulation.
   <br>Measured: macOS / CPython 3.12.2 / NumPy 2.4.6 — the zero-level circle and
   sphere volumes have relative errors 5.18e-4 and 7.76e-4, respectively; their
@@ -106,11 +117,13 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   2.058. The endpoint identities hold exactly, raw endpoint residuals are checked,
   and the 65-level table is strictly monotone with uniform enclosed-volume samples. See
   `tests/manufactured/mollified_sphere_volume_rates.csv` and `docs/verification.md`.
-  <br>Next: 2.2 should add the FEM quadrature-extraction pass and consume
-  `MollifiedVolumeMap` through a monotone `VolumeProfile` transplant; 2.3 owns the
+  <br>Next: 2.2 added the FEM quadrature-extraction pass and consumed
+  `MollifiedVolumeMap` through a monotone `VolumeProfile` transplant; that legacy
+  profile takes dimensional V, so milestone 3.5 owns its migration to normalized s.
+  2.3 owns the
   nonlocal JVP and must calibrate the `minimum_gradient_fraction=1e-3` critical-level
   safeguard against tabulation spacing before using its mollified derivatives in Newton.
-- [x] **2.2** Profiles + transplant — `DESIGN.md` §12.5 · note: §6
+- [x] **2.2** Pressure profile + transplant (legacy dimensional-V API) — `DESIGN.md` §12.5 · note: §6.1, §8.3
   <br>Acceptance: exact enclosed-volume and layer-cake tests.
   <br>Measured: macOS / CPython 3.12.2 / NGSolve 6.2.2606 — direct superlevel-volume
   measurement of the transplanted field realizes seven targets with a 9.77e-5 maximum
@@ -118,8 +131,10 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   (required below 3.0e-3). The NGSolve mapped-quadrature pass integrates the unit square to 1.0
   and its M4b BSpline transplant has 0.5 ± 0.03 mean pressure.
   <br>Next: 2.3 owns the nonlocal ``delta V_chi`` JVP; the current BSpline represents
-  only M4b's local composition and NGSolve differentiates it symbolically.
-- [x] **2.3** Differentiable map — `DESIGN.md` §12.6 · note: §6
+  only M4b's local composition and NGSolve differentiates it symbolically. The measured
+  transplant remains valid, but its public `VolumeProfile` coordinate is dimensional V
+  and MUST be migrated—not silently reinterpreted—in milestone 3.5.
+- [x] **2.3** Differentiable map — `DESIGN.md` §12.6 · note: §8.2, §9.1
   <br>Acceptance: JVP agrees with finite differences.
   <br>Measured: macOS / CPython 3.12.2 / NumPy 2.4.6 — the ADR-0003 frozen-width
   quasi-Newton `(V_derivatives)` surface-average JVP agrees with its central finite
@@ -130,7 +145,7 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   <br>Next: 2.4 remains optional; later Newton work can consume this array-backed
   low-rank quasi-Newton action while retaining symbolic differentiation for M4b's
   local term. Revisit ADR 0003 Option 2 if nonlinear convergence is poor.
-- [x] **2.4** Cut-cell reference (optional) — `DESIGN.md` §12.4 · note: §6 (M4b), §8.1
+- [x] **2.4** Cut-cell reference (optional) — `DESIGN.md` §12.4 · note: §8.1
   <br>Acceptance: optional high-order implicit-domain reference agrees with analytic sharp
   circle volumes and calibrates the mollified map under refinement.
   <br>Measured: macOS / CPython 3.12.2 / NGSolve 6.2.2606 / xfem 2.1.2606 —
@@ -145,7 +160,7 @@ that dependency. Phase 7 may run in parallel with Phase 8.
 
 ## Phase 3 — M3 kernel
 
-- [x] **3.1** Direct-u weak form, frozen (B, p) — `DESIGN.md` §9.1, §9.4 · note: (M3), §5.5
+- [x] **3.1** Direct-u weak form, frozen (B, p) (revised-model G≡0 kernel) — `DESIGN.md` §9.1, §9.4 · note: §5.2, §5.5
   <br>Acceptance: both regularization gradients (∇⊥ default, full ∇ isotropic variant)
   selectable at runtime and applied consistently to the (M2) flux, the (M3) weak form,
   and the final `D_u ∇ᵣu·∇p` term; the choice recorded in config digest, logs, and
@@ -162,8 +177,10 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   coefficient to 3.6e-16, and its certified L² norm agrees with the assembled
   diagnostic to 1e-12. B-floor activity is 1.70e-16 with sampled min |B| = 2.236;
   setting the floor to 1.0 raises the live diagnostic to 1.241e-1.
-  <br>Next: milestone 3.2 should add centralized SUPG with a complete strong residual
-  for both variants. Retain the strong-form oracle: applying the same wrong drive factor
+  <br>Revision note: this verified the unconstrained direct-u equation and remains the
+  G≡0 oracle for corrected (M3); it did not implement (M3b) or a current-profile input.
+  Milestone 3.6 will reuse it when checking the constrained formulation. Retain the
+  strong-form oracle: applying the same wrong drive factor
   and reaction sign to the implementation and weak assembly check raises its L² errors
   to 1.287 (∇⊥) / 1.284 (full ∇), while deleting the final M3 correction from the
   implementation also makes the algebraic assembly check fail. The divergence identity
@@ -172,7 +189,7 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   by +50% and +163%, so the certified-to-assembled comparison catches both.
   Before evolving-field studies, pair the floor-activity measurement with an
   observable-sensitivity warning/error gate.
-- [x] **3.2** SUPG + manufactured tests — `DESIGN.md` §9.1, §9.4 · note: (M3), §5.5
+- [x] **3.2** SUPG + manufactured tests (revised-model G≡0 kernel) — `DESIGN.md` §9.1, §9.4 · note: §5.2, §5.5
   <br>Acceptance: includes the test that fails conspicuously if the `D_u ∇ᵣu·∇p` term is dropped (`DESIGN.md` §22); all manufactured tests run for both gradient variants.
   <br>Measured: macOS / CPython 3.12.2 / NGSolve 6.2.2606 — complete-residual SUPG
   finest-pair L² rates for degrees 1/2/3 are 1.970 / 3.029 / 4.036 with ∇⊥ and
@@ -185,11 +202,13 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   case, the correct L² errors are 1.234e-6 / 1.234e-6 (∇⊥ / full ∇); deleting
   `D_u ∇ᵣu·∇p` raises them to 4.217e-2 / 4.230e-2. See
   `tests/manufactured/m3_supg_rates.csv` and `docs/verification.md`.
-  <br>Next: milestone 3.3 should apply the direct-u/ũ transformation to the same
-  centralized SUPG residual and retain both `stabilization` and gradient-variant
-  provenance paths.
-- [x] **3.3** ũ formulation — `DESIGN.md` §9.2, §9.4 · note: (M3), §5.5
-  <br>Acceptance: agrees with direct-u; transformed source terms use the selected ∇ᵣ; verified for both variants.
+  <br>Revision note: retain the centralized complete strong residual and both provenance
+  paths. Milestone 3.6 must add the −G′B·∇s term and apply every D_u term to ũ.
+- [x] **3.3** Algebraic F(p)-shift equivalence (historical negative control; not a current closure) — `DESIGN.md` §9.2, §9.4 · note: §5.4 "A change of variables does not restore the freedom"
+  <br>Historical acceptance: the shifted solve agrees with direct-u; transformed source
+  terms use the selected ∇ᵣ; verified for both variants. Revised interpretation: this
+  equivalence is evidence that prescribed F cancels from physical u, not that it imposes
+  a mean current.
   <br>Measured: macOS / CPython 3.12.2 / NGSolve 6.2.2606 — reconstructed-ũ and
   direct-u relative L² disagreements are at most 6.26e-16 (∇⊥) and 8.64e-15
   (full ∇), below the 1e-10 gate. Finest-pair degree 1/2/3 L² rates are
@@ -201,12 +220,11 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   `tests/manufactured/m3_utilde_rates.csv` and `docs/verification.md`.
   Direct-u/ũ agreement remains below 3.0e-16 with deliberately active B floors of
   0.1 and 1.0 after matching the symmetric Galerkin projection convention exactly.
-  <br>Next: milestone 3.4 should use the preferred homogeneous ũ solve while retaining
-  the direct-u cross-check, both gradient variants, complete shifted SUPG residual, and
-  physical-u/M2 reconstruction when measuring the D_u^{1/3} layer width. Add a stable
-  prescribed-profile identifier to coupled-run configuration/log provenance before
-  checkpointing F(p).
-- [x] **3.4** D_u^{1/3} layer scaling — `DESIGN.md` §9, §22 · note: (M3), §5.5
+  <br>Revision note: keep this path private/legacy until 3.6 uses it for the required
+  two-F cancellation test. `PrescribedCurrentProfile` and its identifier MUST be
+  removed or explicitly deprecated from the production API/checkpoint schema in 3.5;
+  the corrected inputs are p₀(s) and I₀(s), while G(s) is solved.
+- [x] **3.4** D_u^{1/3} layer scaling (G≡0 local-layer limit) — `DESIGN.md` §9, §22 · note: §5.3–§5.5
   <br>Acceptance: measured δ ∝ D_u^{1/3} for both gradient variants; resolution requirements documented.
   <br>Measured: macOS / CPython 3.12.2 / NGSolve 6.2.2606 — fitted physical-(M2)
   `J_parallel/B` FWHM exponents are 0.346160 (∇⊥) and 0.345392 (full ∇), within 0.04
@@ -220,61 +238,94 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   64×16 → 96×24 h-refinement changes FWHM by only 5.789e-5 relative. The M3 space is
   genuinely periodic, with direct-u/utilde seam values agreeing to 1e-11. Free-DOF
   relative residuals stay below 4.36e-17; physical-u, M2-current, and J_parallel/B
-  cross-checks pass. Prescribed F(p) identifiers participate in the configuration
-  digest and structured solve records. See `tests/manufactured/m3_layer_scaling.csv`,
+  cross-checks pass. Legacy prescribed-F identifiers participate in the configuration
+  digest and structured solve records; this provenance is historical and is replaced by
+  normalized I₀(s), G-basis, and shell-grid provenance in milestones 3.5–3.6. See `tests/manufactured/m3_layer_scaling.csv`,
   `tests/manufactured/m3_layer_mesh_refinement.csv`, and `docs/verification.md`.
-  <br>Next: milestone 3.5 may reuse the periodic machinery and physical-M2 Fourier
-  observable as a scaling baseline, but not this slab as evidence for cross-variant
-  agreement: B_x = 0 makes the layer-normal ∇⊥ and full-∇ operators identical. Add the
-  required field-misaligned/nonzero-B_x benchmark and performance/iteration
-  instrumentation without weakening the default ∇⊥ path or treating polynomial degree
-  as extra layer elements. A later coupled production driver owns invoking
-  `assess_layer_resolution` once it can estimate δ and the local normal mesh scale.
-- [ ] **3.5** Gradient-variant comparison study (∇⊥ vs full ∇) — `DESIGN.md` §9.4 · note: §5.5
-  <br>Acceptance: on shared frozen-(B, p) benchmarks including a resonant layer and a
-  field-misaligned mesh: measured O(ε_J) relative cross-variant agreement at fixed D_u
-  and a common D_u → 0 limit; machine-readable comparison tables for assembly/
-  refactorization reuse, linear-iteration counts, monotonicity/oscillations and layer
-  smearing, misalignment sensitivity, and parallel grid-noise damping, recorded in
-  `docs/verification.md`. Default remains ∇⊥ unless changed by an ADR citing these
-  measurements.
+  <br>Next: milestone 3.5 is the normalization/shell-moment correction. Milestone 3.7 may
+  later reuse this periodic machinery and physical-M2 Fourier observable as a scaling
+  baseline, but not this slab as evidence for cross-variant agreement: B_x=0 makes the
+  layer-normal ∇⊥ and full-∇ operators identical. A later coupled production driver owns
+  invoking `assess_layer_resolution` once it can estimate δ and local normal mesh scale.
+- [ ] **3.5** Normalized profile contracts + shell-current moments — `DESIGN.md` §12.1–§12.5, §9.2, §24 · note: §5.4, §6.1, §8
+  <br>Acceptance: replace the dimensional-V `VolumeProfile` public/checkpoint contract
+  with p₀(s) on exactly [0,1]; add cumulative `ToroidalCurrentProfile` I₀(s) with
+  I₀(0)=0; reject ambiguous/dimensional coordinates; update the serialization contract
+  and increment only a schema that already persists the superseded semantics;
+  use one shared s=V_χ/V_Ω field for both profiles. Implement cumulative and shellwise
+  I_tor integrals with mollified layer-set weights for all (M2) current components and
+  verify against analytic circle/annulus or toroidal-surrogate integrals, h/quadrature
+  refinement, endpoint/partition identities, and a domain-volume rescaling test showing
+  identical p₀(s)/I₀(s) semantics. Legacy prescribed-F state is rejected or explicitly
+  migrated only as non-production verification provenance.
+  <br>Measured: —
+- [ ] **3.6** Constrained unknown-G bordered M3–M3b solve — `DESIGN.md` §9.1–§9.4 · note: §5.4, (M2)–(M3b), §9
+  <br>Acceptance: for both ∇⊥ and full-∇ variants, solve jointly for homogeneous ũ and
+  G(s) with G(1)=u_b; apply −D_u∇ᵣũ consistently in (M2), (M3), SUPG, diagnostics, and
+  shell constraints; realize I_tor(s)=I₀(s) to solver tolerance. Automated tests MUST
+  show (a) two distinct old F(p) profiles with the same edge value give the same physical
+  u, (b) two distinct I₀(s) profiles give their respective currents, and (c) deleting
+  −G′B·∇s, diffusing full u, or omitting any current contribution makes a test fail.
+  Include h/p/N-shell convergence, N-doubling stability, the bordered Schur solve, and a
+  D_u scan holding I₀ fixed while the multiplier-current/mean-ũ diagnostics approach the
+  note's regular limit.
+  <br>Measured: —
+- [ ] **3.7** Gradient-variant comparison study (∇⊥ vs full ∇), constrained formulation — `DESIGN.md` §9.4 · note: §5.5
+  <br>Acceptance: on shared frozen-(B,p,s,I₀) benchmarks including a resonant layer and a
+  field-misaligned mesh: each variant realizes the same I₀(s); measured O(ε_J) relative
+  cross-variant agreement at fixed D_u and a common D_u→0 limit; machine-readable
+  comparison tables for assembly/refactorization reuse, bordered linear-iteration
+  counts, monotonicity/oscillations and layer smearing, misalignment sensitivity, and
+  parallel grid-noise damping, recorded in `docs/verification.md`. Default remains ∇⊥
+  unless changed by an ADR citing these measurements.
   <br>Measured: —
 
 ## Phase 4 — compatible magnetic kernel
 
-- [ ] **4.1** de Rham space/order pairing — `DESIGN.md` §7.1 · note: §5
+- [ ] **4.1** de Rham space/order pairing — `DESIGN.md` §7.1 · note: §6 (M1)
   <br>Measured: —
-- [ ] **4.2** Gauge-fixed curl–curl — `DESIGN.md` §7.3, §11 · note: §5
+- [ ] **4.2** Gauge-fixed curl–curl — `DESIGN.md` §7.3, §11 · note: §6 (M1)
   <br>Acceptance: manufactured magnetostatics; gauge null-space handled.
   <br>Measured: —
-- [ ] **4.3** Harmonic flux field on an analytic torus — `DESIGN.md` §7.2 · note: §5
+- [ ] **4.3** Harmonic flux field on an analytic torus — `DESIGN.md` §7.2 · note: §6 (M1)
   <br>Measured: —
-- [ ] **4.4** Divergence-free current projection — `DESIGN.md` §10 · note: (M2), (M4)
-  <br>Acceptance: discrete ∇·B at roundoff; Ampère compatibility.
+- [ ] **4.4** Divergence-free current projection — `DESIGN.md` §10 · note: (M1)–(M3b), §5.4
+  <br>Acceptance: discrete ∇·B at roundoff; Ampère compatibility; projected current
+  preserves the prescribed (M3b) shell moments I_tor(s)=I₀(s) to the stated tolerance.
   <br>Measured: —
 
 ## Phase 5 — reduced end-to-end solver
 
-- [ ] **5.1** Axisymmetric reduced model — `DESIGN.md` §16.3 · note: §11
+- [ ] **5.1** Axisymmetric reduced model — `DESIGN.md` §16.3 · note: §11, especially §11.2
+  <br>Acceptance: reduced equations include both p₀(s) and I₀(s), and recover the note's
+  Grad–Shafranov enclosed-current relation for at least two current profiles.
   <br>Measured: —
-- [ ] **5.2** Damped Picard — `DESIGN.md` §13.1, §13.3
+- [ ] **5.2** Damped Picard — `DESIGN.md` §13.1, §13.3 · note: §9
+  <br>Acceptance: cycle uses one s field, p=p₀(s), bordered M3–M3b, and a
+  shell-moment-preserving projection; convergence includes both profile residuals.
   <br>Measured: —
 - [ ] **5.3** Anderson with fallback — `DESIGN.md` §13.3
   <br>Measured: —
-- [ ] **5.4** Staged continuation — `DESIGN.md` §14.4
-  <br>**Phase gate.** Acceptance: axisymmetric benchmark vs. Grad–Shafranov + p₀(V(ψ)) within tolerance.
+- [ ] **5.4** Staged continuation — `DESIGN.md` §14.4 · note: §9, §11.2
+  <br>**Phase gate.** Acceptance: axisymmetric benchmark vs. Grad–Shafranov with
+  p=p₀(s(ψ)) and I_tor=I₀(s(ψ)) within tolerance for at least two I₀ targets.
   <br>Measured: —
 
 ## Phase 6 — 3D fixed boundary
 
-- [ ] **6.1** Periodic-torus end-to-end benchmark — `DESIGN.md` §16.2
+- [ ] **6.1** Periodic-torus end-to-end benchmark — `DESIGN.md` §16.2 · note: §6, §9
 - [ ] **6.2** Smooth solid-torus mesh — `DESIGN.md` §16.4 (simple torus → shaped Fourier boundary; geometry-error report)
 - [ ] **6.3** Poincare plots: compute data via field line tracing, save and load
   data, functions to make plots.
 - [ ] **6.4** VMEC/VMEC++ reader + initialization — `DESIGN.md` §17
+  <br>Acceptance: imports p₀(s) and derives cumulative enclosed toroidal current I₀(s)
+  on the same normalized-volume grid; does not pass through a legacy F(p) profile.
 - [ ] **6.5** DESC reader — `DESIGN.md` §17
+  <br>Acceptance: same normalized p₀(s)/I₀(s) contract as 6.4.
 - [ ] **6.6** Finite-β fixed-boundary stellarator example — `DESIGN.md` §19, §22 (nightly)
-  <br>Acceptance: nested-surface case reproduces p = p₀(V(ψ)) to O(ε_κ); island case shows flattening with measured w_c ∝ ε_κ^{1/4}.
+  <br>Acceptance: nested-surface case reproduces p=p₀(s(ψ)) to O(ε_κ) and
+  I_tor=I₀(s(ψ)) to constraint/discretization tolerance; island case shows flattening
+  with measured w_c∝ε_κ^{1/4}; diagnostics include the current-profile residual.
 
 ## Phase 7 — extreme-anisotropy upgrade *(may run parallel to Phase 8)*
 
@@ -284,10 +335,13 @@ that dependency. Phase 7 may run in parallel with Phase 8.
 
 ## Phase 8 — Newton
 
-- [ ] **8.1** Side-effect-free residual refactor — `DESIGN.md` §14.2
-- [ ] **8.2** JFNK prototype with Picard-block preconditioning — `DESIGN.md` §14.3
+- [ ] **8.1** Side-effect-free residual refactor — `DESIGN.md` §14.2 · note: §9.1
+  <br>Acceptance: state includes G coefficients and residual includes every M3b shell row.
+- [ ] **8.2** JFNK prototype with Picard-block preconditioning — `DESIGN.md` §14.3 · note: §9.1
 - [ ] **8.3** Exact local linearization — `DESIGN.md` §14.3
-- [ ] **8.4** Nonlocal low-rank V_χ JVP — `DESIGN.md` §12.6, §14.3
+- [ ] **8.4** Nonlocal low-rank level-set JVPs — `DESIGN.md` §12.6, §14.3 · note: §5.4, §9.1
+  <br>Acceptance: JVP covers p₀(s), G(s), shell weights, and I_tor constraints as well
+  as V_χ; agrees with finite differences for all blocks.
 - [ ] **8.5** Pseudo-transient globalization and switchover — `DESIGN.md` §14.4
   <br>Acceptance: Picard/Newton agreement test.
 
@@ -309,7 +363,8 @@ that dependency. Phase 7 may run in parallel with Phase 8.
 
 ## Release gates
 
-- **0.1** — Phases 0–5 complete. See `DESIGN.md` §25 "Release definitions".
+- **0.1** — Phases 0–5 complete, including corrected normalized p₀(s)/I₀(s) and
+  constrained M3b. See `DESIGN.md` §25 "Release definitions".
 - **0.2** — Phase 6 + first AP solver (7.1–7.3) + Anderson.
 - **0.3** — Phase 8 + Phase 9 results + shaped wall domains + initial sensitivities.
 

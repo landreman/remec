@@ -1,5 +1,10 @@
 # NGSolve API notes
 
+> Entries for milestones 3.3–3.4 mention `PrescribedCurrentProfile` and the former
+> `u=F(p)+ũ` shift. After the 2026-08-15 model revision those entries remain accurate
+> descriptions of NGSolve expression behavior, but not of the production current-profile
+> closure. Follow `DESIGN.md` §9.2 and `STATUS.md` milestones 3.5–3.6.
+
 - Milestone 3.4 (NGSolve 6.2.2606):
   `ngsolve.meshes.MakeStructured2DMesh(periodic_y=True)` registers a top/bottom mesh
   identification, but a plain `ngsolve.H1` space does not consume it: wrap the base

@@ -1,5 +1,16 @@
 # Verification records
 
+> **Model-revision notice (2026-08-15).** Records for milestones 3.3–3.4 describe the
+> former prescribed `u=F(p)+ũ` parameterization. The measurements remain valid for the
+> unconstrained/G≡0 M3 kernel and local layer scaling, but `F(p)` does not prescribe the
+> physical mean current at finite D_u. Under the authoritative August 15 note, these
+> equivalence records are the negative control for `DESIGN.md` §9.2. Production current
+> input is cumulative I₀(s), s=V/V_Ω∈[0,1]; the solver must determine G(s) from (M3b).
+> No statement below calling the F-shift “preferred” should be read as current design.
+> Likewise, milestone 2.2 records the implemented dimensional-V `VolumeProfile`; its
+> numbers remain valid, but milestone 3.5 must migrate the public contract and layer-cake
+> oracle to p₀(s) and the factor V_Ω∫₀¹·ds.
+
 ## Milestone 3.4 — resonant M3 layer scaling
 
 The note's local resonant reduction of (M3),
