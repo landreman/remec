@@ -328,6 +328,9 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   counts, monotonicity/oscillations and layer smearing, misalignment sensitivity, and
   parallel grid-noise damping, recorded in `docs/verification.md`. Default remains ∇⊥
   unless changed by an ADR citing these measurements.
+  The D_u→0 study must be emergent on one fixed frozen state and fixed I₀/drive; monitor
+  ‖D_uG′∇ᵣs‖ and ⟨ũ⟩_s, and explicitly report or reject an inadmissible target rather
+  than inferring regularity from a per-D_u manufactured family.
   <br>Measured: —
 
 ## Phase 4 — compatible magnetic kernel

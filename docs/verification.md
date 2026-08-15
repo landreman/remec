@@ -108,8 +108,17 @@ The maximum shell $|\langle\tilde u\rangle|$ simultaneously falls from
 $3.9866\times10^{-2}$ to $9.3790\times10^{-3}$ (perpendicular) and from
 $3.9875\times10^{-2}$ to $9.3877\times10^{-3}$ (full). The largest M3 and M3b
 relative residuals in this scan are $1.096\times10^{-16}$ and $7.186\times10^{-17}$.
-This is the regular-limit check; milestone 3.7 owns the broader resonant/misaligned
-cross-variant comparison.
+This is a manufactured-family realization check, not an emergent fixed-frozen-state
+limit: `magnetic_magnitude_gradient` is re-derived at each $D_u$ from an exact family
+whose $\tilde u$ and bounded, $D_u$-dependent $G'$ were chosen to vanish regularly.
+Thus the scan demonstrates that the bordered solver realizes an admissible bounded-$G'$
+family and that the mandatory controls fail when its physics is mutated; it does not
+show that an arbitrary fixed target and frozen drive are admissible. The note's
+vanishing diagnostic is qualified by “for an admissible target.” Milestone 3.7 must
+perform the emergent scan with $(\mathbf B,p,s,I_0)$ and the frozen drive held fixed,
+and must report or reject a target when $\|D_uG'\nabla_rs\|$ or
+$\langle\tilde u\rangle_s$ fails to approach a common regular limit, in addition to
+the broader resonant/misaligned cross-variant comparison.
 
 The final M3b evaluation is independent in the specific §9.2 sense that it resamples
 the reconstructed physical M2 current and never reuses assembled $C_u/C_G$ rows. Its

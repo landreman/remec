@@ -391,6 +391,7 @@ def test_fixed_i0_du_scan_has_a_regular_multiplier_limit(variant: str) -> None:
         assert physical_error == pytest.approx(
             float(recorded[diffusivity]["physical_u_l2_error"]), rel=5.0e-3
         )
+        assert physical_error < 5.0e-3
         assert result.schur_condition_number == pytest.approx(
             float(recorded[diffusivity]["schur_condition_number"]), rel=5.0e-10
         )
