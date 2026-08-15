@@ -5,6 +5,21 @@
 > descriptions of NGSolve expression behavior, but not of the production current-profile
 > closure. Follow `DESIGN.md` §9.2 and `STATUS.md` milestones 3.5–3.6.
 
+- Milestone 3.6 (NGSolve 6.2.2606): the open linear spline
+  `BSpline(2, [s0, *nodes, sN], nodal_values)(s)` gives the piecewise-linear G basis
+  required by the bordered M3–M3b system. For a GridFunction-backed level set, do not
+  rely on coordinate `.Diff` through that composition: transcribe the monotone PCHIP
+  for `s=V_chi/V_omega` interval by interval and multiply its analytic `ds/dchi` by
+  the supplied native `grad(chi)`. `MapToAllElements` retains the same element/rule
+  ordering used by `extract_ngsolve_quadrature`; the resulting coefficient samples
+  matched the array-backed volume-map coordinate within 2e-12. Compiling every G
+  column repeats the nested PCHIP expression, so compile time grows visibly with the
+  number of volume levels; keep that resolution explicit in configuration and scan it
+  rather than burying an oversized table in each coefficient tree. One
+  `bilinear_form.mat.Inverse(free_dofs, inverse="umfpack")` object can be reused for
+  the base right-hand side and all A-inverse-P response vectors before forming the
+  small dense Schur complement.
+
 - Milestone 3.4 (NGSolve 6.2.2606):
   `ngsolve.meshes.MakeStructured2DMesh(periodic_y=True)` registers a top/bottom mesh
   identification, but a plain `ngsolve.H1` space does not consume it: wrap the base

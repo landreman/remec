@@ -283,7 +283,7 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   shell. The deprecated F-shift path is deliberately absent
   from `remec.solvers` exports but remains in its implementation module for the required
   two-F cancellation negative control.
-- [ ] **3.6** Constrained unknown-G bordered M3–M3b solve — `DESIGN.md` §9.1–§9.4 · note: §5.4, (M2)–(M3b), §9
+- [x] **3.6** Constrained unknown-G bordered M3–M3b solve — `DESIGN.md` §9.1–§9.4 · note: §5.4, (M2)–(M3b), §9
   <br>Acceptance: for both ∇⊥ and full-∇ variants, solve jointly for homogeneous ũ and
   G(s) with G(1)=u_b; apply −D_u∇ᵣũ consistently in (M2), (M3), SUPG, diagnostics, and
   shell constraints; realize I_tor(s)=I₀(s) to solver tolerance, confirmed by an
@@ -296,7 +296,26 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   Include h/p/N-shell convergence, N-doubling stability, the bordered Schur solve, and a
   D_u scan holding I₀ fixed while the multiplier-current/mean-ũ diagnostics approach the
   note's regular limit.
-  <br>Measured: —
+  <br>Measured: macOS / CPython 3.12.2 / NGSolve 6.2.2606 — the unknown-G
+  piecewise-linear border uses one A factorization plus a shell-sized Schur solve and
+  independently reconstructs all parallel, diamagnetic, and regularizing (M2) moments.
+  Across the coupled h/p table, maximum relative residuals are 1.131e-16 (M3) and
+  1.063e-16 (M3b). At p=2, 20 → 28 subdivisions gives physical-u L² rates 2.0041
+  (∇⊥) and 2.0042 (full ∇); the p=1 → 2 errors decrease from 3.379e-4 → 2.016e-4
+  and 3.869e-4 → 2.054e-4, with the p=3 results at the second-order mollified-shell
+  ceiling. Doubling 4 → 8 shells moves the sampled solution by only 6.99e-6 and
+  7.33e-6 relatively while every shell spans 3.991 local cells/mollifier widths.
+  Two distinct I₀ profiles realize their independently evaluated currents below 1e-10;
+  two old F profiles with one edge value cancel below 1e-10. At fixed I₀,
+  D_u=0.08 → 0.04 → 0.02 reduces ‖D_uG′∇ᵣs‖₂ from 0.387514 → 0.193757 →
+  0.0968786, with zero shell-mean ũ in the aligned regular-limit oracle and M3b
+  residual 3.49e-16. See `tests/manufactured/m3_constrained_rates.csv`,
+  `tests/manufactured/m3_constrained_du_scan.csv`, and `docs/verification.md`.
+  <br>Next: milestone 3.7 should retain this exact shared-s/PCHIP construction and
+  independent current evaluator, use genuinely field-misaligned/resonant benchmarks
+  (the aligned D_u oracle cannot distinguish variants), and record reuse/iteration,
+  oscillation, smearing, misalignment, and parallel-noise metrics without changing the
+  default ∇⊥ choice absent an ADR.
 - [ ] **3.7** Gradient-variant comparison study (∇⊥ vs full ∇), constrained formulation — `DESIGN.md` §9.4 · note: §5.5
   <br>Acceptance: on shared frozen-(B,p,s,I₀) benchmarks including a resonant layer and a
   field-misaligned mesh: each variant realizes the same I₀(s); measured O(ε_J) relative
