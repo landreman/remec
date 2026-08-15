@@ -72,9 +72,12 @@ class FrozenCurrentContinuityCoefficients:
 
 @dataclass(frozen=True, slots=True)
 class PrescribedCurrentProfile:
-    r"""Frozen ``F(p)`` data for the note's ``u = F(p) + utilde`` split.
+    r"""Legacy verification-only ``F(p)`` data for ``u = F(p) + utilde``.
 
-    ``identifier`` is a stable caller-owned provenance key included in the solve
+    This superseded parameterization cannot impose a physical current profile and is
+    intentionally absent from :mod:`remec.solvers` exports and checkpoint profile
+    records. It remains here only for milestone 3.6's required two-F cancellation
+    negative control. ``identifier`` is a stable caller-owned provenance key included in the solve
     configuration digest and structured records. ``value`` is ``F(p)`` and
     ``pressure_derivative`` is ``F'(p)``. Together with
     ``FrozenCurrentContinuityCoefficients.pressure_gradient`` they define
@@ -125,7 +128,7 @@ class CurrentContinuityResult:
 
 
 class CurrentContinuitySolver:
-    r"""Direct-u and preferred utilde solver for note equations (M2)--(M3).
+    r"""Direct-u note-``(M2)``--``(M3)`` kernel with a legacy F-shift oracle.
 
     The selected ``grad_r`` is used consistently in
     ``J = uB + B x grad(p)/B_safe^2 - D_u grad_r(u)`` and in the M3 weak form
@@ -252,12 +255,20 @@ class CurrentContinuitySolver:
         *,
         boundary: str = "bottom|right|top|left",
     ) -> CurrentContinuityResult:
-        r"""Solve note Eq. ``utilde_equation`` with homogeneous ``utilde`` data.
+        r"""Run the deprecated algebraic F-shift negative-control solve.
 
-        This is the preferred (M3) formulation. It solves for ``utilde`` on the same
+        This is not the constrained unknown-G ``(M3)``--``(M3b)`` formulation. It
+        solves for ``utilde`` on the same
         Galerkin/SUPG operator as direct ``u``, then reconstructs
         ``u = F(p) + utilde`` for note-(M2) current and physical diagnostics.
         """
+        warnings.warn(
+            "solve_utilde is a legacy F(p)-shift verification path and does not impose "
+            "a production current profile; use normalized I_0(s) with the milestone-3.6 "
+            "constrained solver",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self._solve(
             field,
             coefficients,
