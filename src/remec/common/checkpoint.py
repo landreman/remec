@@ -6,8 +6,10 @@ import json
 import os
 import platform as platform_module
 import subprocess
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from itertools import pairwise
+from math import isfinite
 from pathlib import Path
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
@@ -24,6 +26,124 @@ _SCHEMA_VERSION = 1
 
 class CheckpointVersionError(ValueError):
     """Raised when checkpoint metadata is invalid or has an unsupported schema."""
+
+
+@dataclass(frozen=True, slots=True)
+class ConstrainedCurrentCheckpoint:
+    r"""Restart-critical border state for note equations ``(M3)``--``(M3b)``.
+
+    The one-dimensional basis is deliberately fixed to piecewise linear on the
+    normalized-volume ``shell_edges``. There is one solved ``G`` coefficient per
+    node, its final coefficient equals ``edge_value``, and there is one independently
+    reconstructed constraint residual per shell.
+    """
+
+    shell_edges: tuple[float, ...]
+    g_coefficients: tuple[float, ...]
+    edge_value: float
+    shell_constraint_residuals: tuple[float, ...]
+    m3_relative_residual_norm: float
+    m3b_relative_residual_norm: float
+
+    def __post_init__(self) -> None:
+        edges = tuple(float(value) for value in self.shell_edges)
+        coefficients = tuple(float(value) for value in self.g_coefficients)
+        residuals = tuple(float(value) for value in self.shell_constraint_residuals)
+        if (
+            len(edges) < 2
+            or edges[0] != 0.0
+            or edges[-1] != 1.0
+            or not all(isfinite(value) for value in edges)
+            or any(right <= left for left, right in pairwise(edges))
+        ):
+            raise CheckpointVersionError(
+                "constrained-current shell edges must partition normalized-volume [0, 1]"
+            )
+        if len(coefficients) != len(edges) or not all(isfinite(value) for value in coefficients):
+            raise CheckpointVersionError(
+                "constrained-current G coefficients must match shell nodes"
+            )
+        if not isfinite(self.edge_value) or coefficients[-1] != self.edge_value:
+            raise CheckpointVersionError(
+                "final G coefficient must equal the constrained edge value"
+            )
+        if len(residuals) != len(edges) - 1 or not all(isfinite(value) for value in residuals):
+            raise CheckpointVersionError(
+                "constrained-current residuals must contain one finite value per shell"
+            )
+        for value in (self.m3_relative_residual_norm, self.m3b_relative_residual_norm):
+            if not isfinite(value) or value < 0.0:
+                raise CheckpointVersionError(
+                    "constrained-current relative residuals must be finite"
+                )
+        object.__setattr__(self, "shell_edges", edges)
+        object.__setattr__(self, "g_coefficients", coefficients)
+        object.__setattr__(self, "shell_constraint_residuals", residuals)
+
+    def to_record(self) -> dict[str, object]:
+        """Return the explicit normalized-volume bordered-state record."""
+        return {
+            "coordinate_kind": "normalized_volume",
+            "basis_kind": "piecewise_linear",
+            "shell_edges": list(self.shell_edges),
+            "g_coefficients": list(self.g_coefficients),
+            "edge_value": self.edge_value,
+            "shell_constraint_residuals": list(self.shell_constraint_residuals),
+            "m3_relative_residual_norm": self.m3_relative_residual_norm,
+            "m3b_relative_residual_norm": self.m3b_relative_residual_norm,
+        }
+
+    @classmethod
+    def from_record(cls, record: Mapping[str, object]) -> ConstrainedCurrentCheckpoint:
+        """Restore only the explicit piecewise-linear normalized-volume border."""
+        expected_keys = {
+            "coordinate_kind",
+            "basis_kind",
+            "shell_edges",
+            "g_coefficients",
+            "edge_value",
+            "shell_constraint_residuals",
+            "m3_relative_residual_norm",
+            "m3b_relative_residual_norm",
+        }
+        if set(record) != expected_keys:
+            raise CheckpointVersionError("ambiguous constrained-current checkpoint record")
+        if record.get("coordinate_kind") != "normalized_volume":
+            raise CheckpointVersionError("constrained-current state must use normalized-volume s")
+        if record.get("basis_kind") != "piecewise_linear":
+            raise CheckpointVersionError("unsupported constrained-current G basis")
+
+        def number_tuple(name: str) -> tuple[float, ...]:
+            value = record.get(name)
+            if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
+                raise CheckpointVersionError("invalid constrained-current checkpoint record")
+            if any(isinstance(item, bool) for item in value):
+                raise CheckpointVersionError("invalid constrained-current checkpoint record")
+            return tuple(float(item) for item in value)
+
+        try:
+            shell_edges = number_tuple("shell_edges")
+            g_coefficients = number_tuple("g_coefficients")
+            if isinstance(record["edge_value"], bool):
+                raise TypeError
+            edge_value = float(record["edge_value"])  # type: ignore[arg-type]
+            shell_constraint_residuals = number_tuple("shell_constraint_residuals")
+            if isinstance(record["m3_relative_residual_norm"], bool) or isinstance(
+                record["m3b_relative_residual_norm"], bool
+            ):
+                raise TypeError
+            m3_relative_residual_norm = float(record["m3_relative_residual_norm"])  # type: ignore[arg-type]
+            m3b_relative_residual_norm = float(record["m3b_relative_residual_norm"])  # type: ignore[arg-type]
+        except (KeyError, TypeError, ValueError) as error:
+            raise CheckpointVersionError("invalid constrained-current checkpoint record") from error
+        return cls(
+            shell_edges=shell_edges,
+            g_coefficients=g_coefficients,
+            edge_value=edge_value,
+            shell_constraint_residuals=shell_constraint_residuals,
+            m3_relative_residual_norm=m3_relative_residual_norm,
+            m3b_relative_residual_norm=m3b_relative_residual_norm,
+        )
 
 
 def _freeze_json(value: Any) -> Any:
@@ -75,6 +195,7 @@ class CheckpointMetadata:
         state_names: tuple[str, ...] | list[str],
         pressure_profile: TabulatedPressureProfile | None = None,
         toroidal_current_profile: TabulatedToroidalCurrentProfile | None = None,
+        constrained_current: ConstrainedCurrentCheckpoint | None = None,
         git_commit: str | None = None,
         platform: str | None = None,
     ) -> CheckpointMetadata:
@@ -107,6 +228,16 @@ class CheckpointMetadata:
                 "pressure": pressure_profile.to_record(),
                 "toroidal_current": toroidal_current_profile.to_record(),
             }
+        if constrained_current is not None:
+            if pressure_profile is None or toroidal_current_profile is None:
+                raise CheckpointVersionError(
+                    "constrained-current state requires normalized pressure/current profiles"
+                )
+            if not isinstance(constrained_current, ConstrainedCurrentCheckpoint):
+                raise CheckpointVersionError(
+                    "constrained_current must be a ConstrainedCurrentCheckpoint"
+                )
+            configuration_payload["constrained_current"] = constrained_current.to_record()
         configuration = _freeze_json(json.loads(canonical_json(configuration_payload)))
         return cls(
             schema_version=_SCHEMA_VERSION,
@@ -179,6 +310,10 @@ def _validate_profile_configuration(configuration: dict[str, Any]) -> None:
     """Reject legacy dimensional-V/F state instead of reinterpreting it on restart."""
     profiles = configuration.get("profiles")
     if profiles is None:
+        if "constrained_current" in configuration:
+            raise CheckpointVersionError(
+                "constrained-current state requires normalized checkpoint profiles"
+            )
         return
     if not isinstance(profiles, dict) or set(profiles) != {"pressure", "toroidal_current"}:
         raise CheckpointVersionError("ambiguous or legacy checkpoint profile state")
@@ -197,3 +332,8 @@ def _validate_profile_configuration(configuration: dict[str, Any]) -> None:
         TabulatedToroidalCurrentProfile.from_record(current)
     except InvalidProfileError as error:
         raise CheckpointVersionError(f"invalid normalized checkpoint profile: {error}") from error
+    constrained_current = configuration.get("constrained_current")
+    if constrained_current is not None:
+        if not isinstance(constrained_current, dict):
+            raise CheckpointVersionError("invalid constrained-current checkpoint record")
+        ConstrainedCurrentCheckpoint.from_record(constrained_current)
