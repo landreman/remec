@@ -9,6 +9,7 @@ from math import isfinite, sqrt
 from typing import Any, Protocol
 
 import numpy as np
+from numpy.typing import NDArray
 
 from remec.common.threads import configure_threads
 from remec.current_moments import (
@@ -194,7 +195,7 @@ def _pchip_volume_coordinate(
 def _linear_g_basis(
     normalized_volume: Any,
     normalized_volume_gradient: Any,
-    shell_edges: np.ndarray,
+    shell_edges: NDArray[np.float64],
     basis_index: int,
 ) -> tuple[Any, Any]:
     r"""Return one piecewise-linear ``G(s)`` basis function and its physical gradient."""
@@ -235,18 +236,18 @@ def _mapped_quadrature(mesh: Any, integration_order: int) -> Any:
     return mesh.MapToAllElements(rules, ng.VOL)
 
 
-def _sample_scalar(coefficient: Any, mapped_points: Any) -> np.ndarray:
+def _sample_scalar(coefficient: Any, mapped_points: Any) -> NDArray[np.float64]:
     """Evaluate one scalar coefficient in deterministic mapped-quadrature order."""
     return np.asarray(coefficient(mapped_points), dtype=float).reshape(-1)
 
 
 def _moments(
     volume_map: MollifiedVolumeMap,
-    shell_edges: np.ndarray,
+    shell_edges: NDArray[np.float64],
     *,
-    parallel: np.ndarray,
-    diamagnetic: np.ndarray,
-    regularizing: np.ndarray,
+    parallel: NDArray[np.float64],
+    diamagnetic: NDArray[np.float64],
+    regularizing: NDArray[np.float64],
 ) -> ShellCurrentMoments:
     """Apply the shared mollified ``(M3b)`` functional to separate ``(M2)`` terms."""
     return mollified_shell_current_moments(
@@ -263,7 +264,7 @@ def _moments(
 
 def _component_moments(
     volume_map: MollifiedVolumeMap,
-    shell_edges: np.ndarray,
+    shell_edges: NDArray[np.float64],
     mapped_points: Any,
     *,
     parallel: Any = 0.0,
@@ -273,7 +274,7 @@ def _component_moments(
     """Evaluate coefficient expressions, then integrate their independent shell rows."""
     sample_count = len(volume_map.quadrature_weights)
 
-    def samples(value: Any) -> np.ndarray:
+    def samples(value: Any) -> NDArray[np.float64]:
         if isinstance(value, (int, float)):
             return np.full(sample_count, float(value), dtype=float)
         return _sample_scalar(value, mapped_points)
