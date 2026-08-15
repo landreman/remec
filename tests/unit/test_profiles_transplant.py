@@ -9,9 +9,9 @@ from ngsolve.meshes import MakeStructured2DMesh
 
 from remec.level_set import MollifiedVolumeMap, QuadratureLevelSetData
 from remec.profiles import (
-    AnalyticVolumeProfile,
+    AnalyticPressureProfile,
     InvalidProfileError,
-    TabulatedVolumeProfile,
+    TabulatedPressureProfile,
     TransplantedProfile,
     extract_ngsolve_quadrature,
 )
@@ -66,11 +66,11 @@ def _unit_interval_volume_map() -> MollifiedVolumeMap:
 def test_tabulated_profile_rejects_nonmonotone_or_wrong_edge_value() -> None:
     """§12.5 requires non-increasing ``p_0`` and ``p_0(V_omega)=p_b``."""
     with pytest.raises(InvalidProfileError, match="non-increasing"):
-        TabulatedVolumeProfile(volumes=[0.0, 0.5, 1.0], pressures=[1.0, 1.1, 0.0])
+        TabulatedPressureProfile([0.0, 0.5, 1.0], [1.0, 1.1, 0.0])
 
-    profile = TabulatedVolumeProfile(volumes=[0.0, 0.5, 1.0], pressures=[1.0, 0.4, 0.0])
+    profile = TabulatedPressureProfile([0.0, 0.5, 1.0], [1.0, 0.4, 0.0])
     with pytest.raises(InvalidProfileError, match="edge value"):
-        profile.validate(total_volume=1.0, edge_value=0.1)
+        profile.validate(edge_value=0.1)
 
     with pytest.raises(InvalidProfileError, match="edge value"):
         TransplantedProfile(_unit_interval_volume_map(), profile, edge_pressure=0.1)
@@ -78,7 +78,7 @@ def test_tabulated_profile_rejects_nonmonotone_or_wrong_edge_value() -> None:
 
 def test_analytic_profile_rejects_an_inconsistent_derivative() -> None:
     """§12.6 must not inherit an unchecked analytic ``p_0'`` into its JVP."""
-    profile = AnalyticVolumeProfile(
+    profile = AnalyticPressureProfile(
         value_function=lambda volume: 1.0 - np.asarray(volume, dtype=float) ** 2,
         derivative_function=lambda volume: -np.ones_like(np.asarray(volume, dtype=float)),
     )
@@ -95,18 +95,18 @@ def test_analytic_profile_accepts_a_resolved_sharp_edge_transition() -> None:
     def derivative(volume: float | np.ndarray) -> np.ndarray:
         return -50.0 / np.cosh((np.asarray(volume, dtype=float) - 0.8) / 0.01) ** 2
 
-    TransplantedProfile(_unit_interval_volume_map(), AnalyticVolumeProfile(value, derivative))
+    TransplantedProfile(_unit_interval_volume_map(), AnalyticPressureProfile(value, derivative))
     with pytest.raises(InvalidProfileError, match="derivative disagrees"):
         TransplantedProfile(
             _unit_interval_volume_map(),
-            AnalyticVolumeProfile(value, lambda volume: 2.0 * derivative(volume)),
+            AnalyticPressureProfile(value, lambda volume: 2.0 * derivative(volume)),
         )
 
 
 def test_transplant_realizes_enclosed_volume_and_pressure_bounds() -> None:
     """(M4b) realizes ``p_0(V)`` and confines pressure to the profile range."""
     volume_map = _unit_interval_volume_map()
-    profile = AnalyticVolumeProfile(
+    profile = AnalyticPressureProfile(
         value_function=lambda volume: 2.0 - volume,
         derivative_function=lambda volume: -np.ones_like(np.asarray(volume, dtype=float)),
     )
@@ -128,7 +128,7 @@ def test_transplant_realizes_enclosed_volume_and_pressure_bounds() -> None:
 def test_transplant_satisfies_layer_cake_identity_for_smooth_moments() -> None:
     """The (layercake) moments certify the prescribed volume distribution."""
     volume_map = _unit_interval_volume_map()
-    profile = AnalyticVolumeProfile(
+    profile = AnalyticPressureProfile(
         value_function=lambda volume: 1.0 - volume**2,
         derivative_function=lambda volume: -2.0 * np.asarray(volume, dtype=float),
     )
@@ -156,7 +156,7 @@ def test_ngsolve_quadrature_extraction_and_bspline_composition() -> None:
     assert np.all(data.gradient_magnitudes >= 0.0)
     assert float(np.dot(data.weights, data.values)) == pytest.approx(1.0 / 36.0)
     volume_map = MollifiedVolumeMap.build(data, levels=129)
-    profile = TabulatedVolumeProfile(volumes=[0.0, 0.5, 1.0], pressures=[1.0, 0.5, 0.0])
+    profile = TabulatedPressureProfile([0.0, 0.5, 1.0], [1.0, 0.5, 0.0])
     transplant = TransplantedProfile(volume_map, profile)
     pressure_cf = transplant.as_ngsolve_coefficient(chi)
 
@@ -187,11 +187,13 @@ def test_circle_transplant_matches_exact_layer_cake_moment() -> None:
         ),
         levels=129,
     )
-    profile = AnalyticVolumeProfile(
-        value_function=lambda volume: 1.0 - volume / (4.0),
-        derivative_function=lambda volume: -np.ones_like(np.asarray(volume, dtype=float)) / 4.0,
+    profile = AnalyticPressureProfile(
+        value_function=lambda normalized_volume: 1.0 - normalized_volume,
+        derivative_function=lambda normalized_volume: (
+            -np.ones_like(np.asarray(normalized_volume, dtype=float))
+        ),
     )
     transplant = TransplantedProfile(volume_map, profile)
     pressure = transplant.pressure(values)
-    # Eq. (layercake): int p dA = int_0^4 (1 - V/4) dV = 2.
+    # Eq. (layercake): int p dA = V_omega int_0^1 (1 - s) ds = 2.
     assert float(np.dot(weights, pressure)) == pytest.approx(2.0, abs=2.0e-2)

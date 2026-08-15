@@ -14,6 +14,21 @@ class VolumeMapConsistencyWarning(RuntimeWarning):
     """A mandatory §12.3 volume-map diagnostic exceeded its configured tolerance."""
 
 
+def compact_moment_matched_heaviside(
+    argument: NDArray[np.float64],
+) -> NDArray[np.float64]:
+    """Evaluate the shared compact ``H_epsilon`` kernel from ``(mollified_V)``."""
+    return np.where(
+        argument <= -1.0,
+        0.0,
+        np.where(
+            argument >= 1.0,
+            1.0,
+            0.5 * (1.0 + argument + np.sin(np.pi * argument) / np.pi),
+        ),
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class QuadratureLevelSetData:
     """Quadrature samples required by the mollified ``V_chi`` construction."""
@@ -133,6 +148,7 @@ class MollifiedVolumeMap:
         volumes: NDArray[np.float64],
         raw_endpoint_volume_error: float,
         raw_endpoint_zero_error: float,
+        spatial_width_cells: float,
         minimum_gradient_fraction: float,
         floored_sample_count: int,
     ) -> None:
@@ -145,6 +161,7 @@ class MollifiedVolumeMap:
         self.maximum_level = float(levels[-1])
         self._raw_endpoint_volume_error = raw_endpoint_volume_error
         self._raw_endpoint_zero_error = raw_endpoint_zero_error
+        self.spatial_width_cells = spatial_width_cells
         self.minimum_gradient_fraction = minimum_gradient_fraction
         self._floored_sample_count = floored_sample_count
         self._volume_interpolant = _MonotonePchip.build(levels, volumes)
@@ -196,6 +213,7 @@ class MollifiedVolumeMap:
             volumes=target_volumes,
             raw_endpoint_volume_error=raw_endpoint_volume_error,
             raw_endpoint_zero_error=raw_endpoint_zero_error,
+            spatial_width_cells=spatial_width_cells,
             minimum_gradient_fraction=minimum_gradient_fraction,
             floored_sample_count=floored_sample_count,
         )
@@ -240,15 +258,7 @@ class MollifiedVolumeMap:
         result = np.empty_like(levels)
         for index, level in enumerate(levels):
             argument = (values - level) / widths
-            smooth_step = np.where(
-                argument <= -1.0,
-                0.0,
-                np.where(
-                    argument >= 1.0,
-                    1.0,
-                    0.5 * (1.0 + argument + np.sin(np.pi * argument) / np.pi),
-                ),
-            )
+            smooth_step = compact_moment_matched_heaviside(argument)
             result[index] = float(np.dot(weights, smooth_step))
         return result
 
@@ -298,6 +308,56 @@ class MollifiedVolumeMap:
         values = np.where(points <= self.minimum_level, self.volumes[0], values)
         values = np.where(points >= self.maximum_level, self.volumes[-1], values)
         return float(values) if points.ndim == 0 else values
+
+    def evaluate_volume_coordinate(
+        self, level: float | NDArray[np.float64]
+    ) -> float | NDArray[np.float64]:
+        """Evaluate the shared note-``s_label`` field ``s=V_chi(level)/V_omega``.
+
+        Pressure transplantation, current constraints, and diagnostics call this one
+        method so dimensional volume can never leak into a public profile contract.
+        """
+        points = np.asarray(level, dtype=float)
+        if not np.all(np.isfinite(points)):
+            raise ValueError("level-set values must be finite")
+        normalized = np.asarray(self.volume(points), dtype=float) / float(self.volumes[0])
+        normalized = np.clip(normalized, 0.0, 1.0)
+        return float(normalized) if points.ndim == 0 else normalized
+
+    @property
+    def quadrature_normalized_volume(self) -> NDArray[np.float64]:
+        """Return the shared ``s`` field at the map's original quadrature samples."""
+        return np.asarray(self.evaluate_volume_coordinate(self._values), dtype=np.float64)
+
+    @property
+    def quadrature_weights(self) -> NDArray[np.float64]:
+        """Return a copy of the physical weights used to build ``V_chi``."""
+        return np.array(self._weights, dtype=np.float64, copy=True)
+
+    @property
+    def quadrature_normalized_mollifier_widths(self) -> NDArray[np.float64]:
+        """Map the ``(mollified_V)`` chi widths into the shared ``s`` coordinate."""
+        return self._quadrature_normalized_half_widths(self._widths)
+
+    @property
+    def quadrature_normalized_cell_widths(self) -> NDArray[np.float64]:
+        """Map one local radial-cell width into ``s``, independent of mollifier size."""
+        return self._quadrature_normalized_half_widths(self._widths / self.spatial_width_cells)
+
+    def _quadrature_normalized_half_widths(
+        self, chi_half_widths: NDArray[np.float64]
+    ) -> NDArray[np.float64]:
+        """Map symmetric chi half-widths through the shared normalized coordinate."""
+        lower = np.asarray(
+            self.evaluate_volume_coordinate(self._values - chi_half_widths), dtype=np.float64
+        )
+        upper = np.asarray(
+            self.evaluate_volume_coordinate(self._values + chi_half_widths), dtype=np.float64
+        )
+        widths = 0.5 * np.abs(upper - lower)
+        positive = widths[widths > 0.0]
+        fallback = float(np.min(positive)) if positive.size else np.finfo(float).eps
+        return np.maximum(widths, fallback)
 
     def inverse_level(self, volume: float | NDArray[np.float64]) -> float | NDArray[np.float64]:
         """Return the stable monotone inverse ``chi_hat(V)``."""
