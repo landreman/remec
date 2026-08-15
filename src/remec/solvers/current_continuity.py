@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import warnings
+from collections.abc import Sequence
 from dataclasses import dataclass
 from math import isfinite
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
+
+import numpy as np
 
 from remec.common.logging import JsonEventLogger
 from remec.common.serialization import configuration_digest
+from remec.fem._constrained_current_continuity import solve_constrained_current_continuity
 from remec.fem._current_continuity import solve_frozen_current_continuity
 from remec.geometry.slab import Slab2D
 from remec.options import (
@@ -16,6 +20,10 @@ from remec.options import (
     RegularizationGradient,
     RuntimeOptions,
 )
+from remec.profiles import ToroidalCurrentProfile
+
+if TYPE_CHECKING:
+    from remec.common.checkpoint import ConstrainedCurrentCheckpoint
 
 CurrentContinuityFormulation = Literal["direct-u", "utilde"]
 
@@ -68,6 +76,227 @@ class FrozenCurrentContinuityCoefficients:
             raise ValueError("magnetic_floor must be finite and positive")
         if not isfinite(self.vacuum_permeability) or self.vacuum_permeability <= 0.0:
             raise ValueError("vacuum_permeability must be finite and positive")
+
+
+@dataclass(frozen=True, slots=True)
+class FrozenCurrentConstraintGeometry:
+    r"""Frozen normalized-volume and toroidal geometry for note equation ``(M3b)``.
+
+    ``level_set`` and ``level_set_gradient`` define the one shared
+    ``s=V_chi(level_set)/V_omega`` field used by both the unknown ``G(s)`` and the
+    mollified shell constraints. ``toroidal_angle_gradient`` is ``grad(phi)`` in
+    ``I_tor=(2*pi)**-1 integral J.grad(phi) dV``.
+    """
+
+    level_set: Any
+    level_set_gradient: Any
+    toroidal_angle_gradient: Any
+
+    def __post_init__(self) -> None:
+        if getattr(self.level_set, "dim", 1) != 1:
+            raise ValueError("level_set must be scalar")
+        for name in ("level_set_gradient", "toroidal_angle_gradient"):
+            if getattr(getattr(self, name), "dim", None) != 3:
+                raise ValueError(f"{name} must be a three-component coefficient function")
+
+
+@dataclass(frozen=True, slots=True)
+class ConstrainedCurrentContinuityResult:
+    r"""Public result of the bordered note-``(M3)``--``(M3b)`` solve."""
+
+    polynomial_order: int
+    regularization_gradient: RegularizationGradient
+    stabilization: CurrentContinuityStabilization
+    shell_edges: tuple[float, ...]
+    g_coefficients: tuple[float, ...]
+    configuration_digest: str
+    m3_relative_residual_norm: float
+    constraint_relative_residual_norm: float
+    schur_condition_number: float
+    target_cumulative_current: tuple[float, ...]
+    independent_cumulative_current: tuple[float, ...]
+    shell_constraint_residuals: tuple[float, ...]
+    diagnostics: dict[str, float]
+
+    def checkpoint_state(self) -> ConstrainedCurrentCheckpoint:
+        r"""Return restart state for the solved ``G`` border and ``(M3b)`` rows."""
+        from remec.common.checkpoint import ConstrainedCurrentCheckpoint
+
+        return ConstrainedCurrentCheckpoint(
+            shell_edges=self.shell_edges,
+            g_coefficients=self.g_coefficients,
+            edge_value=self.g_coefficients[-1],
+            shell_constraint_residuals=self.shell_constraint_residuals,
+            m3_relative_residual_norm=self.m3_relative_residual_norm,
+            m3b_relative_residual_norm=self.constraint_relative_residual_norm,
+        )
+
+
+class ConstrainedCurrentContinuitySolver:
+    r"""Joint unknown-``G`` Schur solve for note equations ``(M3)``--``(M3b)``.
+
+    The solver represents ``G`` on the supplied normalized-volume shell grid, fixes
+    ``G(1)=edge_value``, applies current diffusion only to homogeneous ``utilde``, and
+    uses independently reconstructed physical ``(M2)`` current samples for its public
+    ``I_tor`` diagnostics.
+    """
+
+    def __init__(
+        self,
+        *,
+        polynomial_order: int = 3,
+        runtime: RuntimeOptions | None = None,
+        stabilization: CurrentContinuityStabilization = "supg",
+        quadrature_order: int = 8,
+        volume_levels: int = 17,
+        spatial_width_cells: float = 1.0,
+        logger: JsonEventLogger | None = None,
+    ) -> None:
+        if polynomial_order < 1:
+            raise ValueError("polynomial_order must be at least one")
+        if stabilization not in ("none", "supg"):
+            raise ValueError("stabilization must be 'none' or 'supg'")
+        if quadrature_order < 2:
+            raise ValueError("quadrature_order must be at least two")
+        if volume_levels < 3:
+            raise ValueError("volume_levels must be at least three")
+        if not isfinite(spatial_width_cells) or spatial_width_cells <= 0.0:
+            raise ValueError("spatial_width_cells must be finite and positive")
+        self.polynomial_order = polynomial_order
+        self.runtime = RuntimeOptions() if runtime is None else runtime
+        self.stabilization = stabilization
+        self.quadrature_order = quadrature_order
+        self.volume_levels = volume_levels
+        self.spatial_width_cells = spatial_width_cells
+        self.logger = logger
+        self._internal_solution: Any = None
+
+    def solve(
+        self,
+        field: Slab2D,
+        coefficients: FrozenCurrentContinuityCoefficients,
+        geometry: FrozenCurrentConstraintGeometry,
+        current_profile: ToroidalCurrentProfile,
+        *,
+        shell_edges: Sequence[float],
+        edge_value: float = 0.0,
+        boundary: str = "left|right",
+    ) -> ConstrainedCurrentContinuityResult:
+        r"""Solve the square bordered ``[A P; C_u C_G]`` system from ``(M3b)``."""
+        if not isinstance(field, Slab2D):
+            raise TypeError("the constrained M3-M3b kernel requires a Slab2D mesh")
+        if not isinstance(coefficients, FrozenCurrentContinuityCoefficients):
+            raise TypeError("coefficients must be FrozenCurrentContinuityCoefficients")
+        if not isinstance(geometry, FrozenCurrentConstraintGeometry):
+            raise TypeError("geometry must be FrozenCurrentConstraintGeometry")
+        edges = tuple(float(value) for value in shell_edges)
+        target = tuple(
+            float(value)
+            for value in np.asarray(current_profile.enclosed_current(edges), dtype=float).reshape(
+                -1
+            )
+        )
+        configuration = {
+            "formulation": "constrained-unknown-g",
+            "polynomial_order": self.polynomial_order,
+            "runtime": self.runtime,
+            "current_diffusivity": coefficients.current_diffusivity,
+            "magnetic_floor": coefficients.magnetic_floor,
+            "vacuum_permeability": coefficients.vacuum_permeability,
+            "stabilization": self.stabilization,
+            "quadrature_order": self.quadrature_order,
+            "volume_levels": self.volume_levels,
+            "spatial_width_cells": self.spatial_width_cells,
+            "shell_edges": edges,
+            "target_cumulative_current": target,
+            "edge_value": edge_value,
+        }
+        digest = configuration_digest(configuration)
+        log_fields = {
+            "configuration_digest": digest,
+            "formulation": "constrained-unknown-g",
+            "polynomial_order": self.polynomial_order,
+            "regularization_gradient": self.runtime.regularization_gradient,
+            "stabilization": self.stabilization,
+            "shell_count": len(edges) - 1,
+        }
+        if self.logger is not None:
+            self.logger.info("m3_m3b_solve_started", **log_fields)
+        internal = solve_constrained_current_continuity(
+            field,
+            polynomial_order=self.polynomial_order,
+            coefficients=coefficients,
+            geometry=geometry,
+            current_profile=current_profile,
+            shell_edges=edges,
+            edge_value=edge_value,
+            runtime=self.runtime,
+            boundary=boundary,
+            stabilization=self.stabilization,
+            quadrature_order=self.quadrature_order,
+            volume_levels=self.volume_levels,
+            spatial_width_cells=self.spatial_width_cells,
+        )
+        self._internal_solution = internal
+        if self.logger is not None:
+            self.logger.info(
+                "m3_m3b_solve_completed",
+                **log_fields,
+                m3_relative_residual_norm=internal.m3_relative_residual_norm,
+                m3b_constraint_relative_residual_norm=(internal.constraint_relative_residual_norm),
+                schur_condition_number=internal.schur_condition_number,
+            )
+        return ConstrainedCurrentContinuityResult(
+            polynomial_order=internal.polynomial_order,
+            regularization_gradient=internal.regularization_gradient,
+            stabilization=internal.stabilization,
+            shell_edges=internal.shell_edges,
+            g_coefficients=internal.g_coefficients,
+            configuration_digest=digest,
+            m3_relative_residual_norm=internal.m3_relative_residual_norm,
+            constraint_relative_residual_norm=internal.constraint_relative_residual_norm,
+            schur_condition_number=internal.schur_condition_number,
+            target_cumulative_current=internal.target_cumulative_current,
+            independent_cumulative_current=internal.independent_cumulative_current,
+            shell_constraint_residuals=internal.shell_constraint_residuals,
+            diagnostics={
+                **internal.diagnostics,
+                "m3_relative_residual_norm": internal.m3_relative_residual_norm,
+                "m3b_constraint_relative_residual_norm": (
+                    internal.constraint_relative_residual_norm
+                ),
+            },
+        )
+
+    def _solution(self) -> Any:
+        if self._internal_solution is None:
+            raise RuntimeError("solve must be called before evaluating the constrained result")
+        return self._internal_solution
+
+    def solution_at(self, x_coordinate: float, y_coordinate: float) -> float:
+        """Return reconstructed physical ``u=G(s)+utilde`` at one point."""
+        return float(self._solution().solution_at(x_coordinate, y_coordinate))
+
+    def utilde_at(self, x_coordinate: float, y_coordinate: float) -> float:
+        """Return the homogeneous finite-element unknown at one point."""
+        return float(self._solution().utilde_at(x_coordinate, y_coordinate))
+
+    def g_at(self, x_coordinate: float, y_coordinate: float) -> float:
+        """Return the solved one-dimensional multiplier at one point."""
+        return float(self._solution().g_at(x_coordinate, y_coordinate))
+
+    def current_at(self, x_coordinate: float, y_coordinate: float) -> tuple[float, float, float]:
+        """Return the independently reconstructible physical note-``(M2)`` current."""
+        value: tuple[float, float, float] = self._solution().current_at(x_coordinate, y_coordinate)
+        return value
+
+    def parallel_current_over_field_at(
+        self,
+        x_coordinate: float,
+        y_coordinate: float,
+    ) -> float:
+        r"""Return physical ``J_parallel/B``; full grad includes the ``utilde`` correction."""
+        return float(self._solution().parallel_current_over_field_at(x_coordinate, y_coordinate))
 
 
 @dataclass(frozen=True, slots=True)

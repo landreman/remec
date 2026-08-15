@@ -17,7 +17,11 @@ from remec import (
     TabulatedToroidalCurrentProfile,
     TransplantedProfile,
 )
-from remec.common.checkpoint import CheckpointMetadata, CheckpointVersionError
+from remec.common.checkpoint import (
+    CheckpointMetadata,
+    CheckpointVersionError,
+    ConstrainedCurrentCheckpoint,
+)
 from remec.level_set import MollifiedVolumeMap, QuadratureLevelSetData
 
 
@@ -121,6 +125,44 @@ def test_checkpoint_first_profile_payload_uses_normalized_contract_without_schem
     }
     with pytest.raises(CheckpointVersionError, match="legacy|ambiguous"):
         CheckpointMetadata.from_json(json.dumps(legacy))
+
+
+def test_checkpoint_persists_the_solved_unknown_g_border_without_schema_bump() -> None:
+    r"""Restart state stores ``I_0``, shell basis, solved ``G``, and every (M3b) row."""
+    pressure = TabulatedPressureProfile([0.0, 1.0], [1.0, 0.1])
+    current = TabulatedToroidalCurrentProfile([0.0, 0.5, 1.0], [0.0, 0.4, 0.7])
+    constrained = ConstrainedCurrentCheckpoint(
+        shell_edges=(0.0, 0.5, 1.0),
+        g_coefficients=(0.15, 0.25, 0.0),
+        edge_value=0.0,
+        shell_constraint_residuals=(2.0e-14, -3.0e-14),
+        m3_relative_residual_norm=4.0e-15,
+        m3b_relative_residual_norm=3.6e-14,
+    )
+    metadata = CheckpointMetadata.create(
+        normalization=Normalization(reference_length=1.0, reference_field=2.0),
+        runtime=RuntimeOptions(regularization_gradient="full"),
+        state_names=("chi", "utilde", "g_coefficients"),
+        pressure_profile=pressure,
+        toroidal_current_profile=current,
+        constrained_current=constrained,
+        git_commit="abc123",
+        platform="test-platform",
+    )
+
+    record = metadata.configuration["constrained_current"]
+    assert metadata.schema_version == 1
+    assert record["coordinate_kind"] == "normalized_volume"
+    assert record["basis_kind"] == "piecewise_linear"
+    assert record["shell_edges"] == (0.0, 0.5, 1.0)
+    assert record["g_coefficients"][-1] == record["edge_value"] == 0.0
+    assert record["shell_constraint_residuals"] == pytest.approx((2.0e-14, -3.0e-14))
+    assert CheckpointMetadata.from_json(metadata.to_json()) == metadata
+
+    invalid = json.loads(metadata.to_json())
+    invalid["configuration"]["constrained_current"]["coordinate_kind"] = "dimensional_volume"
+    with pytest.raises(CheckpointVersionError, match="normalized-volume"):
+        CheckpointMetadata.from_json(json.dumps(invalid))
 
 
 def test_pressure_and_current_semantics_do_not_change_with_domain_volume() -> None:

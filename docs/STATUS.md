@@ -283,7 +283,7 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   shell. The deprecated F-shift path is deliberately absent
   from `remec.solvers` exports but remains in its implementation module for the required
   two-F cancellation negative control.
-- [ ] **3.6** Constrained unknown-G bordered M3–M3b solve — `DESIGN.md` §9.1–§9.4 · note: §5.4, (M2)–(M3b), §9
+- [x] **3.6** Constrained unknown-G bordered M3–M3b solve — `DESIGN.md` §9.1–§9.4 · note: §5.4, (M2)–(M3b), §9
   <br>Acceptance: for both ∇⊥ and full-∇ variants, solve jointly for homogeneous ũ and
   G(s) with G(1)=u_b; apply −D_u∇ᵣũ consistently in (M2), (M3), SUPG, diagnostics, and
   shell constraints; realize I_tor(s)=I₀(s) to solver tolerance, confirmed by an
@@ -296,7 +296,30 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   Include h/p/N-shell convergence, N-doubling stability, the bordered Schur solve, and a
   D_u scan holding I₀ fixed while the multiplier-current/mean-ũ diagnostics approach the
   note's regular limit.
-  <br>Measured: —
+  <br>Measured: macOS / CPython 3.12.2 / NGSolve 6.2.2606 — the unknown-G
+  piecewise-linear border uses one A factorization plus a shell-sized Schur solve and
+  independently reconstructs all parallel, diamagnetic, and regularizing (M2) moments.
+  Across the coupled h/p table, maximum relative residuals are 1.131e-16 (M3) and
+  1.063e-16 (M3b). At p=2, 20 → 28 subdivisions gives physical-u L² rates 2.0041
+  (∇⊥) and 2.0042 (full ∇); the p=1 → 2 errors decrease from 3.379e-4 → 2.016e-4
+  and 3.869e-4 → 2.054e-4, with the p=3 results at the second-order mollified-shell
+  ceiling. Doubling 4 → 8 shells changes the physical field by 2.145e-4 (∇⊥) and
+  2.176e-4 (full ∇) in relative L² while every finest shell spans 3.991 local
+  cells/mollifier widths. Two distinct I₀ profiles on the nondegenerate coupled state
+  realize their independently evaluated currents below 1e-10; both G couplings and a
+  nonzero ũ are exercised. Two old F profiles with one edge value cancel below 1e-10.
+  In a fixed-I₀ family with D_u-dependent bounded G′, D_u=0.08 → 0.04 → 0.02 reduces
+  ‖D_uG′∇ᵣs‖₂ from 2.850e-2 → 1.361e-2 → 6.750e-3 (∇⊥) and 2.874e-2 →
+  1.372e-2 → 6.804e-3 (full ∇); maximum |⟨ũ⟩| falls from 3.987e-2 to 9.379e-3.
+  The constrained path reports physical J∥/B, including the full-gradient ũ correction.
+  See `tests/manufactured/m3_constrained_rates.csv`,
+  `tests/manufactured/m3_constrained_du_scan.csv`, and `docs/verification.md`.
+  <br>Next: milestone 3.7 should retain this exact shared-s/PCHIP construction and
+  independent current evaluator, use genuinely field-misaligned/resonant benchmarks
+  and record reuse/iteration, oscillation, smearing, misalignment, and parallel-noise
+  metrics without changing the default ∇⊥ choice absent an ADR. The p=2 → 3 plateau is
+  the inherited second-order mollified-shell ceiling; the §12.4 cut-cell reference is
+  the route for deciding whether sharper shell integration removes it.
 - [ ] **3.7** Gradient-variant comparison study (∇⊥ vs full ∇), constrained formulation — `DESIGN.md` §9.4 · note: §5.5
   <br>Acceptance: on shared frozen-(B,p,s,I₀) benchmarks including a resonant layer and a
   field-misaligned mesh: each variant realizes the same I₀(s); measured O(ε_J) relative
@@ -305,6 +328,9 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   counts, monotonicity/oscillations and layer smearing, misalignment sensitivity, and
   parallel grid-noise damping, recorded in `docs/verification.md`. Default remains ∇⊥
   unless changed by an ADR citing these measurements.
+  The D_u→0 study must be emergent on one fixed frozen state and fixed I₀/drive; monitor
+  ‖D_uG′∇ᵣs‖ and ⟨ũ⟩_s, and explicitly report or reject an inadmissible target rather
+  than inferring regularity from a per-D_u manufactured family.
   <br>Measured: —
 
 ## Phase 4 — compatible magnetic kernel
