@@ -91,3 +91,16 @@
   `CalcDeformation(level_set - level)` and then `Integrate(POS, 1, order=...)` for
   \(\{\chi>\hat\chi\}\). The direct `xfem.Integrate` route only uses the piecewise-linear
   cut approximation unless this deformation is supplied.
+
+- PR-CI timing (NGSolve 6.2.2606): `CoefficientFunction.Compile()` (default
+  `realcompile=False`, so no C++ compiler is pulled in — `DESIGN.md` §26) evaluates an
+  expression tree through a cached-node graph instead of by repeated recursive descent.
+  NGSolve performs no common-subexpression elimination without it, so the regularized M3
+  operators re-evaluated `B_safe`, `b_safe`, and `grad(b_safe)` many times per
+  integration point. Compiling the M3 form integrands and the order-20 diagnostic
+  integrands cut `BilinearForm.Assemble` by ~24x for the perpendicular SUPG variant
+  (`grad_perp` p=1, maxh=1/32: 10.8 s → 0.58 s) and the `-m "not slow"` suite from 236 s
+  to 35 s locally. Assembled matrix entries and every solver diagnostic are **bitwise**
+  unchanged — `Compile()` reorders nothing, it only caches — so no recorded rate table
+  moves. Compile any integrand whose coefficient tree repeats a normalization or a
+  projector; the win grows with `bonus_intorder` and with expression depth.

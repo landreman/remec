@@ -6,11 +6,11 @@ default:
 
 # PR-CI subset: fast tests only
 test:
-	python -m pytest -q -m "not slow"
+	python -m pytest -m "not slow"
 
 # Everything, including nightly-marked tests
 test-full:
-	python -m pytest -q
+	python -m pytest
 
 # Formatting, linting, types
 lint:

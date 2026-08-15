@@ -117,6 +117,22 @@ def _embedded_gradient(gradient: Any) -> Any:
     return ng.CoefficientFunction((gradient[0], gradient[1], 0.0))
 
 
+def _compiled(expression: Any) -> Any:
+    """Return the common-subexpression-eliminated form of an NGSolve expression.
+
+    ``CoefficientFunction.Compile()`` evaluates the identical expression tree through a
+    cached-node graph rather than by repeated recursive descent, so assembled matrices
+    and integrals are bitwise unchanged. The regularized (M3) operators repeat
+    ``B_safe``, ``b_safe``, and ``grad(b_safe)`` many times per integration point, and
+    the perpendicular SUPG strong divergence is where that repetition is worst.
+    Non-NGSolve constants (a Python ``0.0`` source term) are returned unchanged.
+    """
+    compile_expression = getattr(expression, "Compile", None)
+    if compile_expression is None:
+        return expression
+    return compile_expression()
+
+
 def _regularized_gradient(gradient: Any, direction: Any, variant: RegularizationGradient) -> Any:
     """Return the selected M2/M3 gradient: grad_perp or the full gradient."""
     if variant == "full":
@@ -539,13 +555,15 @@ def solve_frozen_current_continuity(
     )
 
     bilinear_form = ng.BilinearForm(space)
-    bilinear_form += galerkin_operator * quadrature
+    bilinear_form += _compiled(galerkin_operator) * quadrature
     linear_form = ng.LinearForm(space)
-    linear_form += galerkin_source * test * quadrature
+    linear_form += _compiled(galerkin_source * test) * quadrature
     if regularized_profile_gradient is not None:
         linear_form += (
-            -coefficients.current_diffusivity
-            * ng.InnerProduct(regularized_test, regularized_profile_gradient)
+            _compiled(
+                -coefficients.current_diffusivity
+                * ng.InnerProduct(regularized_test, regularized_profile_gradient)
+            )
             * quadrature
         )
     supg_bilinear_form: Any | None = None
@@ -586,8 +604,8 @@ def solve_frozen_current_continuity(
             - final_correction
         )
         streamline_test = ng.InnerProduct(magnetic_field, test_gradient)
-        supg_bilinear_integrand = tau * streamline_test * strong_operator
-        supg_linear_integrand = tau * streamline_test * strong_source
+        supg_bilinear_integrand = _compiled(tau * streamline_test * strong_operator)
+        supg_linear_integrand = _compiled(tau * streamline_test * strong_source)
         bilinear_form += supg_bilinear_integrand * quadrature
         linear_form += supg_linear_integrand * quadrature
         supg_bilinear_form = ng.BilinearForm(space)
@@ -647,38 +665,42 @@ def solve_frozen_current_continuity(
         else:
             parallel_current_over_field = physical_field
 
-        solution_l2_squared = float(ng.Integrate(physical_field**2, mesh, order=20))
+        solution_l2_squared = float(ng.Integrate(_compiled(physical_field**2), mesh, order=20))
         solved_variable_l2_squared = float(ng.Integrate(field**2, mesh, order=20))
-        current_l2_squared = float(ng.Integrate(ng.InnerProduct(current, current), mesh, order=20))
-        parallel_current_l2_squared = float(
-            ng.Integrate(parallel_current_over_field**2, mesh, order=20)
+        current_l2_squared = float(
+            ng.Integrate(_compiled(ng.InnerProduct(current, current)), mesh, order=20)
         )
-        drive_l2_squared = float(ng.Integrate(drive**2, mesh, order=20))
+        parallel_current_l2_squared = float(
+            ng.Integrate(_compiled(parallel_current_over_field**2), mesh, order=20)
+        )
+        drive_l2_squared = float(ng.Integrate(_compiled(drive**2), mesh, order=20))
         final_term = (
             coefficients.vacuum_permeability
             * coefficients.current_diffusivity
             * ng.InnerProduct(regularized_field_gradient, pressure_gradient)
             / safe_magnitude**2
         )
-        final_term_l2_squared = float(ng.Integrate(final_term**2, mesh, order=20))
+        final_term_l2_squared = float(ng.Integrate(_compiled(final_term**2), mesh, order=20))
         reaction_term = (
             coefficients.vacuum_permeability * physical_field * b_dot_grad_p / safe_magnitude**2
         )
-        reaction_term_l2_squared = float(ng.Integrate(reaction_term**2, mesh, order=20))
+        reaction_term_l2_squared = float(ng.Integrate(_compiled(reaction_term**2), mesh, order=20))
         if prescribed_current_profile is not None:
             profile_advection_source_l2_squared = float(
-                ng.Integrate(profile_advection_source**2, mesh, order=20)
+                ng.Integrate(_compiled(profile_advection_source**2), mesh, order=20)
             )
             profile_diffusion_source_l2_squared = float(
-                ng.Integrate(profile_diffusion_source**2, mesh, order=20)
+                ng.Integrate(_compiled(profile_diffusion_source**2), mesh, order=20)
             )
             profile_reaction_source_l2_squared = float(
-                ng.Integrate(profile_reaction_source**2, mesh, order=20)
+                ng.Integrate(_compiled(profile_reaction_source**2), mesh, order=20)
             )
             profile_final_source_l2_squared = float(
-                ng.Integrate(profile_final_correction_source**2, mesh, order=20)
+                ng.Integrate(_compiled(profile_final_correction_source**2), mesh, order=20)
             )
-            profile_total_source_l2_squared = float(ng.Integrate(profile_source**2, mesh, order=20))
+            profile_total_source_l2_squared = float(
+                ng.Integrate(_compiled(profile_source**2), mesh, order=20)
+            )
         else:
             profile_advection_source_l2_squared = 0.0
             profile_diffusion_source_l2_squared = 0.0
@@ -686,7 +708,9 @@ def solve_frozen_current_continuity(
             profile_final_source_l2_squared = 0.0
             profile_total_source_l2_squared = 0.0
         direction_norm_defect = 1.0 - ng.InnerProduct(direction, direction)
-        floor_activity_l2_squared = float(ng.Integrate(direction_norm_defect**2, mesh, order=20))
+        floor_activity_l2_squared = float(
+            ng.Integrate(_compiled(direction_norm_defect**2), mesh, order=20)
+        )
         physical_magnitude = ng.sqrt(ng.InnerProduct(magnetic_field, magnetic_field))
         minimum_field_magnitude = _minimum_sampled_value(
             mesh, physical_magnitude, integration_order=20
@@ -726,11 +750,11 @@ def solve_frozen_current_continuity(
                 - strong_source
             )
             supg_strong_residual_l2 = sqrt(
-                max(0.0, float(ng.Integrate(strong_residual**2, mesh, order=20)))
+                max(0.0, float(ng.Integrate(_compiled(strong_residual**2), mesh, order=20)))
             )
             supg_tau_min, supg_tau_max = _quadrature_extrema(
                 mesh,
-                tau,
+                _compiled(tau),
                 integration_order=20,
             )
         else:
