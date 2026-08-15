@@ -247,7 +247,7 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   baseline, but not this slab as evidence for cross-variant agreement: B_x=0 makes the
   layer-normal ∇⊥ and full-∇ operators identical. A later coupled production driver owns
   invoking `assess_layer_resolution` once it can estimate δ and local normal mesh scale.
-- [ ] **3.5** Normalized profile contracts + shell-current moments — `DESIGN.md` §12.1–§12.5, §9.2, §24 · note: §5.4, §6.1, §8
+- [x] **3.5** Normalized profile contracts + shell-current moments — `DESIGN.md` §12.1–§12.5, §9.2, §24 · note: §5.4, §6.1, §8
   <br>Acceptance: replace the dimensional-V `VolumeProfile` public/checkpoint contract
   with p₀(s) on exactly [0,1]; add cumulative `ToroidalCurrentProfile` I₀(s) with
   I₀(0)=0; reject ambiguous/dimensional coordinates; update the serialization contract
@@ -258,7 +258,29 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   refinement, endpoint/partition identities, and a domain-volume rescaling test showing
   identical p₀(s)/I₀(s) semantics. Legacy prescribed-F state is rejected or explicitly
   migrated only as non-production verification provenance.
-  <br>Measured: —
+  <br>Measured: macOS / CPython 3.12.2 / NumPy 2.4.6 — public analytic and
+  piecewise-linear pressure/current profiles now use only normalized s∈[0,1]; pressure
+  is non-increasing, cumulative I₀ enforces I₀(0)=0 while allowing reversal, and
+  checkpoint profile records require `coordinate_kind="normalized_volume"`. The
+  schema remains 1 because its earlier metadata envelope persisted no profile payload;
+  ambiguous dimensional-V and legacy prescribed-F records are rejected. The shared
+  `s=V_χ/V_Ω` evaluator drives both M4b pressure transplantation and independent
+  mollified M3b shell moments. On the circular toroidal surrogate, total-current
+  maximum cumulative errors are 2.683e-4 → 6.668e-5 → 1.665e-5 for 24 → 48 → 96
+  radial cells at quadrature order 6, with adjacent rates 2.008 and 2.002. At fixed
+  48 cells, quadrature orders 1 → 2 → 3 reduce the error 5.599e-4 → 1.578e-4 →
+  6.173e-5. At 96 cells, component errors are 7.801e-5 (parallel), 3.899e-5
+  (diamagnetic), and 1.949e-5 (regularizing); endpoint, component-sum, and shell-
+  partition identities hold to roundoff. Radius 1 → 2.75 domain rescaling changes the
+  scaled I₀(s) result by 3.55e-15 and sampled s by 8.88e-16. See
+  `tests/manufactured/shell_current_moment_rates.csv` and `docs/verification.md`.
+  <br>Next: milestone 3.6 should pass its independently reconstructed physical M2
+  component samples to `mollified_shell_current_moments`, reuse the exact shared s
+  field, and compare those diagnostic rows—not its C_u/C_G matrices—with the input
+  `ToroidalCurrentProfile`. Its shell grid must satisfy the enforced three-cell
+  mollifier-width resolution check. The deprecated F-shift path is deliberately absent
+  from `remec.solvers` exports but remains in its implementation module for the required
+  two-F cancellation negative control.
 - [ ] **3.6** Constrained unknown-G bordered M3–M3b solve — `DESIGN.md` §9.1–§9.4 · note: §5.4, (M2)–(M3b), §9
   <br>Acceptance: for both ∇⊥ and full-∇ variants, solve jointly for homogeneous ũ and
   G(s) with G(1)=u_b; apply −D_u∇ᵣũ consistently in (M2), (M3), SUPG, diagnostics, and

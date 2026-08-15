@@ -7,9 +7,76 @@
 > equivalence records are the negative control for `DESIGN.md` §9.2. Production current
 > input is cumulative I₀(s), s=V/V_Ω∈[0,1]; the solver must determine G(s) from (M3b).
 > No statement below calling the F-shift “preferred” should be read as current design.
-> Likewise, milestone 2.2 records the implemented dimensional-V `VolumeProfile`; its
-> numbers remain valid, but milestone 3.5 must migrate the public contract and layer-cake
+> Likewise, milestone 2.2 records the former dimensional-V `VolumeProfile`; its
+> numbers remain valid. Milestone 3.5 migrated the public contract and layer-cake
 > oracle to p₀(s) and the factor V_Ω∫₀¹·ds.
+
+## Milestone 3.5 — normalized profiles and shell-current moments
+
+The public pressure contract is now $p_0(s)$, and the new cumulative-current
+contract is $I_0(s)$, with the one shared coordinate
+
+\[
+s(\mathbf r)=\frac{V_\chi(\chi(\mathbf r))}{V_\Omega}\in[0,1].
+\]
+
+Analytic and piecewise-linear pressure/current variants reject evaluation outside
+$[0,1]$. Pressure tables must be non-increasing and satisfy the requested
+$p_0(1)=p_b$; current tables enforce $I_0(0)=0$ but deliberately allow reversed-
+current segments. Checkpoint profile records require the literal
+`coordinate_kind="normalized_volume"`; missing tags, dimensional-volume tags, and
+legacy prescribed-F records are rejected rather than inferred from sample ranges.
+The metadata-only schema remains version 1 because it previously persisted no profile
+payload; its first profile-bearing configuration uses only the corrected contract.
+The legacy `PrescribedCurrentProfile` is no longer exported from `remec.solvers`, and
+its remaining F-shift solve emits a deprecation warning and exists only for milestone
+3.6's two-F cancellation oracle.
+
+`MollifiedVolumeMap.evaluate_volume_coordinate` is the sole evaluated-s path used by
+the M4b transplant and the M3b moment diagnostic. The normalized layer-cake target is
+now implemented as
+
+\[
+\int_\Omega\varphi(p)\,dV
+=V_\Omega\int_0^1\varphi(p_0(s))\,ds.
+\]
+
+The independent current diagnostic keeps the three physical (M2) integrands separate,
+
+\[
+\mathbf J=u\mathbf B+\frac{\mathbf B\times\nabla p}{B_{\rm safe}^2}
+-D_u\nabla_r\tilde u,
+\qquad
+I_{\rm tor}(s)=\frac1{2\pi}\int_{\Omega_s}\mathbf J\cdot\nabla\phi\,dV,
+\]
+
+then uses the same spatial mollifier mapped into s for cumulative rows. Shellwise rows
+are adjacent cumulative differences, so the endpoint (I_{\rm tor}(0)=0), total-
+current row (I_{\rm tor}(1)), component sum, and shell-partition identities hold to
+roundoff. Shells narrower than three mapped radial-cell widths are rejected.
+
+The manufactured axisymmetric surrogate uses a circular poloidal section, analytic
+radial M2 projections, and an integrated toroidal angle. At 96 radial cells and
+quadrature order 6, maximum cumulative errors are $7.801\times10^{-5}$ (parallel),
+$3.899\times10^{-5}$ (diamagnetic), $1.949\times10^{-5}$ (regularizing), and
+$1.953\times10^{-5}$ (total). Rescaling the radius from 1 to 2.75 while scaling
+current density by inverse area changes the total profile by only
+$3.55\times10^{-15}$, and the shared sampled s field by $8.88\times10^{-16}$.
+The checked-in h-refinement table is
+`tests/manufactured/shell_current_moment_rates.csv`:
+
+| Radial cells | Quadrature order | Maximum cumulative error | Adjacent rate |
+| ---: | ---: | ---: | ---: |
+| 24 | 6 | 2.6828e-4 | — |
+| 48 | 6 | 6.6678e-5 | 2.0085 |
+| 96 | 6 | 1.6649e-5 | 2.0018 |
+
+At fixed 48-cell resolution, quadrature orders 1, 2, and 3 reduce the same error from
+$5.599\times10^{-4}$ to $1.578\times10^{-4}$ to $6.173\times10^{-5}$, after
+which the spatial mollification error dominates. Mutation checks removed the
+regularizing M2 term from the total, producing a maximum discrepancy 0.393 and turning
+the analytic component/total test red; removing division by $V_\Omega$ from the
+shared s field made both pressure and current radius-rescaling tests fail.
 
 ## Milestone 3.4 — resonant M3 layer scaling
 
