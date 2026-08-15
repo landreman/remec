@@ -281,8 +281,8 @@ def _validate_analytic_derivative(
     derivative_function: Callable[[NDArray[np.float64]], float | NDArray[np.float64]],
     message: str,
 ) -> None:
-    coarse_probe = np.linspace(0.0, 1.0, 257)
-    refined_probe = np.linspace(0.0, 1.0, 1025)
+    coarse_probe: NDArray[np.float64] = np.linspace(0.0, 1.0, 257, dtype=np.float64)
+    refined_probe: NDArray[np.float64] = np.linspace(0.0, 1.0, 1025, dtype=np.float64)
     coarse_values = np.asarray(values_function(coarse_probe), dtype=float)
     refined_values = np.asarray(values_function(refined_probe), dtype=float)
     refined_derivatives = np.asarray(derivative_function(refined_probe), dtype=float)
