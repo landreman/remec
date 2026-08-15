@@ -195,5 +195,5 @@ def test_circle_transplant_matches_exact_layer_cake_moment() -> None:
     )
     transplant = TransplantedProfile(volume_map, profile)
     pressure = transplant.pressure(values)
-    # Eq. (layercake): int p dA = int_0^4 (1 - V/4) dV = 2.
+    # Eq. (layercake): int p dA = V_omega int_0^1 (1 - s) ds = 2.
     assert float(np.dot(weights, pressure)) == pytest.approx(2.0, abs=2.0e-2)

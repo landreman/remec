@@ -270,15 +270,17 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   radial cells at quadrature order 6, with adjacent rates 2.008 and 2.002. At fixed
   48 cells, quadrature orders 1 → 2 → 3 reduce the error 5.599e-4 → 1.578e-4 →
   6.173e-5. At 96 cells, component errors are 7.801e-5 (parallel), 3.899e-5
-  (diamagnetic), and 1.949e-5 (regularizing); endpoint, component-sum, and shell-
-  partition identities hold to roundoff. Radius 1 → 2.75 domain rescaling changes the
+  (diamagnetic), and 1.949e-5 (regularizing). The endpoint, component-sum, and shell-
+  partition identities are imposed by construction; independent analytic cumulative
+  and shellwise values are tested. Radius 1 → 2.75 domain rescaling changes the
   scaled I₀(s) result by 3.55e-15 and sampled s by 8.88e-16. See
   `tests/manufactured/shell_current_moment_rates.csv` and `docs/verification.md`.
   <br>Next: milestone 3.6 should pass its independently reconstructed physical M2
   component samples to `mollified_shell_current_moments`, reuse the exact shared s
   field, and compare those diagnostic rows—not its C_u/C_G matrices—with the input
-  `ToroidalCurrentProfile`. Its shell grid must satisfy the enforced three-cell
-  mollifier-width resolution check. The deprecated F-shift path is deliberately absent
+  `ToroidalCurrentProfile`. Its shell grid must satisfy the enforced local three-radial-
+  cell resolution check, independent of the chosen mollifier width. The deprecated
+  F-shift path is deliberately absent
   from `remec.solvers` exports but remains in its implementation module for the required
   two-F cancellation negative control.
 - [ ] **3.6** Constrained unknown-G bordered M3–M3b solve — `DESIGN.md` §9.1–§9.4 · note: §5.4, (M2)–(M3b), §9

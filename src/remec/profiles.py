@@ -420,7 +420,12 @@ class TransplantedProfile:
         )
 
     def as_ngsolve_coefficient(self, chi: ng.CoefficientFunction) -> ng.CoefficientFunction:
-        """Wrap local ``(M4b)`` as a differentiable monotone NGSolve 1D spline."""
+        """Wrap local ``(M4b)`` as a differentiable monotone NGSolve 1D spline.
+
+        The degree-one spline exactly preserves tabulated monotonicity and lets
+        NGSolve differentiate the local ``g'(chi) delta_chi`` chain-rule term.
+        Milestone 2.3 supplies the separate nonlocal ``delta V_chi`` action.
+        """
         import ngsolve as ng
 
         levels = self.volume_map.levels
@@ -442,7 +447,12 @@ def extract_ngsolve_quadrature(
     *,
     integration_order: int,
 ) -> QuadratureLevelSetData:
-    """Extract FEM quadrature data for ``(mollified_V)`` from an NGSolve mesh."""
+    """Extract FEM quadrature data for ``(mollified_V)`` from an NGSolve mesh.
+
+    Each sample uses ``w_i=weight(ip_i)*|det J_i|`` and
+    ``h_i=|det J_i|**(1/d)``. Curved-element geometry is therefore retained rather
+    than replaced by a nodal or element-volume histogram.
+    """
     import ngsolve as ng
 
     if integration_order < 1:

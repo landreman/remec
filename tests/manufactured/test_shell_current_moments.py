@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+from dataclasses import replace
 from itertools import pairwise
 from math import pi
 from pathlib import Path
@@ -35,11 +36,6 @@ def _circular_toroidal_surrogate(
     chi = radius**2 - radius_samples**2
     normalized_volume = (radius_samples / radius) ** 2
     inverse_area = radius**-2
-    samples = M2ToroidalCurrentSamples(
-        parallel=inverse_area * (2.0 + normalized_volume),
-        diamagnetic=inverse_area * (-0.5 * normalized_volume),
-        regularizing=inverse_area * (0.25 * (1.0 - normalized_volume)),
-    )
     volume_map = MollifiedVolumeMap.build(
         QuadratureLevelSetData(
             values=chi,
@@ -49,6 +45,12 @@ def _circular_toroidal_surrogate(
         ),
         spatial_width_cells=1.0,
         levels=257,
+    )
+    samples = M2ToroidalCurrentSamples(
+        normalized_volume=volume_map.quadrature_normalized_volume,
+        parallel=inverse_area * (2.0 + normalized_volume),
+        diamagnetic=inverse_area * (-0.5 * normalized_volume),
+        regularizing=inverse_area * (0.25 * (1.0 - normalized_volume)),
     )
     return volume_map, samples
 
@@ -76,16 +78,6 @@ def test_m2_cumulative_and_shellwise_moments_match_circle_annulus_integrals() ->
     for name in ("parallel", "diamagnetic", "regularizing", "total"):
         assert result.cumulative(name) == pytest.approx(expected[name], abs=2.0e-3)
         assert result.shellwise(name) == pytest.approx(np.diff(expected[name]), abs=2.0e-3)
-        assert result.cumulative(name)[0] == 0.0
-        assert np.sum(result.shellwise(name)) == pytest.approx(
-            result.cumulative(name)[-1], abs=2.0e-14
-        )
-    assert result.cumulative("total") == pytest.approx(
-        result.cumulative("parallel")
-        + result.cumulative("diamagnetic")
-        + result.cumulative("regularizing"),
-        abs=2.0e-14,
-    )
 
 
 def test_shell_current_moments_refine_and_match_recorded_rate_table() -> None:
@@ -145,3 +137,26 @@ def test_shell_edges_must_be_a_resolved_partition_of_normalized_volume() -> None
         mollified_shell_current_moments(volume_map, samples, [0.0, 0.5, 2.0])
     with pytest.raises(ValueError, match="resolved"):
         mollified_shell_current_moments(volume_map, samples, np.linspace(0.0, 1.0, 4 * 24 + 1))
+
+
+def test_marginal_local_three_cell_shell_partition_remains_accurate() -> None:
+    """The local §9.2 guard accepts 16 resolved shells without a global-width cap."""
+    volume_map, samples = _circular_toroidal_surrogate(96, 6)
+    edges = np.linspace(0.0, 1.0, 17)
+    result = mollified_shell_current_moments(volume_map, samples, edges)
+    expected = _analytic_cumulative(edges)["total"]
+    assert np.max(np.abs(result.cumulative("total") - expected)) < 3.0e-5
+
+
+def test_current_samples_must_retain_the_volume_map_quadrature_order() -> None:
+    """A reordered M2 field cannot silently pair currents with the wrong s samples."""
+    volume_map, samples = _circular_toroidal_surrogate(48, 6)
+    reordered = replace(
+        samples,
+        normalized_volume=np.asarray(samples.normalized_volume)[::-1],
+        parallel=np.asarray(samples.parallel)[::-1],
+        diamagnetic=np.asarray(samples.diamagnetic)[::-1],
+        regularizing=np.asarray(samples.regularizing)[::-1],
+    )
+    with pytest.raises(ValueError, match="quadrature ordering"):
+        mollified_shell_current_moments(volume_map, reordered, np.linspace(0.0, 1.0, 5))

@@ -51,9 +51,25 @@ I_{\rm tor}(s)=\frac1{2\pi}\int_{\Omega_s}\mathbf J\cdot\nabla\phi\,dV,
 \]
 
 then uses the same spatial mollifier mapped into s for cumulative rows. Shellwise rows
-are adjacent cumulative differences, so the endpoint (I_{\rm tor}(0)=0), total-
-current row (I_{\rm tor}(1)), component sum, and shell-partition identities hold to
-roundoff. Shells narrower than three mapped radial-cell widths are rejected.
+are adjacent cumulative differences. Thus the endpoint ($I_{\rm tor}(0)=0$), total-
+current row ($I_{\rm tor}(1)$), component sum, and shell-partition identities are
+imposed by construction; the tests independently compare every cumulative and
+shellwise component with analytic circle/annulus integrals.
+
+The canonical shell weight evaluates the shared compact Heaviside kernel in s-space
+with local half-width
+$\tfrac12|s(\chi-\epsilon)-s(\chi+\epsilon)|$. This preserves the exact shared s field
+and its endpoints. It differs from evaluating the chi-space expression
+$H_\epsilon(\chi-\chi(s_k))$ only at the mollifier consistency order, and the measured
+moment convergence remains second order. Both volume-map construction and shell
+moments call the same kernel helper so a future kernel change cannot make them drift.
+
+Shell resolution is checked locally and independently of the configured mollifier
+width: the chi half-width is divided by `spatial_width_cells` to recover one radial-
+cell width, mapped into s, and compared with each shell at its own quadrature samples.
+At 96 radial cells, the marginal 16-shell partition passes this three-cell guard and
+has a maximum total-current error of $2.085\times10^{-5}$; a finer unresolved partition
+is rejected.
 
 The manufactured axisymmetric surrogate uses a circular poloidal section, analytic
 radial M2 projections, and an integrated toroidal angle. At 96 radial cells and

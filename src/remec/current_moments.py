@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from itertools import pairwise
 from math import pi
 from typing import Literal
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
-from remec.level_set import MollifiedVolumeMap
+from remec.level_set import MollifiedVolumeMap, _compact_moment_matched_heaviside
 
 CurrentComponent = Literal["parallel", "diamagnetic", "regularizing", "total"]
 
@@ -20,11 +21,14 @@ class M2ToroidalCurrentSamples:
 
     The fields correspond to
     ``J = u B + B cross grad(p)/B_safe**2 - D_u grad_r(utilde)``.
-    Keeping the three terms separate lets the independent ``(M3b)`` diagnostic catch
+    ``normalized_volume`` must be the volume map's shared s field in exactly the same
+    quadrature-point ordering as all three components; the integrator checks it before
+    accumulating moments. Keeping the three terms separate lets the independent ``(M3b)`` diagnostic catch
     an omitted diamagnetic or regularizing contribution rather than only comparing a
     pre-summed current assembled by the solver.
     """
 
+    normalized_volume: ArrayLike
     parallel: ArrayLike
     diamagnetic: ArrayLike
     regularizing: ArrayLike
@@ -90,12 +94,24 @@ def mollified_shell_current_moments(
     normalized_volume = volume_map.quadrature_normalized_volume
     weights = volume_map.quadrature_weights
     widths = volume_map.quadrature_normalized_mollifier_widths
-    minimum_resolved_shell = 3.0 * float(np.max(widths))
-    if float(np.min(np.diff(edges))) < minimum_resolved_shell:
+    sample_coordinate = _validated_component(
+        samples.normalized_volume, len(weights), "normalized-volume"
+    )
+    if not np.array_equal(sample_coordinate, normalized_volume):
         raise ValueError(
-            "shell partition is unresolved: every shell must span at least three "
-            "mollified radial-cell widths"
+            "normalized-volume samples must match the volume map's quadrature ordering"
         )
+    cell_widths = volume_map.quadrature_normalized_cell_widths
+    for left, right in pairwise(edges):
+        in_shell = (normalized_volume >= left) & (normalized_volume <= right)
+        cells_across_shell = (
+            0.0 if not np.any(in_shell) else (right - left) / float(np.max(cell_widths[in_shell]))
+        )
+        if cells_across_shell < 3.0 * (1.0 - 5.0e-3):
+            raise ValueError(
+                "shell partition is unresolved: every shell must span at least three "
+                "local radial-cell widths"
+            )
 
     component_samples = {
         "parallel": _validated_component(samples.parallel, len(weights), "parallel"),
@@ -107,15 +123,7 @@ def mollified_shell_current_moments(
     membership[-1] = 1.0
     for index, edge in enumerate(edges[1:-1], start=1):
         argument = (edge - normalized_volume) / widths
-        membership[index] = np.where(
-            argument <= -1.0,
-            0.0,
-            np.where(
-                argument >= 1.0,
-                1.0,
-                0.5 * (1.0 + argument + np.sin(np.pi * argument) / np.pi),
-            ),
-        )
+        membership[index] = _compact_moment_matched_heaviside(argument)
 
     factor = 1.0 / (2.0 * pi)
     cumulative_parallel = factor * membership @ (weights * component_samples["parallel"])
