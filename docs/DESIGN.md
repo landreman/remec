@@ -758,6 +758,9 @@ toroidal flux; magnetic energy; Ampère residual where source current is availab
 Bundle one coarse `wout` and one coarse DESC file (< 1 MB each) as regression inputs;
 no other large binaries in git.
 
+The ploting functions in remec should include tools to compare the remec
+pressure surfaces and Poincare plots to the flux surfaces from DESC, VMEC, and VMEC++.
+
 ---
 
 ## 18. Public Python API

@@ -269,9 +269,11 @@ that dependency. Phase 7 may run in parallel with Phase 8.
 
 - [ ] **6.1** Periodic-torus end-to-end benchmark — `DESIGN.md` §16.2
 - [ ] **6.2** Smooth solid-torus mesh — `DESIGN.md` §16.4 (simple torus → shaped Fourier boundary; geometry-error report)
-- [ ] **6.3** VMEC/VMEC++ reader + initialization — `DESIGN.md` §17
-- [ ] **6.4** DESC reader — `DESIGN.md` §17
-- [ ] **6.5** Finite-β fixed-boundary stellarator example — `DESIGN.md` §19, §22 (nightly)
+- [ ] **6.3** Poincare plots: compute data via field line tracing, save and load
+  data, functions to make plots.
+- [ ] **6.4** VMEC/VMEC++ reader + initialization — `DESIGN.md` §17
+- [ ] **6.5** DESC reader — `DESIGN.md` §17
+- [ ] **6.6** Finite-β fixed-boundary stellarator example — `DESIGN.md` §19, §22 (nightly)
   <br>Acceptance: nested-surface case reproduces p = p₀(V(ψ)) to O(ε_κ); island case shows flattening with measured w_c ∝ ε_κ^{1/4}.
 
 ## Phase 7 — extreme-anisotropy upgrade *(may run parallel to Phase 8)*
