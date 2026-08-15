@@ -98,7 +98,8 @@ abstraction in Section 20).
 The first usable coupled solver **MUST** target: interpretive mode; a fixed, closed
 boundary with **B**·n̂ = 0; prescribed toroidal flux Ψ_t; prescribed pressure profile
 p₀(s) with p₀(1) = p_b; prescribed cumulative enclosed-toroidal-current profile I₀(s)
-with I₀(0) = 0; manually specified regularization/transport coefficients; one
+with I₀(0) = 0 and prescribed edge value u_b of u (default 0, a wall in vacuum);
+manually specified regularization/transport coefficients; one
 shared-memory node. Both user profiles use the normalized enclosed-volume coordinate
 s = V/V_Ω ∈ [0, 1]. The mean-current profile G(s) is a solved multiplier, not a user
 input.
@@ -430,9 +431,10 @@ For frozen (**B**, p, s), solve for (ũ, G) with u = G(s)+ũ. The unstabilized �
 Here ∇ᵣ is the selected regularization gradient (∇⊥ by default, full ∇ as the
 isotropic variant; Sec. 9.4), and every B⁻¹ uses B_safe. The baseline adds SUPG
 stabilization with streamline direction **b**. The strong residual used in SUPG MUST
-include parallel advection, diffusion, every source and reaction term, and the complete
-G-dependent term (including coefficient derivatives implied by the strong divergence
-where needed). The stabilization parameter MUST live in one centralized, unit-tested
+include parallel advection, diffusion, every source and reaction term, and both
+G-dependent couplings — −G′(s)**B**·∇s and the reaction contribution from u = G(s)+ũ —
+including coefficient derivatives implied by the strong divergence where needed. The
+stabilization parameter MUST live in one centralized, unit-tested
 function depending on element size along the field, |**B**|, transverse diffusion, and
 polynomial order; the stabilization contribution MUST be separately reported.
 
@@ -463,6 +465,13 @@ Discretized M3 and M3b form the square bordered system
 
 > [A P; C_u C_G][ũ; g] = [f; ΔI₀].
 
+Assemble the blocks in the unknowns (ũ, g), transcribing from the note's Eq. (bordered)
+discussion: P carries **both** G couplings of the ũ equation — the forcing −G′**B**·∇s
+and the reaction contribution −(μ₀G/B²)**B**·∇p from u = G+ũ; C_u carries
+ũ**B**·∇φ − D_u∇ᵣũ·∇φ and C_G carries G**B**·∇φ. The multiplier current D_uG′∇ᵣs is
+already inside −D_u∇ᵣũ — adding a separate D_uG′∇ᵣs·∇φ term to C_G double-counts it.
+The known diamagnetic contribution to each shell integral moves into ΔI₀'s rows.
+
 The production solve uses a Schur complement with the existing A-solver/preconditioner;
 N is expected to be O(10–100). The note's response-based fixed-point update for G MAY be
 used as a prototype, but the coupled bordered solve is the production path. Checkpoints
@@ -472,10 +481,14 @@ residuals. `G` or its coefficients MUST NOT appear in the public input-profile A
 Mandatory correction tests are: (1) with fixed (**B**,p,D_u) and equal edge values, two
 old prescribed F(p) shifts reconstruct the same u to solver tolerance; (2) two distinct
 I₀(s) inputs return their respective enclosed currents; (3) deleting the
-−G′**B**·∇s term or applying diffusion to u instead of ũ fails; (4) constraint and M3
-residuals converge under h/p and shell refinement; and (5) a D_u scan holds I_tor fixed
-while D_uG′∇ᵣs and the appropriate mean-ũ correction vanish in the regular limit. Run
-these for both gradient variants.
+−G′**B**·∇s term, dropping the −(μ₀G/B²)**B**·∇p reaction coupling, or applying
+diffusion to u instead of ũ fails; (4) constraint and M3
+residuals converge under h/p and shell refinement; (5) a D_u scan holds I_tor fixed
+while D_uG′∇ᵣs and the appropriate mean-ũ correction vanish in the regular limit; and
+(6) the realized I_tor(s) is confirmed by an independent evaluation of the shell
+integrals from the reconstructed physical (M2) current — not by reusing the C_u/C_G
+matrices from the solve — so a mis-assembled constraint block cannot certify itself.
+Run these for both gradient variants.
 
 ### 9.3 DG fallback and linear solvers
 

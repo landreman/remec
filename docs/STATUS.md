@@ -262,10 +262,13 @@ that dependency. Phase 7 may run in parallel with Phase 8.
 - [ ] **3.6** Constrained unknown-G bordered M3–M3b solve — `DESIGN.md` §9.1–§9.4 · note: §5.4, (M2)–(M3b), §9
   <br>Acceptance: for both ∇⊥ and full-∇ variants, solve jointly for homogeneous ũ and
   G(s) with G(1)=u_b; apply −D_u∇ᵣũ consistently in (M2), (M3), SUPG, diagnostics, and
-  shell constraints; realize I_tor(s)=I₀(s) to solver tolerance. Automated tests MUST
+  shell constraints; realize I_tor(s)=I₀(s) to solver tolerance, confirmed by an
+  independent shell-integral evaluation of the reconstructed (M2) current (not by reusing
+  the solve's constraint matrices). Automated tests MUST
   show (a) two distinct old F(p) profiles with the same edge value give the same physical
   u, (b) two distinct I₀(s) profiles give their respective currents, and (c) deleting
-  −G′B·∇s, diffusing full u, or omitting any current contribution makes a test fail.
+  −G′B·∇s, dropping the −(μ₀G/B²)B·∇p reaction coupling, diffusing full u, or omitting
+  any current contribution makes a test fail.
   Include h/p/N-shell convergence, N-doubling stability, the bordered Schur solve, and a
   D_u scan holding I₀ fixed while the multiplier-current/mean-ũ diagnostics approach the
   note's regular limit.

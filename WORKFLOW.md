@@ -117,9 +117,9 @@ explain the design document to the agent again.
 
 | Work | Model | Effort |
 |---|---|---|
-| Phase 0, packaging, I/O readers (6.3, 6.4), diagnostics | top model | medium |
+| Phase 0, packaging, I/O readers (6.4, 6.5), diagnostics | top model | medium |
 | Everything numerical — Phases 1–5, 7, 8 | top model | high |
-| 1.3, 3.2, 4.2, 4.4, 8.3, 8.4 | top model | xhigh |
+| 1.3, 3.2, 3.6, 4.2, 4.4, 8.3, 8.4 | top model | xhigh |
 | Planning a phase, or debugging a wrong convergence rate | top model, `/plan` | xhigh |
 | Review | Claude Opus, extended thinking on | — |
 
@@ -130,11 +130,13 @@ subagents. Effort matters more than model choice here: the failure mode on this 
 is a plausible-looking weak form with a wrong sign, and that is exactly what more
 deliberation buys you.
 
-The six xhigh milestones are the ones where a wrong answer looks right. 1.3 is the phase
+The seven xhigh milestones are the ones where a wrong answer looks right. 1.3 is the phase
 gate the whole project rests on. 3.2's stabilization parameter has no obviously-wrong
-value. 4.2 and 4.4 are where discrete exactness either holds at roundoff or silently
-doesn't. 8.3 and 8.4 are Jacobians that converge to the wrong fixed point if a term is
-missing.
+value. 3.6's bordered constraint solve can satisfy a mis-assembled constraint block to
+solver tolerance while the physical current profile is wrong — only an independent
+I_tor(s) evaluation catches it. 4.2 and 4.4 are where discrete exactness either holds at
+roundoff or silently doesn't. 8.3 and 8.4 are Jacobians that converge to the wrong fixed
+point if a term is missing.
 
 ---
 
@@ -165,7 +167,7 @@ Branch per milestone, always — `DESIGN.md` §25 sizes each one for a single re
 and that maps exactly onto a PR.
 
 Worktrees only when you're running agents in parallel, which for this plan means:
-Phase 7 alongside Phase 8, or 6.3 and 6.4 (the two independent readers) at once, or a
+Phase 7 alongside Phase 8, or 6.4 and 6.5 (the two independent readers) at once, or a
 long nightly benchmark while you continue on something else. Two or three at a time.
 More than that and you become the bottleneck at review, which defeats the purpose.
 

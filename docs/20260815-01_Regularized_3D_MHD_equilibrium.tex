@@ -55,7 +55,7 @@ replaces the singular Pfirsch--Schl\"uter and sheet currents with bounded curren
 width. Because this flux also relaxes the mean parallel current, which classical theory leaves free
 and a code must accept as input, the closure is constrained: the flux acts on the departure of
 $J_\parallel/B$ from an unknown one-dimensional profile that is fixed by prescribing the enclosed
-toroidal current versus normalized enclosed volume $s=V/V_Omegain[0,1]$---the same independent
+toroidal current versus normalized enclosed volume $s=V/V_\Omega\in[0,1]$---the same independent
 variable as the pressure input. The
 result is a closed elliptic/hypoelliptic system of partial differential equations for
 $(\bB,p,u=J_\parallel/B)$, bordered by one one-dimensional unknown and one one-dimensional
@@ -982,10 +982,17 @@ and Eq.~(\ref{eq:shell_constraints}) form the bordered linear system
 =\begin{pmatrix}\mathbf f\\ \Delta\mathbf I_0\end{pmatrix},
 \label{eq:bordered}
 \end{equation}
-where $A$ is the advection--diffusion operator already needed for (M3), $P$ its action on the $N$
-basis functions of $G$ (through $-G'\bB\cdot\nabla s$ and the boundary term), and $C_u$, $C_G$ the
-shell integrals of the $\tilde u$ and $G$ contributions to $\bJ\cdot\nabla\phi$ [including the
-$D_uG'\gradperp s\cdot\nabla\phi$ term]. Since $N$ is tens while $\tilde{\mathbf u}$ has millions of
+where $A$ is the advection--diffusion operator already needed for (M3), acting on $\tilde u$
+(streaming, diffusion, and the $\tilde u$ parts of the reaction and $D_u$ right-hand-side terms);
+$P$ collects the action of the $N$ free basis functions of $G$, namely the forcing
+$-G'\,\bB\cdot\nabla s$ \emph{and} the reaction contribution $-(\mu_0/B^{2})\,G\,\bB\cdot\nabla p$
+from $u=G+\tilde u$, both $O(\varepsilon_\kappa)$ (the fixed $G(s_N)=u_b$ contribution moves to
+the right-hand side); and $C_u$, $C_G$ are the shell integrals of the $\tilde u$ and $G$
+contributions to $\bJ\cdot\nabla\phi$---in the variables $(\tilde u,\mathbf g)$ these are
+$\tilde u\,\bB\cdot\nabla\phi-D_u\gradperp\tilde u\cdot\nabla\phi$ and $G\,\bB\cdot\nabla\phi$
+respectively, the multiplier current $D_uG'\gradperp s$ being already contained in
+$-D_u\gradperp\tilde u$ (it must not be added to $C_G$ as well), while the known diamagnetic
+contribution moves to the right-hand side of the constraint rows. Since $N$ is tens while $\tilde{\mathbf u}$ has millions of
 degrees of freedom, the border is handled by a Schur complement with the existing $A$-solver as
 preconditioner; in the Newton formulation of Sec.~\ref{sec:newton} the $N$ coefficients simply
 join the state vector and Eq.~(\ref{eq:shell_constraints}) the residual. A fixed-point update
