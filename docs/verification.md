@@ -11,6 +11,98 @@
 > numbers remain valid. Milestone 3.5 migrated the public contract and layer-cake
 > oracle to p₀(s) and the factor V_Ω∫₀¹·ds.
 
+## Milestone 3.7 — constrained gradient-variant comparison
+
+The transverse and full-gradient current-viscosity closures were compared with the
+same bordered (M3)--(M3b) solver on shared frozen
+$(\mathbf B,p,s,I_0,\mathrm{drive})$ states. Both reconstruct the physical (M2)
+current
+
+\[
+\mathbf J=(G+\tilde u)\mathbf B
++\frac{\mathbf B\times\nabla p}{B_{\rm safe}^2}
+-D_u\nabla_r\tilde u,
+\]
+
+and the cumulative current in every row is evaluated independently from that current.
+Thus the study preserves DESIGN §5 invariant 4 rather than comparing only M3
+residuals. It also records the sampled minimum field and floor activity (invariant 5),
+and every four-shell partition spans at least 4.796 local cells/mollifier widths in the
+resonant scan and 6.812 in the misaligned scan (invariant 6).
+
+### Fixed-state regular limit and resonant layer
+
+The resonant benchmark uses
+$\mathbf B=(0,6(x-1/2),2)$ on a periodic-$y$ $24\times16$ structured triangular
+mesh. Its fixed drive is
+$\sin(2\pi y)+0.05\sin(10\pi y)$; the smaller fifth harmonic measures parallel
+grid-noise transfer without changing the current target. The same analytic cumulative
+$I_0(s)=0.04s+0.01s(1-s)$, pressure gradient, volume coordinate, drive, shell grid,
+mesh, and edge value are held fixed throughout the $D_u$ scan. With reference length
+one and $\min|\mathbf B|=2$, $\epsilon_J=D_u/2$.
+
+| $D_u$ | $\epsilon_J$ | relative $u_\perp-u_{\rm full}$ L² | difference / $\epsilon_J$ |
+| ---: | ---: | ---: | ---: |
+| 0.04 | 0.020 | 2.0022e-2 | 1.0011 |
+| 0.02 | 0.010 | 1.0421e-2 | 1.0421 |
+| 0.01 | 0.005 | 5.1697e-3 | 1.0339 |
+
+The adjacent decay rates are 0.942 and 1.011, so the disagreement is measured
+$O(\epsilon_J)$ and both variants approach one common limit on a genuinely fixed
+state. Each variant realizes the same input current with independent M3b relative
+residual below $2.0\times10^{-17}$. The target is admissible: for
+$D_u=0.04\to0.01$, $\|D_uG'\nabla_rs\|_2$ falls from
+$1.7217\times10^{-2}$ to $4.3043\times10^{-3}$, while the maximum shell
+$|\langle\tilde u\rangle|$ stays below $1.74\times10^{-16}$. The smooth-floor
+activity is $1.60\times10^{-16}$ with sampled $\min|\mathbf B|=2$.
+
+At $D_u=0.02$, the transverse/full fundamental-harmonic FWHM values are 0.41047 and
+0.40698, a 0.85% difference; they span 9.85 and 9.77 normal elements. Each radial
+amplitude has exactly one turning point, so neither closure adds a spurious layer
+oscillation. The full-gradient closure reduces the injected fifth-to-fundamental
+parallel-noise ratio from $6.8883\times10^{-3}$ to $6.5795\times10^{-3}$, a 4.48%
+reduction. The complete scan is checked in as
+`tests/manufactured/m3_gradient_du_limit.csv`.
+
+### Field-misalignment and solver-cost measurements
+
+The second benchmark uses a constant in-plane field at 22.5 degrees. The structured
+triangle edges lie at 0, 45, and 90 degrees, so the field bisects the nearest two edge
+directions and is deliberately maximally misaligned within that mesh family. On the
+$20\times20\to28\times28$ refinement, the physical-$u$ coarse-to-fine relative L²
+change is $1.9625\times10^{-2}$ for the transverse closure and
+$1.6215\times10^{-2}$ for full gradient; the latter is 17.4% smaller. The fine-grid
+cross-variant difference is $2.9210\times10^{-2}$, while both independently evaluated
+M3b residuals remain below $5.71\times10^{-17}$. These rows are in
+`tests/manufactured/m3_gradient_misalignment.csv`.
+
+One frozen solve is the available proxy for one future Picard linearization. Each row
+assembles and factorizes $A$ once, reuses that one UMFPACK factorization for the base
+right-hand side plus four $A^{-1}P$ columns (five response solves), and reports zero
+Krylov iterations and zero preconditioner applications because this verification
+kernel is direct. It performs zero assembly or factorization reuse across separate
+frozen calls. At $D_u=0.02$, transverse/full assembly times are 0.909/0.845 s and
+complete frozen-step times are 1.692/1.618 s. On the fine misaligned mesh they are
+1.972/1.760 s and 3.444/3.183 s, respectively. These local wall times show a modest
+full-gradient advantage, but the current monolithic $A$ assembly does not yet exploit
+the field-independent Laplacian block across nonlinear updates; Phase 5 should measure
+that cache opportunity in the actual Picard driver. The table records the absence of
+reuse rather than crediting a theoretical reuse.
+
+The full-gradient closure therefore provides small but consistent damping, smearing,
+misalignment, and local timing improvements in these tests. They are not large enough
+to override the note-derived transverse physics, especially before a nonlinear driver
+can measure real cache/preconditioner behavior. The default remains
+`regularization_gradient="perpendicular"`; no ADR is warranted by this study.
+
+Mutation checks verified that the comparison cannot pass with collapsed or mixed
+operators. Forcing the full-gradient Galerkin/M2 path through the perpendicular
+projection reduced the $D_u=0.04$ normalized cross-variant difference from 1.001 to
+0.0368 and failed the $O(\epsilon_J)$ gate. Reconstructing the full-gradient physical
+(M2) regularizing current with the perpendicular operator while retaining the full
+(M3)--(M3b) solve raised the independently evaluated misaligned-case current residual
+to $9.872\times10^{-4}$, far above the $10^{-10}$ gate.
+
 ## Milestone 3.6 — constrained unknown-G M3–M3b solve
 
 For frozen $(\mathbf B,p,\chi)$, the production current-continuity kernel now solves

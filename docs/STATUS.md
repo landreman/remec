@@ -320,7 +320,7 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   metrics without changing the default ∇⊥ choice absent an ADR. The p=2 → 3 plateau is
   the inherited second-order mollified-shell ceiling; the §12.4 cut-cell reference is
   the route for deciding whether sharper shell integration removes it.
-- [ ] **3.7** Gradient-variant comparison study (∇⊥ vs full ∇), constrained formulation — `DESIGN.md` §9.4 · note: §5.5
+- [x] **3.7** Gradient-variant comparison study (∇⊥ vs full ∇), constrained formulation — `DESIGN.md` §9.4 · note: §5.5
   <br>Acceptance: on shared frozen-(B,p,s,I₀) benchmarks including a resonant layer and a
   field-misaligned mesh: each variant realizes the same I₀(s); measured O(ε_J) relative
   cross-variant agreement at fixed D_u and a common D_u→0 limit; machine-readable
@@ -331,7 +331,28 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   The D_u→0 study must be emergent on one fixed frozen state and fixed I₀/drive; monitor
   ‖D_uG′∇ᵣs‖ and ⟨ũ⟩_s, and explicitly report or reject an inadmissible target rather
   than inferring regularity from a per-D_u manufactured family.
-  <br>Measured: —
+  <br>Measured: macOS / CPython 3.12.2 / NGSolve 6.2.2606 — on one fixed
+  resonant `(B,p,s,I₀,drive)` state, D_u = 0.04 → 0.02 → 0.01 reduces the relative
+  physical-u cross-variant difference from 2.0022e-2 → 1.0421e-2 → 5.1697e-3,
+  with difference/ε_J = 1.0011 / 1.0421 / 1.0339 and adjacent decay rates 0.942 /
+  1.011. Both variants independently realize the same I₀ below 2.0e-17 relative;
+  ‖D_uG′∇ᵣs‖₂ falls 1.7217e-2 → 4.3043e-3 and maximum |⟨ũ⟩| stays below
+  1.74e-16, so the fixed target is admissible. At D_u=0.02, the ∇⊥/full layer FWHM
+  values are 0.41047 / 0.40698 (9.85 / 9.77 normal cells), both have one radial
+  turning point, and full ∇ lowers fifth-harmonic parallel-noise transfer by 4.48%.
+  On a 22.5° field-misaligned 20² → 28² mesh scan, coarse-to-fine relative L² changes
+  are 1.9625e-2 / 1.6215e-2 and the fine cross-variant difference is 2.9210e-2.
+  Each frozen solve uses one A assembly/factorization, five direct response solves,
+  zero Krylov/preconditioner iterations, and zero cross-call reuse; measured full-∇
+  frozen-step times are 4.3% (resonant) and 7.6% (misaligned) lower, but the nonlinear
+  cache opportunity is not yet implemented. The evidence does not justify changing
+  the default from ∇⊥. See `tests/manufactured/m3_gradient_du_limit.csv`,
+  `tests/manufactured/m3_gradient_misalignment.csv`, and `docs/verification.md`.
+  <br>Next: Phase 4 starts the compatible de Rham magnetic kernel. Preserve the runtime
+  gradient selection and its independently reconstructed physical (M2) current through
+  the later H(div) projection; milestone 4.4 must retain these M3b shell moments rather
+  than certifying only divergence. The actual Picard driver in Phase 5 should remeasure
+  full-∇ regularization-block reuse before considering any default change.
 
 ## Phase 4 — compatible magnetic kernel
 
