@@ -333,21 +333,23 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   than inferring regularity from a per-D_u manufactured family.
   <br>Measured: macOS / CPython 3.12.2 / NGSolve 6.2.2606 — on one fixed
   resonant `(B,p,s,I₀,drive)` state, D_u = 0.04 → 0.02 → 0.01 reduces the relative
-  physical-u cross-variant difference from 2.0190e-2 → 1.0481e-2 → 5.1877e-3,
-  with difference/ε_J = 1.0095 / 1.0481 / 1.0375 and adjacent decay rates 0.946 /
-  1.015. Both variants independently realize the same I₀ below 1.41e-17 relative;
-  the multiplier-current norm falls from about 1.55e-2 → 4.00e-3 and maximum
-  |⟨ũ⟩| stays below 1.74e-16, so the fixed target is admissible. Its nonuniform
-  ∇φ makes the regularizing toroidal-current norm nonzero and variant-distinct
-  (1.104e-2 / 9.878e-3 at D_u=0.02). At that D_u, the ∇⊥/full layer FWHM values
-  are 0.41047 / 0.40698 (9.85 / 9.77 normal cells), both have one radial turning
-  point, and full ∇ lowers fifth-harmonic parallel-noise transfer by 4.48%; all scan
-  rows clear six FWHM cells. On aligned and 22.5°-misaligned 20² → 28² controls,
+  physical-u cross-variant difference from 2.0207e-2 → 1.0489e-2 → 5.1913e-3,
+  with difference/ε_J = 1.0104 / 1.0489 / 1.0383 and adjacent decay rates 0.946 /
+  1.015. A fixed B_x=0.01 makes the bordered P block nonzero:
+  ‖B·∇G‖₂ = 3.86e-3 → 4.06e-3 and maximum |⟨ũ⟩| = 8.74e-3 → 3.539e-2,
+  so neither admissibility monitor is a structural zero. Both variants independently
+  realize the same I₀ below 2.99e-17 relative, while the multiplier-current norm falls
+  from about 1.55e-2 → 4.06e-3. The nonuniform ∇φ makes the regularizing
+  toroidal-current norm nonzero and variant-distinct (1.109e-2 / 9.955e-3 at
+  D_u=0.02). At that D_u, the ∇⊥/full layer FWHM values are 0.41050 / 0.40702
+  (9.85 / 9.77 normal cells), both have one radial turning point, and full ∇ lowers
+  fifth-harmonic parallel-noise transfer by 4.49%; all scan rows clear six FWHM cells.
+  On aligned and 22.5°-misaligned 20² → 28² controls,
   coarse-to-fine changes are 1.4068e-2 / 1.2687e-2 and 1.9625e-2 / 1.6215e-2,
   giving misalignment amplifications of 1.395 / 1.278. Each frozen solve records one
   A assembly/factorization, five direct responses, and four within-call factorization
   reuses; Krylov iterations are not applicable and the preconditioner is none.
-  Separated bordered-solve timings favor full ∇ by 0.78% (resonant) and 3.88%
+  Separated bordered-solve timings favor full ∇ by 8.03% (resonant) and 3.88%
   (misaligned), but single-run wall times are volatile and cross-iteration reuse is not
   implemented. The evidence does not justify changing the default from ∇⊥. See
   `tests/manufactured/m3_gradient_du_limit.csv`,

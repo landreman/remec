@@ -35,6 +35,9 @@ def _recorded_du_rows() -> dict[tuple[str, float], dict[str, float]]:
                     "cross_variant_relative_l2",
                     "cross_variant_over_epsilon_j",
                     "multiplier_current_l2",
+                    "maximum_shell_mean_utilde",
+                    "g_advection_coupling_l2",
+                    "g_reaction_coupling_l2",
                     "regularizing_toroidal_current_l2",
                     "layer_fwhm",
                     "radial_turning_points",
@@ -80,12 +83,14 @@ def _resonant_comparison_case(
     r"""Return one fixed resonant ``(M2)``--``(M3b)`` comparison state.
 
     ``B_y=6(x-1/2)`` makes the fundamental periodic harmonic resonant at
-    ``x=1/2``.  The frozen drive contains a smaller fifth harmonic so the study can
+    ``x=1/2``.  The small nonzero ``B_x`` makes both ``B.grad(s)`` and
+    ``B.grad(p)`` nonzero, so the bordered ``P`` block couples ``G`` back into
+    ``utilde``.  The frozen drive contains a smaller fifth harmonic so the study can
     separately measure layer smearing and parallel grid-noise damping.  Neither the
     drive nor the normalized cumulative target ``I_0(s)`` depends on ``D_u`` or on
     the selected regularization gradient.
     """
-    magnetic_field = ng.CoefficientFunction((0.0, 6.0 * (ng.x - 0.5), 2.0))
+    magnetic_field = ng.CoefficientFunction((0.01, 6.0 * (ng.x - 0.5), 2.0))
     pressure_gradient = ng.CoefficientFunction((1.0, 0.0, 0.0))
     magnetic_floor = 1.0e-8
     safe_magnitude = ng.sqrt(ng.InnerProduct(magnetic_field, magnetic_field) + magnetic_floor**2)
@@ -374,10 +379,6 @@ def test_constrained_comparison_reports_cost_and_invariant_diagnostics(
         "perpendicular",
         subdivisions=(16, 16),
     )
-    assert active_floor_result.diagnostics["minimum_field_magnitude"] == pytest.approx(
-        2.0,
-        abs=1.0e-12,
-    )
     assert active_floor_result.diagnostics["floor_activity_l2"] > 0.25
 
 
@@ -392,7 +393,7 @@ def test_fixed_state_variants_are_o_epsilon_j_and_have_one_common_limit(
         perpendicular, perpendicular_result = resonant_scan[diffusivity]["perpendicular"]
         full, full_result = resonant_scan[diffusivity]["full"]
         difference = _relative_l2_difference(perpendicular, full)
-        epsilon_j = diffusivity / 2.0  # min |B|=2 and the slab reference length is one.
+        epsilon_j = diffusivity / sqrt(4.0001)  # Bbar=min |B|; reference length is one.
         differences.append(difference)
 
         assert 0.8 < difference / epsilon_j < 1.3
@@ -402,7 +403,6 @@ def test_fixed_state_variants_are_o_epsilon_j_and_have_one_common_limit(
                 result.target_cumulative_current,
                 abs=1.0e-10,
             )
-            assert result.diagnostics["maximum_shell_mean_utilde"] < 1.0e-12
             assert result.diagnostics["floor_activity_l2"] < 1.0e-12
         for variant, result in (
             ("perpendicular", perpendicular_result),
@@ -422,6 +422,22 @@ def test_fixed_state_variants_are_o_epsilon_j_and_have_one_common_limit(
                 expected["multiplier_current_l2"],
                 rel=5.0e-6,
             )
+            assert result.diagnostics["maximum_shell_mean_utilde"] == pytest.approx(
+                expected["maximum_shell_mean_utilde"],
+                rel=5.0e-6,
+            )
+            assert result.diagnostics["g_advection_coupling_l2"] == pytest.approx(
+                expected["g_advection_coupling_l2"],
+                rel=5.0e-6,
+            )
+            assert result.diagnostics["g_reaction_coupling_l2"] == pytest.approx(
+                expected["g_reaction_coupling_l2"],
+                rel=5.0e-6,
+            )
+            assert result.diagnostics["maximum_shell_mean_utilde"] > 1.0e-6
+            assert result.diagnostics["maximum_shell_mean_utilde"] < 1.0
+            assert result.diagnostics["g_advection_coupling_l2"] > 1.0e-3
+            assert result.diagnostics["g_reaction_coupling_l2"] > 1.0e-12
             assert result.diagnostics["regularizing_toroidal_current_l2"] == pytest.approx(
                 expected["regularizing_toroidal_current_l2"],
                 rel=5.0e-6,
