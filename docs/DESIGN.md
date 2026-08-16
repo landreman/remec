@@ -250,8 +250,9 @@ linearization.
    undersized and oversized terminal-order controls that make the pairing falsifiable;
    the oversized control MUST establish redundant constraint rows using numerical rank
    with relative singular-value tolerance 1e-10, rather than depend on a particular
-   factorization raising an exception. The measured paired/oversized smallest-to-largest
-   singular-value ratios are 2.02e-2 and 1.05e-15, respectively.
+   factorization raising an exception. On the measured `Curve(3)` ball with `HDiv(2)`,
+   the paired `L2(1)` smallest-to-largest singular-value ratio is 2.02e-2, while the
+   oversized `L2(2)` first-discarded-to-largest ratio is 1.05e-15.
    Its λ_h is a continuity multiplier, not a gauge multiplier, and is not expected to
    converge to zero. The relative projection correction
    ‖J_h − J_raw‖/‖J_raw‖ MUST also be recorded and converge to zero — a large or
@@ -596,7 +597,10 @@ visible divergence) and an oversized terminal space whose extra constraint rows 
 proven redundant by rank deficiency of the constraint block. A singular direct
 factorization MAY illustrate that redundancy but MUST NOT be the acceptance observable.
 Use relative singular-value tolerance 1e-10; the measured paired and oversized ratios
-are 2.02e-2 and 1.05e-15, leaving eight and five orders of margin respectively.
+on the `Curve(3)` 107-tetrahedron ball with `HDiv(2)` are respectively 2.02e-2 for
+the paired block's smallest singular value and 1.05e-15 for the oversized block's first
+discarded singular value, each normalized by the largest. Paired `HDiv(3)` and `HDiv(4)`
+smallest-to-largest ratios remain 4.22e-3 and 1.52e-3.
 Here λ_h is the **continuity multiplier**, not the
 Sec. 7.3 magnetic gauge multiplier; it generally has a legitimate nonzero limit.
 Diagnostics MUST include divergence norm before/after, the continuity-multiplier norm,

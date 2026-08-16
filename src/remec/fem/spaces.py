@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+# Raise only together with new affine/curved table rows and remeasured gate constants.
 _MAX_VALIDATED_BASE_ORDER = 5
 
 
@@ -39,7 +40,8 @@ def make_tetrahedral_de_rham_sequence(mesh: Any, *, order: int) -> DeRhamSequenc
 
     ``order`` is the HCurl/base order ``p``, not the independent H1 order used for
     ``chi`` and ``utilde`` elsewhere in DESIGN section 7.1. Base orders 0--5 are
-    covered by the affine and curved manufactured verification tables.
+    covered by the affine and curved manufactured verification tables. Do not raise the
+    cap without extending both tables and recalibrating both order-scaled roundoff gates.
 
     Implements the space pairing
     ``H1(p+1) --grad--> HCurl(p) --curl--> HDiv(max(p-1, 0))

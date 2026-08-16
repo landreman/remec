@@ -61,7 +61,7 @@ def _curved_roundoff_gate(base_order: int) -> float:
 
 
 def _recorded_defect_gate(recorded: float) -> float:
-    """Allow backend-level roundoff drift while retaining row-specific regression data."""
+    """Bound upward degradation; smaller backend roundoff is intentionally acceptable."""
     return max(8.0 * recorded, 64.0 * np.finfo(float).eps)
 
 

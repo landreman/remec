@@ -88,10 +88,13 @@ the constraint forces physical divergence to vanish pointwise. Exploratory §10 
 solves measured relative divergence below 7.0e-16 on curved balls and tori, while an
 undersized terminal space left O(1) divergence. For the oversized `HDiv(2)-L2(2)`
 control, the constraint block has rank 428 across 1070 rows, directly exposing 642
-redundant rows independent of whether a chosen factorization raises. Its relative
-smallest singular value is 1.05e-15, versus 2.02e-2 for the full-rank paired block;
-relative numerical-rank tolerance 1e-10 therefore separates them cleanly. Milestone 4.4
-must turn those pairing controls into automated manufactured tests. Its λ is a continuity
+redundant rows independent of whether a chosen factorization raises. On that
+`HDiv(2)` mesh, the paired block's smallest-to-largest singular-value ratio is 2.02e-2;
+the oversized block's first-discarded-to-largest ratio is 1.05e-15 (its literal
+smallest-to-largest ratio is 3.70e-35). Paired `HDiv(3)` and `HDiv(4)` ratios remain
+4.22e-3 and 1.52e-3, so relative numerical-rank tolerance 1e-10 separates every
+measured case cleanly. Milestone 4.4 must turn those pairing controls into automated
+manufactured tests. Its λ is a continuity
 multiplier with a legitimate nonzero limit, not the magnetic gauge multiplier; alternate
 trace choices that leave a constant kernel require mean-zero normalization before its
 norm is reported.

@@ -28,9 +28,11 @@
   relative divergence below 7.0e-16; an undersized terminal order left O(1) divergence,
   while an oversized order produced a constraint block of rank 428 with 1070 rows (642
   redundant). Test that rank fact rather than a solver-specific singular-factorization
-  exception; the paired/oversized smallest-to-largest singular-value ratios were 2.02e-2
-  and 1.05e-15, cleanly separated by relative rank tolerance 1e-10. Its λ is a
-  continuity multiplier with a legitimate nonzero limit, not the
+  exception. On the `Curve(3)` ball with `HDiv(2)`, the paired smallest-to-largest ratio
+  was 2.02e-2 and the oversized first-discarded-to-largest ratio was 1.05e-15; paired
+  `HDiv(3)`/`HDiv(4)` ratios were 4.22e-3/1.52e-3, all cleanly classified by relative
+  rank tolerance 1e-10. Its λ is a continuity multiplier with a legitimate nonzero
+  limit, not the
   magnetic gauge multiplier; normalize its mean if a non-natural trace leaves constants
   in the multiplier kernel. Milestone 4.4 must automate those positive and negative
   controls. An
