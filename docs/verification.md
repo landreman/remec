@@ -11,6 +11,51 @@
 > numbers remain valid. Milestone 3.5 migrated the public contract and layer-cake
 > oracle to p₀(s) and the factor V_Ω∫₀¹·ds.
 
+## Milestone 4.2 — gauge-fixed curl–curl magnetostatics
+
+The fixed-boundary magnetic kernel solves the mixed Coulomb-gauge form of note (M1),
+
+\[
+\mu_0^{-1}(\nabla\times A_h,\nabla\times v_h)
++(\nabla\lambda_h,v_h)=(J,v_h),\qquad
+(A_h,\nabla q_h)=0,
+\]
+
+with essential \(n\times A_h=0\) and \(\lambda_h=0\) on the complete boundary. The
+spaces use the milestone-4.1 tetrahedral pairing
+\(A_h\in H(\mathrm{curl})_p\), \(\lambda_h\in H^1_{p+1}\), and the reported
+field is an independent mass projection of \(\nabla\times A_h\) into
+\(H(\mathrm{div})_{p-1}\). No mass penalty is added to the vector equation.
+
+On the unit cube the manufactured potential
+\(A=(0,0,\sin(\pi x)\sin(\pi y))\) is divergence-free, has zero tangential trace,
+and gives
+\(J=(0,0,2\pi^2\sin(\pi x)\sin(\pi y))/\mu_0\). The 2, 3, and 4 cells-per-axis
+sweep measures the following finest-pair rates:
+
+| HCurl base p | A L² rate | B=curl(A) L² rate | finest A error | finest B error |
+| ---: | ---: | ---: | ---: | ---: |
+| 1 | 1.8593 | 0.9414 | 5.5283e-2 | 6.7660e-1 |
+| 2 | 3.0036 | 1.9306 | 3.3434e-3 | 9.9018e-2 |
+| 3 | 4.0559 | 2.9749 | 2.5781e-4 | 9.9782e-3 |
+
+Thus the measured orders are \(p+1\) for the vector potential and \(p\) for its
+curl. Across all nine rows, the maximum free-DOF relative residual is 1.54e-15,
+the maximum weak gauge-constraint residual is 3.66e-17, and the compatible-current
+gauge-multiplier norm is at most 3.65e-14. The independent curl-projection defect is
+at most 2.36e-15, relative magnetic divergence is at most 9.49e-14, and relative
+boundary-normal residual is at most 6.28e-15; every magnetic invariant clears the
+curved-calibrated \(128\epsilon_{\rm mach}(p+2)^3\) gate. The full measurements are
+loaded and asserted from `tests/manufactured/gauge_fixed_curl_curl_rates.csv`.
+
+A separate discrete Helmholtz control supplies \(J=\nabla\phi_h\) from a nonzero
+homogeneous \(H^1_{p+1}\) field. The solve returns \(A_h=B_h=0\) and
+\(\lambda_h=\phi_h\) to 1e-11, so the gauge block is tested independently of the
+divergence-free manufactured current. Deleting \((\nabla\lambda_h,v_h)\) makes this
+control singular during numeric factorization. Replacing the H(div) projection of
+\(\nabla\times A_h\) with a projection of \(A_h\) changes the p=2 magnetic rate from
+1.9306 to -8.7e-4, which the convergence test rejects.
+
 ## Milestone 4.1 — tetrahedral de Rham order pairing
 
 The first compatible-magnetics milestone establishes the NGSolve order convention
