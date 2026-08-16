@@ -17,7 +17,8 @@ class DeRhamSequence:
     with the two downstream orders floored at zero.  It makes
     ``div(curl(A_h)) = 0`` algebraic on affine and curved tetrahedra, as required
     by (M1).  On curved elements ordinary NGSolve ``L2`` is not the density-mapped
-    terminal space, so use the direct composition for the magnetic invariant.
+    terminal space. Verify the magnetic invariant by projecting ``curl(A_h)`` into
+    the paired HDiv space and applying ``ng.div`` to that HDiv GridFunction.
     """
 
     base_order: int

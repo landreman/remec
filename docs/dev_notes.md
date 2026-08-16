@@ -9,16 +9,19 @@
   `H1(p+1) -> HCurl(p) -> HDiv(max(p-1, 0)) -> L2(max(p-2, 0))`; equal integer
   `order` arguments do not give the exact global complex.  The offsets are element-
   family specific: in particular, a hexahedron uses a different convention, so the
-  tetrahedral factory rejects every non-tetrahedral volume element.  On a third-order
-  curved OCC tetrahedral ball, the Piola-mapped gradient/curl inclusions and both
-  `curl(grad)` and `div(curl)` identities remained below 6.95e-13.  A general
+  tetrahedral factory rejects every non-tetrahedral volume element. On a third-order,
+  107-tetrahedron curved OCC ball, projecting `curl(A_h)` into the paired HDiv space
+  had relative defect 7.12e-16 and applying `ng.div` to that HDiv GridFunction gave
+  relative divergence 7.42e-15; a random-HDiv negative control measured 3.28. A general
   `div(HDiv)` field did not lie in ordinary scalar `L2` there (relative projection
   defects 0.23--0.32), because the divergence carries the contravariant Piola
-  `1/det(J)` density while scalar `L2` uses the ordinary pullback.  Test the curved-
-  mesh (M1) invariant by setting `B_h = ng.curl(A_h)` and evaluating the symbolic trace
-  `B_h.Diff(ng.x)[0] + B_h.Diff(ng.y)[1] + B_h.Diff(ng.z)[2]`; a direct
-  `ng.div(ng.curl(A_h))` raises because the intermediate coefficient function has no
-  `derivname`. Per approved ADR 0004 Option 4, use `L2` as the weak curved-current
+  `1/det(J)` density while scalar `L2` uses the ordinary pullback. Test the curved-mesh
+  (M1) invariant by independently mass-projecting `ng.curl(A_h)` into HDiv, asserting
+  the projection defect, and evaluating `ng.div(B_h)` on that HDiv GridFunction. A
+  direct `ng.div(ng.curl(A_h))` raises because the intermediate coefficient function
+  has no `derivname`. Do not use `B_h.Diff(ng.x)`: for a GridFunction-backed coefficient
+  function it is coefficient differentiation and returns zero even for a divergent
+  field. Per approved ADR 0004 Option 4, use `L2` as the weak curved-current
   divergence-constraint/diagnostic space; do not assert strong curved `div(HDiv)`
   membership in ordinary `L2`, and measure strong-divergence and multiplier convergence
   in milestone 4.4. An exploratory

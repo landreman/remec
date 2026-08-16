@@ -373,20 +373,21 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   identities at order-scaled roundoff, with exact Euler characteristic one; load and
   assert every row of the checked-in measurement table; reject element families and
   orders whose NGSolve convention has not been established. On an order-3 curved OCC
-  tetrahedral ball, verify the HCurl-to-HDiv mapping and symbolic `div(curl(A_h))` trace
-  below 1e-12.
+  tetrahedral ball, verify the HCurl-to-HDiv mapping and `ng.div` of that projected HDiv
+  field below 1e-12, while a random-HDiv negative control remains conspicuously nonzero.
   <br>Measured: macOS / CPython 3.12.2 / NGSolve 6.2.2606 — the affine tetrahedral
   sequence is `H1(p+1) -> HCurl(p) -> HDiv(max(p-1,0)) -> L2(max(p-2,0))`.
   Across twelve mesh/order rows the maximum individual mapping defect is 2.42e-14,
   maximum `curl(grad)` defect is 1.15e-12, and maximum `div(curl)` defect is 2.40e-13;
   every alternating global dimension is exactly one. On the 107-tetrahedron curved
-  ball, the HCurl-to-HDiv defect is 7.18e-16 and the symbolic divergence trace is
-  exactly zero. See
+  ball, the HCurl-to-HDiv defect is 7.12e-16 and the projected field's relative
+  divergence is 7.42e-15, while the random-HDiv control is 3.28. See
   `tests/manufactured/de_rham_pairing.csv` and `docs/verification.md`.
   <br>Next: milestone 4.2 should reuse these tetrahedral offsets for its H1 gauge and
   HCurl vector-potential spaces. On curved tetrahedra measure the (M1) magnetic
-  invariant with the symbolic trace of `B_h=curl(A_h)`, because `ng.div(ng.curl(A_h))`
-  raises on NGSolve 6.2.2606. NGSolve's ordinary scalar L2 is a weak diagnostic/
+  invariant by projecting `curl(A_h)` into HDiv and evaluating `ng.div(B_h)`, because
+  `ng.div(ng.curl(A_h))` raises on NGSolve 6.2.2606 and `B_h.Diff(ng.x)` is a vacuous
+  coefficient derivative. NGSolve's ordinary scalar L2 is a weak diagnostic/
   constraint space, not the Piola density-mapped strong image of `div(HDiv)`; approved
   ADR 0004 keeps magnetic divergence exact and makes curved-current divergence a
   measured convergence invariant.

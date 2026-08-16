@@ -207,8 +207,9 @@ def test_curved_tetrahedral_magnetic_subcomplex_composes_at_roundoff() -> None:
 
     ADR 0004 weakens only the terminal curved ``HDiv --div--> L2`` interpretation
     used for the current projection.  It leaves ``B_h = curl(A_h)`` exact.  This test
-    verifies the HCurl-to-HDiv mapping and evaluates the supported symbolic coordinate
-    trace of ``B_h`` instead of the unsupported nested ``ng.div(ng.curl(A_h))`` call.
+    verifies the HCurl-to-HDiv mapping and then applies ``ng.div`` to that projected
+    HDiv GridFunction. A random HDiv negative control proves the diagnostic is not a
+    vacuous symbolic derivative.
     """
     geometry = OCCGeometry(Sphere(Pnt(0.0, 0.0, 0.0), 1.0))
     mesh = ng.Mesh(geometry.GenerateMesh(maxh=0.9))
@@ -227,19 +228,31 @@ def test_curved_tetrahedral_magnetic_subcomplex_composes_at_roundoff() -> None:
         integration_order=integration_order,
     )
 
-    symbolic_divergence = (
-        magnetic_field.Diff(ng.x)[0] + magnetic_field.Diff(ng.y)[1] + magnetic_field.Diff(ng.z)[2]
+    divergence_defect = _relative_norm(
+        ng.div(curl.field),
+        mesh,
+        scale=curl.source_norm,
+        order=integration_order,
+    )
+    divergent_control = _random_field(sequence.hdiv, seed=4200)
+    control_norm = float(
+        ng.sqrt(
+            ng.Integrate(
+                ng.InnerProduct(divergent_control, divergent_control),
+                mesh,
+                order=integration_order,
+            )
+        )
+    )
+    control_divergence_defect = _relative_norm(
+        ng.div(divergent_control),
+        mesh,
+        scale=control_norm,
+        order=integration_order,
     )
     assert curl.relative_defect < 1.0e-12
-    assert (
-        _relative_norm(
-            symbolic_divergence,
-            mesh,
-            scale=curl.source_norm,
-            order=integration_order,
-        )
-        < 1.0e-12
-    )
+    assert divergence_defect < 1.0e-12
+    assert control_divergence_defect > 1.0e-2
 
 
 def test_de_rham_pairing_table_covers_the_validated_sweep_exactly() -> None:
@@ -263,3 +276,9 @@ def test_tetrahedral_de_rham_sequence_rejects_tensor_product_elements() -> None:
     mesh = MakeStructured3DMesh(hexes=True, nx=1, ny=1, nz=1)
     with pytest.raises(ValueError, match="tetrahedral"):
         make_tetrahedral_de_rham_sequence(mesh, order=2)
+
+
+def test_tetrahedral_de_rham_sequence_rejects_non_mesh_objects() -> None:
+    """The factory reports a type error before trying to construct NGSolve spaces."""
+    with pytest.raises(TypeError, match="NGSolve mesh"):
+        make_tetrahedral_de_rham_sequence(object(), order=2)

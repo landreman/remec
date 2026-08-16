@@ -58,13 +58,18 @@ and bounds each recomputed defect against its recorded row. The record is
 
 NGSolve's Piola mappings preserve the magnetic part of the complex on curved geometry.
 The automated regression uses an order-3 curved, 107-tetrahedron OCC ball at base order
-2: the HCurl-to-HDiv projection defect is \(7.18\times10^{-16}\), and the symbolic
-coordinate-derivative trace of `curl(A_h)` is exactly zero. Ordinary scalar NGSolve `L2`,
+2: the HCurl-to-HDiv projection defect is \(7.12\times10^{-16}\), and applying `ng.div`
+to that projected HDiv GridFunction gives relative divergence \(7.42\times10^{-15}\).
+A random-HDiv negative control measures 3.28, proving the diagnostic has teeth.
+Ordinary scalar NGSolve `L2`,
 however, is not the density-mapped terminal space on a curved element, so projecting a
 general `div(HDiv)` field into it is not a roundoff identity (measured relative defects
-0.23--0.32).  Curved-mesh magnetic verification must therefore form
-`B_h = ng.curl(A_h)` and measure its symbolic coordinate-derivative trace; the nested
-call `ng.div(ng.curl(A_h))` is not supported in NGSolve 6.2.2606. Approved ADR 0004
+0.23--0.32 on one coarse, quadrature-sensitive mesh; ADR 0004's h/order sweep and
+mapping argument are the load-bearing evidence). Curved-mesh magnetic verification
+must therefore project `ng.curl(A_h)` into HDiv and evaluate `ng.div(B_h)` on the
+resulting GridFunction; the nested call `ng.div(ng.curl(A_h))` is not supported in
+NGSolve 6.2.2606, and `GridFunction.Diff(ng.x)` is a vacuous coefficient derivative.
+Approved ADR 0004
 therefore preserves magnetic `div(curl)=0` as an exact curved invariant while treating
 the ordinary-L2 current constraint as weak on curved geometry. Milestone 4.4 must
 measure strong-current-divergence and gauge-multiplier convergence and enforce the

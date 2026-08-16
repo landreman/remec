@@ -236,8 +236,10 @@ linearization.
 1. **Magnetic divergence (exact):** ∇_h·(∇_h×A_h) = 0 algebraically to roundoff on
    affine and curved meshes; a regression test MUST measure this independently of
    nonlinear convergence. On curved NGSolve meshes this is the mapped HCurl→HDiv
-   basis identity and MUST be measured by the symbolic coordinate-derivative trace,
-   not inferred from the terminal ordinary-L2 arrow (ADR 0004).
+   basis identity. It MUST be measured by first verifying the projection of `curl(A_h)`
+   into the paired HDiv space at roundoff and then applying `ng.div` to that HDiv
+   GridFunction, with a divergent HDiv negative control; it MUST NOT be inferred from
+   either the terminal ordinary-L2 arrow or `GridFunction.Diff(ng.x)` (ADR 0004).
 2. **Current continuity (affine exact; curved convergent):** raw (M2) currents are
    projected to an H(div) field satisfying the Sec. 10 scalar-L2 constraint. On affine
    meshes this is strongly divergence-free to roundoff. On curved meshes it is weakly

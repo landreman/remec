@@ -39,8 +39,11 @@ and calls the result divergence-free.  The note is stricter about why this matte
 On affine tetrahedra, the milestone-4.1 sequence satisfies all three inclusions at
 roundoff.  On an order-3 curved OCC tetrahedral ball with NGSolve 6.2.2606:
 
-- the H¹→HCurl and HCurl→HDiv inclusions and both successive-derivative identities
-  remain below `6.95e-13`;
+- the H¹→HCurl and HCurl→HDiv inclusions and projected `curl(grad)` identity remain
+  below `6.95e-13`;
+- the final automated regression independently projects `curl(A_h)` into HDiv with
+  relative defect `7.12e-16`, measures its relative divergence with `ng.div` as
+  `7.42e-15`, and measures `3.28` for a random-HDiv negative control;
 - a random `HDiv(2)` divergence projected into ordinary scalar `L2(1)` has relative
   defect `0.23`–`0.32` (independently reproduced in review as `2.71e-1`);
 - `dual_mapping`, `piola`, and `covariant` keyword flags are not documented scalar-L²
@@ -68,17 +71,22 @@ This behavior follows the mappings: an HDiv field uses the contravariant Piola m
 so its divergence carries `1/det(J)`, whereas ordinary scalar NGSolve L² uses the
 ordinary pullback.  Therefore `div(HDiv)` is not strongly contained in the selected
 scalar space on a curved element.  A direct NGSolve call `ng.div(ng.curl(a_h))` also
-raises because `ng.curl(a_h)` is a plain coefficient function; the working diagnostic
-is the symbolic trace
+raises because `ng.curl(a_h)` is a plain coefficient function. The working diagnostic
+first verifies its mass projection into the paired HDiv space, then applies `ng.div` to
+that HDiv GridFunction:
 
 ```python
-b_h = ng.curl(a_h)
-div_b_h = b_h.Diff(ng.x)[0] + b_h.Diff(ng.y)[1] + b_h.Diff(ng.z)[2]
+b_projection = mass_project(ng.curl(a_h), hdiv_space)
+assert b_projection.relative_defect < roundoff_gate
+div_b_h = ng.div(b_projection.field)
 ```
 
-which evaluates to zero on the curved test.  That verifies magnetic `div(curl)=0`, but
-does not supply the missing terminal density space needed to interpret the §10 current
-projection as strongly divergence-free.
+The projection defect and divergence are both at roundoff on the curved test. A random
+HDiv field produces O(1) relative divergence under the same diagnostic. Do not use
+`b_h.Diff(ng.x)`: for a GridFunction-backed coefficient function it is coefficient
+differentiation and returns zero even for a divergent field. This verifies magnetic
+`div(curl)=0`, but does not supply the missing terminal density space needed to
+interpret the §10 current projection as strongly divergence-free.
 
 The design therefore appears infeasible as written on the selected backend: ordinary
 scalar NGSolve L² cannot simultaneously be the stated curved-mesh terminal space and
@@ -95,7 +103,8 @@ obtained that way: `B_h = ∇×A_h` with `A_h ∈ HCurl`, and `div(curl) = 0` is
 algebraic identity of the basis functions that survives the covariant/contravariant
 Piola maps, since the curl of an HCurl function is an HDiv function by construction.
 The curved-ball measurements above confirm this directly — the HCurl→HDiv inclusion
-holds below `6.95e-13` and the symbolic divergence trace of `∇×A_h` evaluates to zero.
+holds at roundoff and `ng.div` of the projected curl has relative norm `7.42e-15`, while
+the random-HDiv control is O(1).
 So ∇·B = 0 at roundoff on curved meshes is already established and is not what is at
 stake here; only ∇·J is.
 
