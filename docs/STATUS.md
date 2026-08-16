@@ -448,24 +448,33 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   `HDiv(p-1)-L2(p-2)` saddle projection enforces current divergence at roundoff on
   affine cubes, the curved OCC ball, and the order-4 analytic torus. On the ball,
   relative divergence falls from 6.998e-1 to 6.367e-16, the nonzero continuity-
-  multiplier L² norm is 7.063e-2, and the Ampère compatibility residual is 1.308e-14.
+  multiplier L² norm is 7.063e-2 (5.456e-2 relative to the projected-current norm),
+  and the H¹-dual Ampère quadrature-consistency residual is 1.308e-14.
   Paired `HDiv(2)-L2(1)` has rank 428/428 with minimum singular ratio 2.016e-2;
   undersized `L2(0)` leaves relative divergence 2.133, while oversized `L2(2)` has
   rank 428/1,070 and first discarded ratio 1.086e-15. On the 1,414-tetrahedron torus,
-  divergence falls from 1.835e-1 to 1.101e-15 and undersizing leaves 3.968e-1. Its
+  divergence falls from 1.826e-1 to 1.107e-15 and undersizing leaves 3.968e-1. Its
   paired/oversized representative element blocks have ranks 4/4 and 4/10. Two compact-
-  mollified (M3b) shell targets, 0.4941443925 and 0.5058566965, are retained to
-  2.78e-16 and 6.66e-16 absolute error. The affine relative projection correction has
+  mollified verification-only (M3b) shell targets, 0.4941443925 and 0.5058566965,
+  sum to the independent unit-flux value within 1.09e-6 and are retained to 1.22e-15
+  and 6.66e-16 absolute error. Before projection, the corresponding shell moments are
+  0.4953887131 and 0.5096516757; shellwise and cumulative before/after diagnostics are
+  reported. For the first projected shell, quadrature orders 8, 16, 24, and 32 give
+  0.49066947, 0.49466807, 0.49404942, and 0.49414956: the high-order pair differs by
+  1.00e-4 versus 4.00e-3 for the low-order pair, so the 1e-15 result is explicitly only
+  the same-rule algebraic residual. The affine relative projection correction has
   finest-pair rates 1.9053 (base order 2) and 2.7856 (base order 3), while divergence
   remains at roundoff. See `tests/manufactured/current_projection_rates.csv` and
-  `docs/verification.md`. Final local `make check`: 201 not-slow tests in 38.53 s;
-  the touched slow torus test passes in 12.29 s.
+  `docs/verification.md`. Final post-review local `make check`: 202 not-slow tests in
+  42.04 s; the torus acceptance test is in PR CI and takes 15.47 s.
   <br>Next: Phase 5 should pass the independently reconstructed three-component (M2)
-  current and the exact milestone-3.6 mollified shell weights into this projection,
+  current and the exact milestone-3.6 gradient-scaled mollified shell weights and
+  resolution guards into this projection (the fixed-in-s helper here is verification
+  only),
   retain its fixed moment quadrature in checkpoint provenance, and monitor the relative
   correction as an M3/projection consistency diagnostic. The natural-trace formulation
-  is the verified default; do not substitute an essential normal trace without removing
-  the constant multiplier kernel explicitly.
+  is the only exposed and verified form; an essential normal trace needs a separately
+  derived lifting and constant-kernel treatment.
   <br>Design input: ADR 0005 Option 1 approved, superseding ADR 0004. General curved
   `div(HDiv)` is not strongly contained in ordinary scalar L2, but determinant
   cancellation makes the paired weak constraint pointwise coercive. Its λ is the
@@ -548,13 +557,11 @@ test < ~90 s — reference laptop, macOS/CPython 3.12, `-n 3 --dist=loadscope`. 
 milestone re-checks this as item 7 of the definition of done and records the new
 `make test` wall-clock here.
 
-Measured 2026-08-16 on `milestone/4.4-constrained-current-projection`: `make test`
-passes 201 not-slow tests in 38.53 s ✅. The slowest item is the shared
-`test_m3_gradient_comparison` setup at 12.94 s; the new affine/curved-ball projection
-module setup is 3.64 s. No individual not-slow item exceeds ~20 s. The new curved-torus
-projection is marked `slow` and passes in 12.29 s; the most recent full-suite baseline
-before this milestone was 182 s, so the added slow test leaves the <5-minute budget
-intact.
+Measured 2026-08-16 on `milestone/4.4-constrained-current-projection`: the curved-torus
+projection is part of the ordinary PR-CI suite and passes in 15.47 s. `make test`
+passes all 202 not-slow tests in 42.04 s ✅; the next-slowest item is the shared
+`test_m3_gradient_comparison` setup at 12.35 s. No individual not-slow item exceeds
+~20 s.
 
 ## Release gates
 

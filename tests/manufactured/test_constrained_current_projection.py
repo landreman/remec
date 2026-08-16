@@ -18,8 +18,8 @@ from remec.fem._current_projection import (
     CurrentMomentConstraint,
     CurrentProjectionSolution,
     analyze_divergence_constraint_rank,
-    mollified_shell_moment_weights,
     solve_constrained_current_projection,
+    verification_mollified_shell_moment_weights,
 )
 from remec.fem._magnetostatics import solve_gauge_fixed_curl_curl
 from remec.geometry import AnalyticSolidTorus
@@ -179,6 +179,7 @@ def test_curved_ball_pairing_and_ampere_compatibility(
     assert solution.post_projection_divergence_relative_norm < _roundoff_gate(3, curved=True)
     assert solution.ampere_compatibility_relative_residual < 2.0e-11
     assert solution.continuity_multiplier_l2_norm > 1.0e-2
+    assert solution.continuity_multiplier_relative_norm > 1.0e-2
     assert solution.free_dof_relative_residual < 1.0e-11
 
     magnetic = solve_gauge_fixed_curl_curl(
@@ -226,7 +227,6 @@ def test_curved_ball_wrong_terminal_orders_are_falsifiable(
     assert oversized_rank.first_discarded_singular_value_ratio < 1.0e-10
 
 
-@pytest.mark.slow
 def test_curved_torus_projection_preserves_m3b_shell_moments_and_pairing() -> None:
     r"""The current passed to ``(M1)`` retains independent mollified ``(M3b)`` rows."""
     torus = AnalyticSolidTorus(
@@ -245,7 +245,7 @@ def test_curved_torus_projection_preserves_m3b_shell_moments_and_pairing() -> No
         (-ng.y / cylindrical_radius**2, ng.x / cylindrical_radius**2, 0.0)
     )
     shell_edges = (0.0, 0.5, 1.0)
-    weights = mollified_shell_moment_weights(
+    weights = verification_mollified_shell_moment_weights(
         normalized_volume,
         toroidal_angle_gradient,
         shell_edges,
@@ -260,10 +260,13 @@ def test_curved_torus_projection_preserves_m3b_shell_moments_and_pairing() -> No
             2.0 * ng.z,
         )
     )
-    raw_current = harmonic + 0.04 * poloidal_gradient
+    raw_current = (1.0 + 0.01 * normalized_volume) * harmonic + 0.04 * poloidal_gradient
     targets = tuple(
         float(ng.Integrate(ng.InnerProduct(harmonic, weight), mesh, order=14)) for weight in weights
     )
+    # Independent unit-flux anchor: the shell weights partition grad(phi)/(2*pi),
+    # so the normalized harmonic field integrates to one over their union.
+    assert sum(targets) == pytest.approx(1.0, abs=2.0e-6)
     constraints = tuple(
         CurrentMomentConstraint(weight=weight, target=target, name=f"shell-{index}")
         for index, (weight, target) in enumerate(zip(weights, targets, strict=True))
@@ -280,8 +283,29 @@ def test_curved_torus_projection_preserves_m3b_shell_moments_and_pairing() -> No
     )
     assert paired.post_projection_divergence_relative_norm < _roundoff_gate(3, curved=True)
     assert paired.ampere_compatibility_relative_residual < 2.0e-11
+    assert max(paired.raw_moment_relative_residuals) > 1.0e-4
     assert max(paired.moment_relative_residuals) < 1.0e-10
     assert paired.projected_moments == pytest.approx(targets, rel=1.0e-10, abs=1.0e-11)
+    assert paired.raw_cumulative_moments == pytest.approx(
+        (0.0, *np.cumsum(paired.raw_moments)), abs=1.0e-13
+    )
+    assert paired.target_cumulative_moments == pytest.approx(
+        (0.0, *np.cumsum(targets)), abs=1.0e-13
+    )
+    assert paired.projected_cumulative_moments == pytest.approx(
+        paired.target_cumulative_moments, rel=1.0e-10, abs=1.0e-11
+    )
+    assert max(paired.raw_cumulative_moment_relative_residuals) > 1.0e-4
+    assert max(paired.cumulative_moment_relative_residuals) < 1.0e-10
+
+    # The cut-shell integral is not claimed below its quadrature sensitivity.
+    quadrature_scan = tuple(
+        float(ng.Integrate(ng.InnerProduct(paired.current_density, weights[0]), mesh, order=order))
+        for order in (8, 16, 24, 32)
+    )
+    assert 10.0 * abs(quadrature_scan[3] - quadrature_scan[2]) < abs(
+        quadrature_scan[1] - quadrature_scan[0]
+    )
 
     undersized = solve_constrained_current_projection(
         mesh,

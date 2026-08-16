@@ -30,13 +30,19 @@ rows impose
 W_j=\frac{H_\epsilon(s_j-s)-H_\epsilon(s_{j-1}-s)}{2\pi}\nabla\phi .
 \]
 
+The analytic helper used in this milestone fixes the compact width in normalized-
+volume space and is verification-only. Production rows must instead be constructed
+from the milestone-3.6 shared volume map, gradient-scaled mollifier, and resolution
+guards, then passed to the projection as general weights.
+
 Each nonlinear shell row uses one explicit tetrahedral integration rule in both the
 saddle assembly and an independently evaluated post-projection integral, so the
-reported residual is algebraic rather than a comparison between two curved cut-layer
-quadratures. The solver reports raw/projected norms, divergence before and after,
-boundary-normal norm, relative correction, continuity-multiplier norm, algebraic
-residual, shell residuals, and the H¹-dual Ampère compatibility residual
-\((J_h,\nabla q_h)\).
+reported residual is explicitly a same-rule algebraic quantity rather than a claim
+below the curved cut-layer quadrature error. The solver reports raw/projected norms,
+divergence before and after, boundary-normal norm, relative correction, absolute and
+relative continuity-multiplier norms, algebraic residual, shellwise and cumulative
+moments before and after projection, their residuals, and the H¹-dual Ampère
+quadrature-consistency residual \((J_h,\nabla q_h)\).
 
 On affine unit cubes a smooth tangent analytic curl is projected over the checked-in
 `tests/manufactured/current_projection_rates.csv` sweep:
@@ -55,25 +61,35 @@ The finest-pair correction rates are 1.9053 and 2.7856 for base orders 2 and 3;
 the constraint remains at roundoff while the approximation error converges. On the
 order-3 curved OCC ball, a raw current with relative divergence 0.6998 is corrected to
 6.37e-16 with a 0.1807 relative change. Its continuity multiplier is deliberately
-nonzero (L² norm 0.07063), the algebraic residual is 6.00e-16, and the Ampère residual
-is 1.31e-14. Feeding that current to the gauge-fixed (M1) solve leaves the magnetic
-divergence below the curved roundoff gate and the magnetic gauge multiplier below
-1e-10.
+nonzero (L² norm 0.07063, or 0.05456 relative to the current norm), the algebraic
+residual is 6.00e-16, and the H¹-dual residual is 1.31e-14. This last number checks
+quadrature consistency implied by the divergence constraint; it is not an independent
+compatibility observable. Feeding that current to the gauge-fixed (M1) solve leaves
+the magnetic divergence below the curved roundoff gate and the magnetic gauge
+multiplier below 1e-10.
 
 The wrong-terminal-order controls reproduce ADR 0005 independently of factorization
 behavior. On that ball, paired HDiv(2)--L2(1) has rank 428/428 and minimum singular
 ratio 2.016e-2. Undersized L2(0) leaves relative divergence 2.13, while oversized
 L2(2) has rank 428/1,070 and first discarded singular ratio 1.09e-15. On the 1,414-
 tetrahedron order-4 torus, the paired projection reduces raw relative divergence
-0.1835 to 1.10e-15; its undersized control leaves 0.3968. A representative curved-
+0.1826 to 1.11e-15; its undersized control leaves 0.3968. A representative curved-
 element block has paired rank 4/4 (minimum ratio 2.63e-2), while the oversized block
 has rank 4/10 and first discarded ratio 4.40e-32, proving local redundant rows without
 forming a global dense torus matrix.
 
-The same torus test constrains two mollified shells to independently integrated targets
-0.4941443925 and 0.5058566965. The projected values differ by 2.78e-16 and 6.66e-16,
-respectively; relative divergence is 1.10e-15 and the Ampère residual 1.23e-14. Thus
-the exact continuity correction does not erase the (M3b) current profile. Mutation
+The same torus test constrains two verification-only mollified shells to targets
+0.4941443925 and 0.5058566965. Their sum differs from the independent unit-flux
+closed form by 1.09e-6, so the test detects a sign or normalization mutation in the
+weights. Raw shell moments 0.4953887131 and 0.5096516757 become the two targets after
+projection; cumulative before/after values are also recorded. The projected values
+differ from their targets by 1.22e-15 and 6.66e-16, respectively; these are same-rule
+algebraic residuals, not physical integration-error claims. Integrating the first
+projected shell at quadrature orders 8, 16, 24, and 32 gives 0.49066947, 0.49466807,
+0.49404942, and 0.49414956. The high-order-pair spread, 1.00e-4, is less than one tenth
+of the low-order-pair spread, 4.00e-3, and exposes the relevant quadrature sensitivity.
+Relative divergence is 1.11e-15 and the H¹-dual residual is 1.23e-14. Thus the exact
+continuity correction does not erase the (M3b) current profile. Mutation
 checks show that using the undersized default terminal order raises the ball divergence
 to 2.13 and Ampère residual to 0.110, and deleting the shell targets returns zero
 moments, missing the two prescribed values by 0.494 and 0.506.

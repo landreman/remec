@@ -13,6 +13,10 @@
   shell weights on curved tetrahedra, use an explicit `dx(intrules={ET.TET: rule})`
   for both moment couplings and their RHS normalization; an unrelated diagnostic rule
   otherwise measures cut-layer quadrature mismatch instead of the algebraic constraint.
+  The fixed-in-normalized-volume-width weight constructor introduced for the analytic
+  torus is deliberately verification-only. Production callers must construct weights
+  with milestone 3.6's shared gradient-scaled volume map and resolution guards, then
+  pass those general vector weights through `CurrentMomentConstraint`.
   Compound bilinear forms assemble as one monolithic sparse matrix rather than exposing
   `.blocks`; the HDiv-to-L2 constraint block is recoverable from `mat.COO()` using the
   component DOF offsets. Restricting the discontinuous L2 rows to one curved element

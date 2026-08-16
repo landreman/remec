@@ -49,29 +49,40 @@ class CurrentProjectionSolution:
     boundary_normal_relative_norm: float
     projection_correction_relative_norm: float
     continuity_multiplier_l2_norm: float
+    continuity_multiplier_relative_norm: float
     free_dof_relative_residual: float
     ampere_compatibility_relative_residual: float
+    raw_moments: tuple[float, ...]
     target_moments: tuple[float, ...]
     projected_moments: tuple[float, ...]
+    raw_cumulative_moments: tuple[float, ...]
+    target_cumulative_moments: tuple[float, ...]
+    projected_cumulative_moments: tuple[float, ...]
+    raw_moment_relative_residuals: tuple[float, ...]
     moment_relative_residuals: tuple[float, ...]
+    raw_cumulative_moment_relative_residuals: tuple[float, ...]
+    cumulative_moment_relative_residuals: tuple[float, ...]
 
 
-def mollified_shell_moment_weights(
+def verification_mollified_shell_moment_weights(
     normalized_volume: Any,
     toroidal_angle_gradient: Any,
     shell_edges: Sequence[float],
     *,
     mollifier_width: float,
 ) -> tuple[Any, ...]:
-    r"""Build note-``(M3b)`` weights using the shared compact layer-set mollifier.
+    r"""Build fixed-in-``s`` note-``(M3b)`` weights for manufactured verification.
 
     For shell edges ``s_j``, this returns
 
     ``W_j = [H_eps(s_j-s)-H_eps(s_{j-1}-s)] grad(phi)/(2*pi)``,
 
     with exact zero/one endpoint memberships and the compact moment-matched
-    ``H_eps`` from note equation ``(mollified_V)``.  Consequently
-    ``int W_j dot J dV`` is precisely the mollified shell row in ``(M3b)``.
+    ``H_eps`` from note equation ``(mollified_V)``.  The scalar width is deliberately
+    fixed in normalized-volume space, so this helper is only for analytic manufactured
+    tests.  Production ``(M3b)`` rows must be supplied through
+    :class:`CurrentMomentConstraint` using the shared gradient-scaled volume-map
+    mollifier and its resolution guards from milestone 3.6.
     """
     if getattr(normalized_volume, "dim", None) != 1:
         raise ValueError("normalized_volume must be a scalar coefficient function")
@@ -247,7 +258,6 @@ def solve_constrained_current_projection(
     raw_divergence: Any | None = None,
     terminal_order: int | None = None,
     moment_constraints: Sequence[CurrentMomentConstraint] = (),
-    boundary: str | None = None,
     bonus_integration_order: int = 8,
     moment_integration_order: int | None = None,
     ampere_test_order: int | None = None,
@@ -264,15 +274,14 @@ def solve_constrained_current_projection(
     equation ``(M2)`` and ``M_j(J)=int W_j dot J dV`` are the mollified shell rows of
     ``(M3b)``.  The paired L2 constraint makes ``div(J_h)=0`` pointwise on affine and
     curved tetrahedra (ADR 0005), which is the compatibility condition for Ampere's
-    law ``(M1)``. ``boundary=None`` selects the design's natural-trace form; a named
-    boundary instead imposes an essential zero normal trace on the HDiv space.
+    law ``(M1)``.  The HDiv space deliberately uses the design's natural-trace form;
+    essential normal-trace data require a separately derived lifting and are not
+    exposed by this solver.
     """
     if getattr(raw_current, "dim", None) != 3:
         raise ValueError("raw_current must be a three-component coefficient function")
     if raw_divergence is not None and getattr(raw_divergence, "dim", None) != 1:
         raise ValueError("raw_divergence must be a scalar coefficient function or None")
-    if boundary is not None and (not isinstance(boundary, str) or not boundary):
-        raise ValueError("boundary must be a non-empty region expression or None")
     if isinstance(bonus_integration_order, bool) or not isinstance(bonus_integration_order, int):
         raise TypeError("bonus_integration_order must be an integer")
     if bonus_integration_order < 0:
@@ -310,11 +319,7 @@ def solve_constrained_current_projection(
 
     import ngsolve as ng
 
-    current_space = (
-        ng.HDiv(mesh, order=sequence.hdiv_order)
-        if boundary is None
-        else ng.HDiv(mesh, order=sequence.hdiv_order, dirichlet=boundary)
-    )
+    current_space = ng.HDiv(mesh, order=sequence.hdiv_order)
     terminal_space = ng.L2(mesh, order=resolved_terminal_order)
     number_spaces = [ng.NumberSpace(mesh) for _ in constraints]
     mixed_space = ng.FESpace([current_space, terminal_space, *number_spaces])
@@ -396,6 +401,9 @@ def solve_constrained_current_projection(
     continuity_multiplier_l2_norm = _l2_norm(
         mesh, continuity_multiplier, integration_order=integration_order
     )
+    continuity_multiplier_relative_norm = continuity_multiplier_l2_norm / max(
+        projected_current_l2_norm, np.finfo(float).tiny
+    )
     normal = ng.specialcf.normal(3)
     boundary_normal_relative_norm = float(
         ng.sqrt(
@@ -408,6 +416,16 @@ def solve_constrained_current_projection(
         )
         / max(projected_current_l2_norm, np.finfo(float).tiny)
     )
+    raw_moments = tuple(
+        float(
+            ng.Integrate(
+                ng.InnerProduct(raw_current, constraint.weight),
+                mesh,
+                order=resolved_moment_order,
+            )
+        )
+        for constraint in constraints
+    )
     projected_moments = tuple(
         float(
             ng.Integrate(
@@ -419,9 +437,26 @@ def solve_constrained_current_projection(
         for constraint in constraints
     )
     target_moments = tuple(constraint.target for constraint in constraints)
+    raw_moment_relative_residuals = tuple(
+        abs(actual - target) / max(abs(actual), abs(target), 1.0)
+        for actual, target in zip(raw_moments, target_moments, strict=True)
+    )
     moment_relative_residuals = tuple(
         abs(actual - target) / max(abs(actual), abs(target), 1.0)
         for actual, target in zip(projected_moments, target_moments, strict=True)
+    )
+    raw_cumulative_moments = (0.0, *np.cumsum(raw_moments).tolist())
+    target_cumulative_moments = (0.0, *np.cumsum(target_moments).tolist())
+    projected_cumulative_moments = (0.0, *np.cumsum(projected_moments).tolist())
+    raw_cumulative_moment_relative_residuals = tuple(
+        abs(actual - target) / max(abs(actual), abs(target), 1.0)
+        for actual, target in zip(raw_cumulative_moments, target_cumulative_moments, strict=True)
+    )
+    cumulative_moment_relative_residuals = tuple(
+        abs(actual - target) / max(abs(actual), abs(target), 1.0)
+        for actual, target in zip(
+            projected_cumulative_moments, target_cumulative_moments, strict=True
+        )
     )
     ampere_compatibility_relative_residual = _ampere_compatibility_residual(
         mesh,
@@ -443,9 +478,17 @@ def solve_constrained_current_projection(
         boundary_normal_relative_norm=boundary_normal_relative_norm,
         projection_correction_relative_norm=projection_correction_relative_norm,
         continuity_multiplier_l2_norm=continuity_multiplier_l2_norm,
+        continuity_multiplier_relative_norm=continuity_multiplier_relative_norm,
         free_dof_relative_residual=free_dof_relative_residual,
         ampere_compatibility_relative_residual=ampere_compatibility_relative_residual,
+        raw_moments=raw_moments,
         target_moments=target_moments,
         projected_moments=projected_moments,
+        raw_cumulative_moments=raw_cumulative_moments,
+        target_cumulative_moments=target_cumulative_moments,
+        projected_cumulative_moments=projected_cumulative_moments,
+        raw_moment_relative_residuals=raw_moment_relative_residuals,
         moment_relative_residuals=moment_relative_residuals,
+        raw_cumulative_moment_relative_residuals=raw_cumulative_moment_relative_residuals,
+        cumulative_moment_relative_residuals=cumulative_moment_relative_residuals,
     )
