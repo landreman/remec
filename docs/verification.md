@@ -53,9 +53,11 @@ an exploratory order-3 OCC ball measured gradient/curl mapping and both successi
 derivative identities below \(6.95\times10^{-13}\).  Ordinary scalar NGSolve `L2`,
 however, is not the density-mapped terminal space on a curved element, so projecting a
 general `div(HDiv)` field into it is not a roundoff identity (measured relative defects
-0.23--0.32).  Curved-mesh magnetic verification must therefore measure
-`div(curl(A_h))` directly, while divergence constraints use their weak L² pairing; this
-API fact is recorded in `docs/dev_notes.md` for milestones 4.2 and 4.4.
+0.23--0.32).  Curved-mesh magnetic verification must therefore form
+`B_h = ng.curl(A_h)` and measure its symbolic coordinate-derivative trace; the nested
+call `ng.div(ng.curl(A_h))` is not supported in NGSolve 6.2.2606.  The curved-current
+terminal-space decision is pending in ADR 0004; the API facts are recorded in
+`docs/dev_notes.md` for milestones 4.2 and 4.4.
 
 Mutation checks confirmed that replacing the offsets by equal `order` arguments fails
 the order/dimension contract, and deleting the tetrahedral-family guard fails the

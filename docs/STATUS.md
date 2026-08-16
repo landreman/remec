@@ -367,7 +367,7 @@ that dependency. Phase 7 may run in parallel with Phase 8.
 
 ## Phase 4 — compatible magnetic kernel
 
-- [x] **4.1** de Rham space/order pairing — `DESIGN.md` §7.1 · note: §6 (M1)
+- [~] **4.1** de Rham space/order pairing — `DESIGN.md` §7.1 · note: §6 (M1)
   <br>Acceptance: on 6- and 48-tetrahedron contractible cubes at base orders 0--3,
   independently verify every grad/curl/div mapping and both successive-derivative
   identities below 1e-12, with exact Euler characteristic one; reject element families
@@ -380,8 +380,10 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   `tests/manufactured/de_rham_pairing.csv` and `docs/verification.md`.
   <br>Next: milestone 4.2 should reuse these tetrahedral offsets for its H1 gauge and
   HCurl vector-potential spaces. On curved tetrahedra measure the (M1) magnetic
-  invariant directly as `div(curl(A_h))`: NGSolve's ordinary scalar L2 is a weak
-  diagnostic/constraint space, not the Piola density-mapped strong image of `div(HDiv)`.
+  invariant with the symbolic trace of `B_h=curl(A_h)`, because `ng.div(ng.curl(A_h))`
+  raises on NGSolve 6.2.2606. NGSolve's ordinary scalar L2 is a weak diagnostic/
+  constraint space, not the Piola density-mapped strong image of `div(HDiv)`; ADR 0004
+  is pending on that terminal-space decision.
 - [ ] **4.2** Gauge-fixed curl–curl — `DESIGN.md` §7.3, §11 · note: §6 (M1)
   <br>Acceptance: manufactured magnetostatics; gauge null-space handled.
   <br>Measured: —
@@ -391,6 +393,8 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   <br>Acceptance: discrete ∇·B at roundoff; Ampère compatibility; projected current
   preserves the prescribed (M3b) shell moments I_tor(s)=I₀(s) to the stated tolerance.
   <br>Measured: —
+  <br>Blocked design input: ADR 0004 must decide the curved-mesh terminal density space
+  or revise the meaning of discrete divergence before this projection is implemented.
 
 ## Phase 5 — reduced end-to-end solver
 
@@ -468,8 +472,7 @@ that dependency. Phase 7 may run in parallel with Phase 8.
 
 ## Open ADRs blocking work
 
-_(none yet — agents add rows here when they draft one)_
-
 | ADR | Milestone blocked | Question | Status |
 |---|---|---|---|
 | 0003 | 2.3 | Must the M4b mollifier-width JVP differentiate `epsilon = c h |grad chi|`? | Option 1 accepted |
+| 0004 | 4.1, 4.4 | What terminal space/constraint makes curved HDiv current strongly divergence-free? | Pending human sign-off |

@@ -15,9 +15,11 @@
   `div(HDiv)` field did not lie in ordinary scalar `L2` there (relative projection
   defects 0.23--0.32), because the divergence carries the contravariant Piola
   `1/det(J)` density while scalar `L2` uses the ordinary pullback.  Test the curved-
-  mesh (M1) invariant by evaluating `div(curl(A_h))` directly and use `L2` as the weak
-  divergence-constraint/diagnostic space; do not assert strong curved `div(HDiv)`
-  membership in ordinary `L2`.  An exploratory
+  mesh (M1) invariant by setting `B_h = ng.curl(A_h)` and evaluating the symbolic trace
+  `B_h.Diff(ng.x)[0] + B_h.Diff(ng.y)[1] + B_h.Diff(ng.z)[2]`; a direct
+  `ng.div(ng.curl(A_h))` raises because the intermediate coefficient function has no
+  `derivname`. Use `L2` as the weak divergence-constraint/diagnostic space pending ADR
+  0004; do not assert strong curved `div(HDiv)` membership in ordinary `L2`. An exploratory
   `MakeStructured3DMesh(secondorder=True, mapping=<nonlinear>)` construction segfaulted
   in this local wheel; `netgen.occ` mesh generation followed by `mesh.Curve(order)` was
   stable and should be the verification path for curved tetrahedra.
