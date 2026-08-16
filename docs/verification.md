@@ -11,6 +11,73 @@
 > numbers remain valid. Milestone 3.5 migrated the public contract and layer-cake
 > oracle to p₀(s) and the factor V_Ω∫₀¹·ds.
 
+## Milestone 4.4 — constrained compatible current projection
+
+The current passed from note (M2)--(M3b) to Ampère's law (M1) is projected with
+
+\[
+(J_h,v_h)+(\lambda_h,\nabla\!\cdot v_h)
+ +(\nabla\!\cdot J_h,q_h)=(J_{\rm raw},v_h),
+\]
+
+using the milestone-4.1 tetrahedral pairing
+\(J_h\in H(\mathrm{div})_{p-1}\), \(q_h\in L^2_{p-2}\). Optional scalar border
+rows impose
+\(M_j(J_h)=\Delta I_{0,j}\), with
+\(M_j(J) = \int W_j\cdot J\,dV\) and compact-mollified shell weights
+
+\[
+W_j=\frac{H_\epsilon(s_j-s)-H_\epsilon(s_{j-1}-s)}{2\pi}\nabla\phi .
+\]
+
+Each nonlinear shell row uses one explicit tetrahedral integration rule in both the
+saddle assembly and an independently evaluated post-projection integral, so the
+reported residual is algebraic rather than a comparison between two curved cut-layer
+quadratures. The solver reports raw/projected norms, divergence before and after,
+boundary-normal norm, relative correction, continuity-multiplier norm, algebraic
+residual, shell residuals, and the H¹-dual Ampère compatibility residual
+\((J_h,\nabla q_h)\).
+
+On affine unit cubes a smooth tangent analytic curl is projected over the checked-in
+`tests/manufactured/current_projection_rates.csv` sweep:
+
+| base order | subdivisions | elements | relative correction | relative divergence | Ampère residual |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 2 | 1 | 6 | 4.7083e-1 | 7.34e-16 | 2.83e-15 |
+| 2 | 2 | 48 | 2.0062e-1 | 8.10e-16 | 6.40e-15 |
+| 2 | 4 | 384 | 6.0300e-2 | 1.33e-15 | 7.40e-15 |
+| 2 | 8 | 3,072 | 1.6098e-2 | 2.77e-15 | 7.78e-15 |
+| 3 | 1 | 6 | 3.1346e-1 | 1.95e-16 | 4.49e-15 |
+| 3 | 2 | 48 | 5.7617e-2 | 5.22e-16 | 1.17e-14 |
+| 3 | 4 | 384 | 8.3561e-3 | 1.29e-15 | 1.39e-14 |
+
+The finest-pair correction rates are 1.9053 and 2.7856 for base orders 2 and 3;
+the constraint remains at roundoff while the approximation error converges. On the
+order-3 curved OCC ball, a raw current with relative divergence 0.6998 is corrected to
+6.37e-16 with a 0.1807 relative change. Its continuity multiplier is deliberately
+nonzero (L² norm 0.07063), the algebraic residual is 6.00e-16, and the Ampère residual
+is 1.31e-14. Feeding that current to the gauge-fixed (M1) solve leaves the magnetic
+divergence below the curved roundoff gate and the magnetic gauge multiplier below
+1e-10.
+
+The wrong-terminal-order controls reproduce ADR 0005 independently of factorization
+behavior. On that ball, paired HDiv(2)--L2(1) has rank 428/428 and minimum singular
+ratio 2.016e-2. Undersized L2(0) leaves relative divergence 2.13, while oversized
+L2(2) has rank 428/1,070 and first discarded singular ratio 1.09e-15. On the 1,414-
+tetrahedron order-4 torus, the paired projection reduces raw relative divergence
+0.1835 to 1.10e-15; its undersized control leaves 0.3968. A representative curved-
+element block has paired rank 4/4 (minimum ratio 2.63e-2), while the oversized block
+has rank 4/10 and first discarded ratio 4.40e-32, proving local redundant rows without
+forming a global dense torus matrix.
+
+The same torus test constrains two mollified shells to independently integrated targets
+0.4941443925 and 0.5058566965. The projected values differ by 2.78e-16 and 6.66e-16,
+respectively; relative divergence is 1.10e-15 and the Ampère residual 1.23e-14. Thus
+the exact continuity correction does not erase the (M3b) current profile. Mutation
+checks show that using the undersized default terminal order raises the ball divergence
+to 2.13 and Ampère residual to 0.110, and deleting the shell targets returns zero
+moments, missing the two prescribed values by 0.494 and 0.506.
+
 ## Milestone 4.3 — harmonic flux on an analytic torus
 
 The circular solid torus

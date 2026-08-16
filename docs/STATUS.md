@@ -435,7 +435,7 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   tangency defect from the algebraic div(curl) invariant. This milestone supplies only
   the validated circular-torus closed form; milestone 6.2 must implement and validate
   the §7.2 scalar Neumann (or mixed) tangency correction before shaped-torus use.
-- [ ] **4.4** Constrained current projection — `DESIGN.md` §10 · note: (M1)–(M3b), §5.4
+- [x] **4.4** Constrained current projection — `DESIGN.md` §10 · note: (M1)–(M3b), §5.4
   <br>Acceptance: discrete ∇·B and paired projected-current divergence at roundoff on
   affine and curved geometry; curved ball and torus mixed-projection tests include the
   paired terminal order as a positive control, an undersized order that leaves visible
@@ -444,7 +444,28 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   behavior; Ampère compatibility; projected current preserves the prescribed (M3b)
   shell moments I_tor(s)=I₀(s) to the stated tolerance. Report the continuity-multiplier
   norm, but do not require it to vanish.
-  <br>Measured: —
+  <br>Measured: macOS / CPython 3.12.2 / NGSolve 6.2.2606 — the paired
+  `HDiv(p-1)-L2(p-2)` saddle projection enforces current divergence at roundoff on
+  affine cubes, the curved OCC ball, and the order-4 analytic torus. On the ball,
+  relative divergence falls from 6.998e-1 to 6.367e-16, the nonzero continuity-
+  multiplier L² norm is 7.063e-2, and the Ampère compatibility residual is 1.308e-14.
+  Paired `HDiv(2)-L2(1)` has rank 428/428 with minimum singular ratio 2.016e-2;
+  undersized `L2(0)` leaves relative divergence 2.133, while oversized `L2(2)` has
+  rank 428/1,070 and first discarded ratio 1.086e-15. On the 1,414-tetrahedron torus,
+  divergence falls from 1.835e-1 to 1.101e-15 and undersizing leaves 3.968e-1. Its
+  paired/oversized representative element blocks have ranks 4/4 and 4/10. Two compact-
+  mollified (M3b) shell targets, 0.4941443925 and 0.5058566965, are retained to
+  2.78e-16 and 6.66e-16 absolute error. The affine relative projection correction has
+  finest-pair rates 1.9053 (base order 2) and 2.7856 (base order 3), while divergence
+  remains at roundoff. See `tests/manufactured/current_projection_rates.csv` and
+  `docs/verification.md`. Final local `make check`: 201 not-slow tests in 38.53 s;
+  the touched slow torus test passes in 12.29 s.
+  <br>Next: Phase 5 should pass the independently reconstructed three-component (M2)
+  current and the exact milestone-3.6 mollified shell weights into this projection,
+  retain its fixed moment quadrature in checkpoint provenance, and monitor the relative
+  correction as an M3/projection consistency diagnostic. The natural-trace formulation
+  is the verified default; do not substitute an essential normal trace without removing
+  the constant multiplier kernel explicitly.
   <br>Design input: ADR 0005 Option 1 approved, superseding ADR 0004. General curved
   `div(HDiv)` is not strongly contained in ordinary scalar L2, but determinant
   cancellation makes the paired weak constraint pointwise coercive. Its λ is the
@@ -527,12 +548,13 @@ test < ~90 s — reference laptop, macOS/CPython 3.12, `-n 3 --dist=loadscope`. 
 milestone re-checks this as item 7 of the definition of done and records the new
 `make test` wall-clock here.
 
-Measured 2026-08-16 on `milestone/4.2-gauge-fixed-curl-curl`: `make test` passes
-179 not-slow tests in 28.52 s ✅. The slowest item is the shared
-`test_m3_gradient_comparison` setup at 12.24 s; the new magnetostatics module setup is
-4.99 s. No individual not-slow item exceeds ~20 s. The most recent full-suite
-baseline is 182 s ✅; milestone 4.2 adds no slow tests and its complete new module takes
-under 7 s, leaving the <5-minute full-suite budget intact.
+Measured 2026-08-16 on `milestone/4.4-constrained-current-projection`: `make test`
+passes 201 not-slow tests in 38.53 s ✅. The slowest item is the shared
+`test_m3_gradient_comparison` setup at 12.94 s; the new affine/curved-ball projection
+module setup is 3.64 s. No individual not-slow item exceeds ~20 s. The new curved-torus
+projection is marked `slow` and passes in 12.29 s; the most recent full-suite baseline
+before this milestone was 182 s, so the added slow test leaves the <5-minute budget
+intact.
 
 ## Release gates
 
