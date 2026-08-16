@@ -68,6 +68,32 @@ def _recorded_rows() -> dict[int, dict[str, str]]:
     return indexed
 
 
+def _actual_csv(rows: dict[int, _HarmonicRow]) -> str:
+    """Format all measured rows so a cross-platform mismatch is reproducible."""
+    header = (
+        "geometry_order,elements,curved_volume,weak_curl_relative_residual,"
+        "weak_divergence_relative_residual,boundary_normal_relative_norm,toroidal_flux,"
+        "sampled_magnetic_magnitude_minimum,sampled_magnetic_magnitude_maximum"
+    )
+    body = [
+        ",".join(
+            (
+                str(row.geometry_order),
+                str(row.elements),
+                f"{row.curved_volume:.16e}",
+                f"{row.weak_curl_relative_residual:.16e}",
+                f"{row.weak_divergence_relative_residual:.16e}",
+                f"{row.boundary_normal_relative_norm:.16e}",
+                f"{row.toroidal_flux:.16e}",
+                f"{row.sampled_magnetic_magnitude_minimum:.16e}",
+                f"{row.sampled_magnetic_magnitude_maximum:.16e}",
+            )
+        )
+        for row in rows.values()
+    ]
+    return "\n".join((header, *body))
+
+
 @pytest.fixture(scope="module")
 def harmonic_rows() -> dict[int, _HarmonicRow]:
     """Share the curved-torus constructions across all acceptance assertions."""
@@ -173,9 +199,10 @@ def test_harmonic_flux_table_matches_every_geometry_order(
     """The machine-readable table covers and reproduces the full curvature sweep."""
     recorded = _recorded_rows()
     assert set(recorded) == set(harmonic_rows)
+    mismatch_report = "measured platform table:\n" + _actual_csv(harmonic_rows)
     for order, row in harmonic_rows.items():
         table_row = recorded[order]
-        assert int(table_row["elements"]) == row.elements
+        assert int(table_row["elements"]) == row.elements, mismatch_report
         assert row.curved_volume == pytest.approx(float(table_row["curved_volume"]), abs=2e-8)
         assert row.toroidal_flux == pytest.approx(float(table_row["toroidal_flux"]), abs=2e-11)
         for column in (
