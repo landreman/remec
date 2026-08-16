@@ -103,7 +103,11 @@ class AnalyticSolidTorus:
         """Return the one normalized harmonic field of this solid torus."""
         from remec.fem._harmonic_flux import build_analytic_torus_harmonic_field
 
-        solution = build_analytic_torus_harmonic_field(mesh_bundle._mesh, self)
+        solution = build_analytic_torus_harmonic_field(
+            mesh_bundle._mesh,
+            self,
+            boundary_region=self.boundary_regions()["wall"],
+        )
         return [solution.field]
 
     def metadata(self) -> dict[str, object]:

@@ -428,7 +428,7 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   [0.66448, 1.23427]. The discrete curl of a zero-tangential-trace HCurl potential has
   toroidal flux below 1e-12; a nonzero-trace control has flux above 1.0. See
   `tests/manufactured/harmonic_flux_torus.csv` and
-  `docs/verification.md`. Final local `make check`: 197 tests in 34.73 s.
+  `docs/verification.md`. Final local `make check`: 197 tests in 29.95 s.
   <br>Next: milestone 4.4 should use the order-4 analytic torus when testing the paired
   current projection on curved multiply connected geometry, preserve the harmonic
   coefficient outside the curl–curl solve, and distinguish the measured 1.05e-4 geometry

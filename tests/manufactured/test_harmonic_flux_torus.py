@@ -137,8 +137,10 @@ def test_harmonic_field_satisfies_m1(
 def test_harmonic_field_has_oriented_unit_toroidal_flux(
     poloidal_cut: tuple[AnalyticSolidTorus, Any],
 ) -> None:
-    """The actual NGSolve ``B_h`` has positive unit flux through the mesh cut."""
+    """The actual ``B_h`` has unit cut flux and remains tangent to the physical wall."""
     torus, cut_bundle = poloidal_cut
+    diagnosed = build_analytic_torus_harmonic_field(cut_bundle._mesh, torus)
+    assert diagnosed.boundary_normal_relative_norm < 1.2e-4
     field = torus.harmonic_basis(cut_bundle)[0]
     assert poloidal_cut_flux(cut_bundle, field) == pytest.approx(1.0, abs=2.0e-8)
     assert poloidal_cut_flux(cut_bundle, -field) == pytest.approx(-1.0, abs=2.0e-8)

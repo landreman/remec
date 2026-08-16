@@ -32,7 +32,8 @@ The acceptance diagnostic builds a separate half-torus with an explicit
 \(\phi=0\) boundary, curves it to order 6, and asks NGSolve to integrate the actual
 coefficient field against the cut normal. It measures \(0.9999999916288673\), an
 absolute unit-flux error of \(8.37\times10^{-9}\); reversing the field measures \(-1\)
-to the same tolerance, so the test also fixes the flux orientation. The
+to the same tolerance, so the test also fixes the flux orientation. The \(2\times10^{-8}\)
+gate is 2.4 times this measured order-6 geometry error and is not widened for mesh noise. The
 weak curl and divergence diagnostics assemble the analytic residual against scalar and
 vector H¹ test spaces and report their mass-Riesz norms relative to \(\|B_h\|_2\).
 Independent divergent and rotational fields produce order-one weak residuals, preventing
@@ -62,8 +63,8 @@ misreported as algebraic roundoff.
 A manufactured vector potential
 \(A_z=[a^2-((R_{\rm cyl}-R)^2+z^2)](1+0.2x+0.1z)\) vanishes on the exact boundary.
 Its projection into `HCurl(order=2, dirichlet="wall")` on the explicit half-torus,
-with constrained DOFs eliminated,
-has measured tangential-trace norm below \(10^{-14}\). Independent cut quadrature
+with constrained DOFs eliminated, has an algebraically imposed tangential trace whose
+reported norm is below \(10^{-14}\). The topological evidence is the independent cut quadrature
 of the actual NGSolve `curl(discrete_potential)` is below \(10^{-12}\), verifying that
 the essential zero tangential trace cannot change the harmonic flux coefficient. A
 nonzero-trace HCurl control has cut flux above 1.0. Mutation checks are conspicuous:

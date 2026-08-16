@@ -109,6 +109,7 @@ def build_analytic_torus_harmonic_field(
     torus: AnalyticSolidTorus,
     *,
     test_order: int = 2,
+    boundary_region: str = "wall",
 ) -> HarmonicFluxField:
     r"""Construct the unit-flux harmonic field required by note equation ``(M1)``.
 
@@ -130,6 +131,8 @@ def build_analytic_torus_harmonic_field(
         raise TypeError("test_order must be an integer")
     if test_order < 1:
         raise ValueError("test_order must be positive")
+    if not isinstance(boundary_region, str) or not boundary_region:
+        raise ValueError("boundary_region must be a nonempty string")
 
     import ngsolve as ng
 
@@ -157,6 +160,7 @@ def build_analytic_torus_harmonic_field(
                 (field * ng.specialcf.normal(3)) ** 2,
                 mesh,
                 ng.BND,
+                definedon=mesh.Boundaries(boundary_region),
                 order=integration_order,
             )
         )

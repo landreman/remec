@@ -19,7 +19,10 @@
   so the positive toroidal flux uses the negative boundary integral. For the normalized
   circular field this measures 0.9999999916288673; negating the field reverses the sign.
   Use this explicit-cut construction for flux regressions instead of a separate NumPy
-  formula that can become disconnected from the field under test.
+  formula that can become disconnected from the field under test. When diagnosing
+  tangency on this half-torus, restrict `ng.BND` with
+  `definedon=mesh.Boundaries("wall")`: the artificial cut faces intentionally carry
+  nonzero normal flux and are not part of the physical-wall tangency invariant.
 
 - Milestone 4.2 (NGSolve 6.2.2606): the symmetric Coulomb-gauge saddle form on
   `FESpace([HCurl, H1])` is invertible with UMFPACK when both spaces carry the full
