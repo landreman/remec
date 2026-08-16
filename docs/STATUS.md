@@ -393,9 +393,28 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   coefficient derivative. A general curved `div(HDiv)` field is not strongly contained
   in ordinary scalar L2, but ADR 0005 establishes that the paired weak constraint still
   forces current divergence to zero pointwise through determinant cancellation.
-- [ ] **4.2** Gauge-fixed curl–curl — `DESIGN.md` §7.3, §11 · note: §6 (M1)
+- [x] **4.2** Gauge-fixed curl–curl — `DESIGN.md` §7.3, §11 · note: §6 (M1)
   <br>Acceptance: manufactured magnetostatics; gauge null-space handled.
-  <br>Measured: —
+  <br>Measured: macOS / CPython 3.12.2 / NGSolve 6.2.2606 — on 48 → 162 → 384
+  affine tetrahedra, finest-pair vector-potential L² rates for HCurl base orders
+  1/2/3 are 1.8593 / 3.0036 / 4.0559, while magnetic-field L² rates are
+  0.9414 / 1.9306 / 2.9749. Across all nine rows, the gauge multiplier is below
+  3.65e-14, the free-DOF relative residual below 1.54e-15, the weak gauge residual
+  below 3.66e-17, the independent curl-to-HDiv projection defect below 2.37e-15,
+  relative magnetic divergence below 9.53e-14, and the fixed-boundary normal-field
+  residual below 6.32e-15. Sampled |B| extrema are reported on every row; the finest
+  magnetic energy differs from π²/4 by 2.02e-5 relative. A nonzero discrete gradient
+  current is removed entirely by the gauge multiplier to 1e-11; deleting its coupling
+  makes the system singular. A μ₀=4πe-7 control preserves the manufactured A and
+  verifies the 1/μ₀ magnetic-energy scaling.
+  See `tests/manufactured/gauge_fixed_curl_curl_rates.csv` and
+  `docs/verification.md`.
+  <br>Next: milestone 4.3 should reuse this exact Coulomb-gauge block on its analytic
+  torus, add the harmonic field with its coefficient held fixed, and verify that the
+  curl contribution carries zero toroidal flux under the essential tangential trace.
+  Before putting the block inside a Picard loop, separate tetrahedral order validation
+  from `make_tetrahedral_de_rham_sequence` allocation so each solve does not construct
+  four unused validation spaces.
 - [ ] **4.3** Harmonic flux field on an analytic torus — `DESIGN.md` §7.2 · note: §6 (M1)
   <br>Measured: —
 - [ ] **4.4** Constrained current projection — `DESIGN.md` §10 · note: (M1)–(M3b), §5.4
@@ -487,21 +506,12 @@ test < ~90 s — reference laptop, macOS/CPython 3.12, `-n 3 --dist=loadscope`. 
 milestone re-checks this as item 7 of the definition of done and records the new
 `make test` wall-clock here.
 
-Measured 2026-08-16 on `plan_short_tests` (173 tests, one marked `slow`):
-`make test-full` 182 s ✅; `make test` **171 s ❌ over the 2-minute budget**. The four
-offenders, all in `tests/manufactured/`, also break the ~20 s per-test cap:
-
-| Test | Time |
-|---|---|
-| `test_m3_constrained.py::test_constrained_manufactured_h_p_and_shell_scans_match_rate_table[perpendicular]` | 54 s |
-| `test_m3_constrained.py::…_match_rate_table[full]` | 52 s |
-| `test_m3_gradient_comparison.py::test_field_misalignment_sensitivity_has_an_aligned_control` | 25 s |
-| `test_m3_constrained.py::test_fixed_i0_du_scan_has_a_regular_multiplier_limit[perpendicular, full]` | 21 s each |
-
-Next: the next milestone to touch M3 brings the not-slow suite back under budget —
-split each h/p/shell scan into a cheap two-level rate check that stays in PR CI and a
-`slow` full scan for nightly, and share the gradient-comparison setup solve. Do not
-meet the budget by weakening a rate expectation or a tolerance (`AGENTS.md`).
+Measured 2026-08-16 on `milestone/4.2-gauge-fixed-curl-curl`: `make test` passes
+179 not-slow tests in 28.52 s ✅. The slowest item is the shared
+`test_m3_gradient_comparison` setup at 12.24 s; the new magnetostatics module setup is
+4.99 s. No individual not-slow item exceeds ~20 s. The most recent full-suite
+baseline is 182 s ✅; milestone 4.2 adds no slow tests and its complete new module takes
+under 7 s, leaving the <5-minute full-suite budget intact.
 
 ## Release gates
 

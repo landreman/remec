@@ -5,6 +5,18 @@
 > descriptions of NGSolve expression behavior, but not of the production current-profile
 > closure. Follow `DESIGN.md` §9.2 and `STATUS.md` milestones 3.5–3.6.
 
+- Milestone 4.2 (NGSolve 6.2.2606): the symmetric Coulomb-gauge saddle form on
+  `FESpace([HCurl, H1])` is invertible with UMFPACK when both spaces carry the full
+  fixed-boundary trace (`dirichlet=".*"`). For a compatible analytic current,
+  NGSolve's default coefficient-function quadrature can leave a spurious gauge
+  multiplier as large as 1e-4 on the coarsest trigonometric case; assembling both the
+  operator and load with `dx(bonus_intorder=10)` reduces it below 4e-14. This is
+  quadrature compatibility, not a gauge defect. Project `curl(A_h)` into the paired
+  HDiv space with an independently assembled mass solve before applying `ng.div`, as
+  in milestone 4.1. The HDiv normal trace can be evaluated directly with
+  `magnetic_field * ng.specialcf.normal(3)` on `ng.BND`; it is below 7e-15 relative
+  when the HCurl tangential trace is essential on the full cube boundary.
+
 - Milestone 4.1 (NGSolve 6.2.2606): on affine tetrahedra, the exact order pairing is
   `H1(p+1) -> HCurl(p) -> HDiv(max(p-1, 0)) -> L2(max(p-2, 0))`; equal integer
   `order` arguments do not give the exact global complex.  The offsets are element-
