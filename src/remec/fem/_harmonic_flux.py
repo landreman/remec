@@ -8,8 +8,11 @@ from math import pi, sqrt
 from typing import Any
 
 import numpy as np
+from numpy.typing import NDArray
 
 from remec.geometry.solid_torus import AnalyticSolidTorus
+
+FloatArray = NDArray[np.float64]
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,9 +30,9 @@ class HarmonicFluxField:
 
     def poloidal_normal_component(
         self,
-        x_coordinate: np.ndarray,
-        z_coordinate: np.ndarray,
-    ) -> np.ndarray:
+        x_coordinate: FloatArray,
+        z_coordinate: FloatArray,
+    ) -> FloatArray:
         """Evaluate ``B_h . e_y`` on the positive-y poloidal cut."""
         del z_coordinate
         return self.normalization / x_coordinate
@@ -170,7 +173,7 @@ def build_analytic_torus_harmonic_field(
 
 def poloidal_cut_flux(
     torus: AnalyticSolidTorus,
-    normal_component: Callable[[np.ndarray, np.ndarray], np.ndarray],
+    normal_component: Callable[[FloatArray, FloatArray], FloatArray],
     *,
     quadrature_order: int = 24,
 ) -> float:
