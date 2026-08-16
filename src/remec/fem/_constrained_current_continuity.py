@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from itertools import pairwise
 from math import isfinite, sqrt
+from time import perf_counter
 from typing import Any, Protocol
 
 import numpy as np
@@ -20,6 +21,7 @@ from remec.current_moments import (
 from remec.fem._current_continuity import (
     _compiled,
     _embedded_gradient,
+    _minimum_sampled_value,
     _normalized_direction_gradient,
     _quadrature_extrema,
     _regularized_gradient,
@@ -344,6 +346,7 @@ def solve_constrained_current_continuity(
     factorization of ``A`` supplies all response columns; the dense solve is only the
     one-dimensional Schur complement.
     """
+    solve_started = perf_counter()
     if polynomial_order < 1:
         raise ValueError("polynomial_order must be at least one")
     if stabilization not in ("none", "supg"):
@@ -519,21 +522,35 @@ def solve_constrained_current_continuity(
 
     free_dofs = space.FreeDofs()
     configure_threads(resolved_runtime.threads)
+    a_assemblies = 0
+    a_factorizations = 0
+    a_factorization_reuses = 0
+    a_response_solves = 0
     with ng.TaskManager():
+        a_assembly_started = perf_counter()
         bilinear_form.Assemble()
+        a_assemblies += 1
+        a_assembly_wall_seconds = perf_counter() - a_assembly_started
+
+        linear_form_assembly_started = perf_counter()
         drive_form.Assemble()
         for column in p_forms:
             column.Assemble()
-        if supg_bilinear_form is not None and supg_drive_form is not None:
-            supg_bilinear_form.Assemble()
-            supg_drive_form.Assemble()
-            for column in supg_p_forms:
-                column.Assemble()
+        linear_form_assembly_wall_seconds = perf_counter() - linear_form_assembly_started
+
+        factorization_started = perf_counter()
         inverse = bilinear_form.mat.Inverse(free_dofs, inverse="umfpack")
+        a_factorizations += 1
         base_rhs = drive_form.vec.CreateVector()
         base_rhs.data = drive_form.vec - edge_value * p_forms[-1].vec
         base_utilde = _solve_with_inverse(inverse, base_rhs, space)
-        responses = [_solve_with_inverse(inverse, column.vec, space) for column in p_forms[:-1]]
+        a_response_solves += 1
+        responses: list[Any] = []
+        for column in p_forms[:-1]:
+            responses.append(_solve_with_inverse(inverse, column.vec, space))
+            a_response_solves += 1
+            a_factorization_reuses += 1
+        factorization_and_response_wall_seconds = perf_counter() - factorization_started
 
     mapped_points = _mapped_quadrature(mesh, quadrature_order)
     sampled_normalized_volume = _sample_scalar(normalized_volume, mapped_points)
@@ -644,6 +661,16 @@ def solve_constrained_current_continuity(
         )
     else:
         parallel_current_over_field = physical_u
+    bordered_solve_wall_seconds = perf_counter() - solve_started
+    diagnostics_started = perf_counter()
+    diagnostic_assembly_started = perf_counter()
+    with ng.TaskManager():
+        if supg_bilinear_form is not None and supg_drive_form is not None:
+            supg_bilinear_form.Assemble()
+            supg_drive_form.Assemble()
+            for column in supg_p_forms:
+                column.Assemble()
+    diagnostic_assembly_wall_seconds = perf_counter() - diagnostic_assembly_started
     independent_moments = _component_moments(
         volume_map,
         edges,
@@ -727,6 +754,19 @@ def solve_constrained_current_continuity(
     def l2(expression: Any) -> float:
         return sqrt(max(0.0, float(ng.Integrate(_compiled(expression), mesh, order=20))))
 
+    floor_activity = coefficients.magnetic_floor**2 / (
+        ng.InnerProduct(magnetic_field, magnetic_field) + coefficients.magnetic_floor**2
+    )
+    floor_activity_l2 = l2(floor_activity**2)
+    physical_magnitude = ng.sqrt(ng.InnerProduct(magnetic_field, magnetic_field))
+    minimum_field_magnitude = _minimum_sampled_value(
+        mesh,
+        physical_magnitude,
+        integration_order=20,
+    )
+
+    diagnostics_wall_seconds = perf_counter() - diagnostics_started
+    total_wall_seconds = perf_counter() - solve_started
     diagnostics = {
         "m3_residual_norm": m3_residual_norm,
         "m3b_constraint_residual_norm": constraint_residual_norm,
@@ -734,8 +774,19 @@ def solve_constrained_current_continuity(
         "m3_supg_tau_min": supg_tau_min,
         "m3_supg_tau_max": supg_tau_max,
         "schur_condition_number": schur_condition_number,
-        "a_factorizations": 1.0,
-        "a_response_solves": float(len(edges)),
+        "a_assemblies": float(a_assemblies),
+        "a_factorizations": float(a_factorizations),
+        "a_factorization_reuses": float(a_factorization_reuses),
+        "a_response_solves": float(a_response_solves),
+        "a_assembly_wall_seconds": a_assembly_wall_seconds,
+        "linear_form_assembly_wall_seconds": linear_form_assembly_wall_seconds,
+        "diagnostic_assembly_wall_seconds": diagnostic_assembly_wall_seconds,
+        "factorization_and_response_wall_seconds": factorization_and_response_wall_seconds,
+        "bordered_solve_wall_seconds": bordered_solve_wall_seconds,
+        "diagnostics_wall_seconds": diagnostics_wall_seconds,
+        "total_wall_seconds": total_wall_seconds,
+        "minimum_field_magnitude": minimum_field_magnitude,
+        "floor_activity_l2": floor_activity_l2,
         "maximum_shell_mean_utilde": float(np.max(np.abs(shell_means))),
         "multiplier_current_l2": l2(ng.InnerProduct(multiplier_current, multiplier_current)),
         "g_advection_coupling_l2": l2(g_advection_coupling**2),

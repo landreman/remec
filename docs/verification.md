@@ -11,6 +11,151 @@
 > numbers remain valid. Milestone 3.5 migrated the public contract and layer-cake
 > oracle to p₀(s) and the factor V_Ω∫₀¹·ds.
 
+## Milestone 3.7 — constrained gradient-variant comparison
+
+The transverse and full-gradient current-viscosity closures were compared with the
+same bordered (M3)--(M3b) solver on shared frozen
+$(\mathbf B,p,s,I_0,\mathrm{drive})$ states. Both reconstruct the physical (M2)
+current
+
+\[
+\mathbf J=(G+\tilde u)\mathbf B
++\frac{\mathbf B\times\nabla p}{B_{\rm safe}^2}
+-D_u\nabla_r\tilde u,
+\]
+
+and the cumulative current in every row is evaluated independently from that current.
+Thus the study preserves DESIGN §5 invariant 4 rather than comparing only M3
+residuals. It also records the sampled minimum field and floor activity (invariant 5),
+and every four-shell partition spans at least 4.796 local cells/mollifier widths in the
+resonant scan and 6.812 in the misaligned scan (invariant 6).
+
+### Fixed-state regular limit and resonant layer
+
+The resonant benchmark uses
+$\mathbf B=(0.01,6(x-1/2),2)$ on a periodic-$y$ $24\times16$ structured triangular
+mesh and the nonuniform toroidal-angle gradient
+$\nabla\phi=(0.4,0.3\sin(2\pi y),1)$. This makes both the multiplier and
+regularizing terms visible to the independent toroidal-current constraint. Its fixed
+drive is $\sin(2\pi y)+0.05\sin(10\pi y)$; the smaller fifth harmonic measures
+parallel grid-noise transfer without changing the current target. The small nonzero
+$B_x$ makes both $\mathbf B\cdot\nabla s$ and $\mathbf B\cdot\nabla p$ nonzero, so
+the bordered $P$ block couples the constrained multiplier back into $\tilde u$ rather
+than reducing to the unconstrained kernel. The same analytic cumulative
+$I_0(s)=0.04s+0.01s(1-s)$, pressure gradient, volume coordinate, drive, shell grid,
+mesh, and edge value are held fixed throughout the $D_u$ scan. With reference length
+one, the benchmark convention $\bar B=\min|\mathbf B|=\sqrt{4.0001}$ gives
+$\epsilon_J=D_u/\sqrt{4.0001}$. The resulting order-unity normalized coefficient is
+specific to that conservative $\bar B$ convention and is not assigned physical
+significance.
+
+| $D_u$ | $\epsilon_J$ | $\epsilon_\kappa/\epsilon_J$ | relative $u_\perp-u_{\rm full}$ L² | difference / $\epsilon_J$ |
+| ---: | ---: | ---: | ---: | ---: |
+| 0.04 | 0.0199998 | 0.25 | 2.0207e-2 | 1.0104 |
+| 0.02 | 0.0099999 | 0.50 | 1.0489e-2 | 1.0489 |
+| 0.01 | 0.0049999 | 1.00 | 5.1913e-3 | 1.0383 |
+
+The adjacent decay rates are 0.946 and 1.015, so the cross-variant disagreement is
+measured $O(\epsilon_J)$ on this genuinely fixed state. Each variant realizes the same
+input current with independent M3b relative residual below $2.99\times10^{-17}$.
+However, this fixed-$\epsilon_\kappa$ target is **not** a strict admissible
+$D_u\to0$ sequence under note §5.5(vii): as
+$\epsilon_\kappa/\epsilon_J$ rises from 0.25 to 1.00, the maximum shell
+$|\langle\tilde u\rangle|$ rises from about 0.00874 to 0.03539. The checked test pins
+$D_u\max_s|\langle\tilde u\rangle_s|$ to within a factor 1.02 (about
+$3.49\times10^{-4}$ to $3.54\times10^{-4}$), demonstrating the observed $1/D_u$
+growth instead of calling it bounded. The note's vanishing-mean condition requires
+$\epsilon_\kappa\to0$ alongside $D_u$; milestone 3.6 records that admissible-family
+behavior. The smallest row here is already poorly separated
+($\epsilon_\kappa/\epsilon_J=1$), so this table supports only the measured
+cross-variant $O(\epsilon_J)$ statement, not convergence to a regular common physical
+limit. The multiplier-current norm nevertheless falls from about
+$1.55\times10^{-2}$ to $4.06\times10^{-3}$, with adjacent rates 0.983 and 0.942.
+
+The actual multiplier-to-$\tilde u$ forcing is nonzero. In the resonant scan the
+coupling is carried by the advection term
+$-G'\mathbf B\cdot\nabla s$, whose L² norm is
+$3.86\times10^{-3}$ to $4.06\times10^{-3}$; the reaction share is only
+$2.65\times10^{-12}$ to $3.04\times10^{-12}$ because this benchmark uses
+$\mu_0=10^{-8}$. The misalignment table separately pins both contributions, with
+advection norms 1.92--2.24 and reaction norms 0.0109--0.0132, so the reaction path is
+not inferred from the numerically negligible resonant share. The smooth-floor
+activity, evaluated directly as the L² norm of
+$B_{\rm floor}^2/(B^2+B_{\rm floor}^2)$, is $1.735\times10^{-17}$ with sampled
+$\min|\mathbf B|=2.000025$; a separate $B_{\rm floor}=2$ case exceeds 0.25 and
+proves the diagnostic responds when the floor is active. The toroidal
+regularizing-current norm is nonzero and variant-distinct: at $D_u=0.02$ it is
+0.01109 (∇⊥) and 0.009955
+(full ∇), so this benchmark does not hide the (M2) term from (M3b).
+
+At $D_u=0.02$, the transverse/full fundamental-harmonic FWHM values are 0.41050 and
+0.40702, a 0.85% difference; they span 9.85 and 9.77 normal elements. Each radial
+amplitude has exactly one turning point, so neither closure adds a spurious layer
+oscillation. The full-gradient closure reduces the injected fifth-to-fundamental
+parallel-noise ratio from $6.8031\times10^{-3}$ to $6.4977\times10^{-3}$, a 4.49%
+reduction. All three diffusivities clear six FWHM cells for both variants. These
+FWHM/noise observables use the physical $J_\parallel/B$ evaluator. Replacing that
+evaluator by auxiliary $u$ in the full-gradient rows changes the noise transfer by
+3.37%, 0.501%, and 0.314% at $D_u=0.04$, 0.02, and 0.01 respectively; deleting the
+correction therefore fails the largest-$D_u$ CSV pin. The exact $J_\parallel/B$
+formula is independently guarded by the milestone-3.6 pointwise current test. The
+complete scan is checked in as
+`tests/manufactured/m3_gradient_du_limit.csv`.
+
+### Field-misalignment and solver-cost measurements
+
+The second benchmark uses a constant in-plane field at 22.5 degrees. The structured
+triangle edges lie at 0, 45, and 90 degrees, so the field bisects the nearest two edge
+directions and is deliberately maximally misaligned within that mesh family. A
+zero-degree field on the same meshes is the aligned control. On the
+$20\times20\to28\times28$ refinement, aligned physical-$u$ coarse-to-fine relative L²
+changes are $1.4068\times10^{-2}$ (∇⊥) and $1.2687\times10^{-2}$ (full ∇); the
+misaligned values are $1.9625\times10^{-2}$ and $1.6215\times10^{-2}$. Thus
+misalignment amplifies h-sensitivity by 1.395 and 1.278 respectively, rather than the
+comparison merely measuring ordinary refinement error. The fine-grid cross-variant
+differences are $3.9467\times10^{-2}$ aligned and $2.9210\times10^{-2}$ misaligned.
+The larger aligned cross-variant difference does not mean its mesh sensitivity is
+worse: misalignment is measured by the within-variant coarse/fine amplification above,
+not by the absolute distance between closures. Rotating the field for the aligned
+control also changes $\mathbf B\cdot\nabla p$ and $\mathbf B\cdot\nabla s$ by 7.6%, so
+the absolute amplification includes a small state change; the ratio between the two
+variant amplifications, $1.395/1.278\simeq1.09$, is the comparative signal.
+The multiplier-current norms are also variant-distinct in both controls, and all
+independently evaluated M3b residuals remain below $7.01\times10^{-17}$. These rows
+are in
+`tests/manufactured/m3_gradient_misalignment.csv`.
+
+One frozen solve is the available proxy for one future Picard linearization. Each row
+records the counters at the actual call sites: one $A$ assembly, one UMFPACK
+factorization, five response solves, and four subsequent uses of the same
+factorization after the first response. Since the kernel is direct, Krylov iterations
+are `not_applicable` and the preconditioner is `none`. No cross-call cache exists in
+the frozen API; Phase 5 must measure cross-iteration reuse in the actual Picard driver.
+The timing columns separate $A$ assembly, right-hand-side assembly, diagnostic-only
+SUPG assembly, factorization/responses, the bordered production solve, post-solve
+diagnostics, and the total call. Across the three resonant rows, full-∇ assembles $A$
+about 2.3 times faster (within-row transverse/full ratios 2.21--2.46); the fine
+misalignment ratio is 1.73. Bordered-solve differences are below the observed
+run-to-run timing spread and are not attributed to either closure. These single-run
+local wall times do not establish a nonlinear cache or preconditioner advantage.
+
+The full-gradient closure provides small damping and smearing changes, lower absolute
+h-sensitivity in both alignment controls, and modest local timing differences in these
+tests. The evidence is not large or broad enough to override the note-derived
+transverse physics, especially before a nonlinear driver can measure real
+cache/preconditioner behavior. The default remains
+`regularization_gradient="perpendicular"`; no ADR is warranted by this study.
+
+Mutation checks verified that the comparison cannot pass with collapsed or mixed
+operators. Forcing the full-gradient Galerkin/M2 path through the perpendicular
+projection reduced the $D_u=0.04$ normalized cross-variant difference from 1.0104 to
+0.0372 and failed the $O(\epsilon_J)$ gate. Reconstructing the full-gradient physical
+(M2) regularizing current with the perpendicular operator while retaining the full
+(M3)--(M3b) solve raised the independently evaluated resonant-case current residual
+to $9.017\times10^{-5}$, far above the $10^{-10}$ gate. Finally, deleting the
+full-gradient $J_\parallel/B$ correction changed the $D_u=0.04$ noise transfer from
+the pinned 0.0054730 to 0.0052886 and failed its 0.5% relative gate.
+
 ## Milestone 3.6 — constrained unknown-G M3–M3b solve
 
 For frozen $(\mathbf B,p,\chi)$, the production current-continuity kernel now solves
