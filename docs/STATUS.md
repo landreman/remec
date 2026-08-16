@@ -415,8 +415,26 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   Before putting the block inside a Picard loop, separate tetrahedral order validation
   from `make_tetrahedral_de_rham_sequence` allocation so each solve does not construct
   four unused validation spaces.
-- [ ] **4.3** Harmonic flux field on an analytic torus — `DESIGN.md` §7.2 · note: §6 (M1)
-  <br>Measured: —
+- [x] **4.3** Harmonic flux field on an analytic torus — `DESIGN.md` §7.2 · note: §6 (M1)
+  <br>Measured: macOS / CPython 3.12.2 / NGSolve 6.2.2606 — on the circular
+  torus R=2, a=0.6, the normalized harmonic field
+  `B_h=C(-y,x,0)/(x²+y²)` has NGSolve-integrated flux 0.9999999916288673
+  (absolute error 8.37e-9) through an explicit order-6 poloidal-cut mesh. Across
+  curved geometry orders
+  1 → 2 → 3 → 4 on 1,414 tetrahedra, the boundary-normal/volume norm falls
+  1.1123e-1 → 5.8917e-3 → 2.9034e-3 → 1.0541e-4; weak curl and divergence
+  residuals remain below 8.52e-18. Absolute volume error decreases at every order,
+  reaching 1.67e-5 (1.18e-6 relative), and sampled |B_h| stays in
+  [0.66448, 1.23427]. The discrete curl of a zero-tangential-trace HCurl potential has
+  toroidal flux below 1e-12; a nonzero-trace control has flux above 1.0. See
+  `tests/manufactured/harmonic_flux_torus.csv` and
+  `docs/verification.md`. Final local `make check`: 197 tests in 29.95 s.
+  <br>Next: milestone 4.4 should use the order-4 analytic torus when testing the paired
+  current projection on curved multiply connected geometry, preserve the harmonic
+  coefficient outside the curl–curl solve, and distinguish the measured 1.05e-4 geometry
+  tangency defect from the algebraic div(curl) invariant. This milestone supplies only
+  the validated circular-torus closed form; milestone 6.2 must implement and validate
+  the §7.2 scalar Neumann (or mixed) tangency correction before shaped-torus use.
 - [ ] **4.4** Constrained current projection — `DESIGN.md` §10 · note: (M1)–(M3b), §5.4
   <br>Acceptance: discrete ∇·B and paired projected-current divergence at roundoff on
   affine and curved geometry; curved ball and torus mixed-projection tests include the
@@ -453,6 +471,9 @@ that dependency. Phase 7 may run in parallel with Phase 8.
 
 - [ ] **6.1** Periodic-torus end-to-end benchmark — `DESIGN.md` §16.2 · note: §6, §9
 - [ ] **6.2** Smooth solid-torus mesh — `DESIGN.md` §16.4 (simple torus → shaped Fourier boundary; geometry-error report)
+  <br>Design input: implement and validate the §7.2 scalar Neumann (or mixed harmonic)
+  tangency correction on the shaped boundary; milestone 4.3's circular closed form is
+  not a shaped-torus harmonic-field implementation.
 - [ ] **6.3** Poincare plots: compute data via field line tracing, save and load
   data, functions to make plots.
 - [ ] **6.4** VMEC/VMEC++ reader + initialization — `DESIGN.md` §17

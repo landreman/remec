@@ -11,6 +11,73 @@
 > numbers remain valid. Milestone 3.5 migrated the public contract and layer-cake
 > oracle to p₀(s) and the factor V_Ω∫₀¹·ds.
 
+## Milestone 4.3 — harmonic flux on an analytic torus
+
+The circular solid torus
+
+\[
+(\sqrt{x^2+y^2}-R)^2+z^2<a^2,\qquad R=2,\quad a=0.6,
+\]
+
+links the cylindrical axis. Its nontrivial harmonic component for note (M1) is
+
+\[
+\mathbf B_h=C\nabla\phi
+=C\frac{(-y,x,0)}{x^2+y^2},\qquad
+C^{-1}=2\pi\left(R-\sqrt{R^2-a^2}\right).
+\]
+
+The normalization follows from an analytic integral only when constructing the field.
+The acceptance diagnostic builds a separate half-torus with an explicit
+\(\phi=0\) boundary, curves it to order 6, and asks NGSolve to integrate the actual
+coefficient field against the cut normal. It measures \(0.9999999916288673\), an
+absolute unit-flux error of \(8.37\times10^{-9}\); reversing the field measures \(-1\)
+to the same tolerance, so the test also fixes the flux orientation. The \(2\times10^{-8}\)
+gate is 2.4 times this measured order-6 geometry error and is not widened for mesh noise. The
+weak curl and divergence diagnostics assemble the analytic residual against scalar and
+vector H¹ test spaces and report their mass-Riesz norms relative to \(\|B_h\|_2\).
+Independent divergent and rotational fields produce order-one weak residuals, preventing
+a disabled residual assembly from satisfying the roundoff gate.
+
+The OCC torus is curved at geometry orders 1--4. OCC produces 1,414 tetrahedra on
+macOS and 1,389 on Linux, so `tests/manufactured/harmonic_flux_torus.csv` contains and
+strictly checks a full reference sweep keyed by `sys.platform` for each platform. These
+rows use NGSolve 6.2.2606; an unsupported platform fails with a complete measured CSV
+in the assertion message, which is the regeneration procedure rather than a reason to
+broaden tolerances. The macOS measurements are:
+
+| geometry order | volume | weak curl residual | weak div residual | boundary-normal / volume norm |
+| ---: | ---: | ---: | ---: | ---: |
+| 1 | 13.65983927 | 8.37e-18 | 2.97e-18 | 1.1123e-1 |
+| 2 | 14.20666427 | 8.51e-18 | 2.93e-18 | 5.8917e-3 |
+| 3 | 14.21316539 | 7.60e-18 | 2.59e-18 | 2.9034e-3 |
+| 4 | 14.21224706 | 6.35e-18 | 2.26e-18 | 1.0541e-4 |
+
+The exact volume is \(2\pi^2Ra^2=14.21223034\); absolute volume error and the
+boundary-normal geometry error both decrease at every order. The finest volume relative
+error is \(1.18\times10^{-6}\). Sampled \(|B_h|\) stays positive on every row, with
+global extrema 0.66448 and 1.23427. Thus invariant 1 is preserved analytically and the
+remaining tangency defect is explicitly measured as curved-geometry error rather than
+misreported as algebraic roundoff.
+
+A manufactured vector potential
+\(A_z=[a^2-((R_{\rm cyl}-R)^2+z^2)](1+0.2x+0.1z)\) vanishes on the exact boundary.
+Its projection into `HCurl(order=2, dirichlet="wall")` on the explicit half-torus,
+with constrained DOFs eliminated, has an algebraically imposed tangential trace whose
+reported norm is below \(10^{-14}\). The topological evidence is the independent cut quadrature
+of the actual NGSolve `curl(discrete_potential)` is below \(10^{-12}\), verifying that
+the essential zero tangential trace cannot change the harmonic flux coefficient. A
+nonzero-trace HCurl control has cut flux above 1.0. Mutation checks are conspicuous:
+negating the actual \(B_h\) changes the measured flux from +1 to -1, replacing the weak
+residual norm with zero fails the nonharmonic controls, and rotating \(B_h\) from
+toroidal to radial raises the finest boundary-normal ratio from
+\(1.05\times10^{-4}\) to 1.32.
+
+This is deliberately the analytic circular-torus baseline. It does not claim that the
+same closed form is tangent to a shaped torus. Before milestone 6.2 admits shaped
+boundaries, it must implement and validate the scalar Neumann correction (or another
+§7.2 harmonic construction) on those geometries.
+
 ## Milestone 4.2 — gauge-fixed curl–curl magnetostatics
 
 The fixed-boundary magnetic kernel solves the mixed Coulomb-gauge form of note (M1),

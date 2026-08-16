@@ -5,6 +5,25 @@
 > descriptions of NGSolve expression behavior, but not of the production current-profile
 > closure. Follow `DESIGN.md` §9.2 and `STATUS.md` milestones 3.5–3.6.
 
+- Milestone 4.3 (Netgen/NGSolve 6.2.2606): `netgen.csg.Torus` generated 45,205
+  tetrahedra for the R=2, a=0.6 verification torus regardless of requested `maxh` in
+  the tested 0.65--2.0 range. Revolving an OCC `WorkPlane` circular face around the
+  z-axis produced 1,414 tetrahedra on macOS and 1,389 on Linux, and remained stable
+  under `mesh.Curve(order)` for orders 1--4. The verification CSV therefore records
+  strict `sys.platform`-specific reference rows for NGSolve 6.2.2606 rather than
+  relaxing numerical tolerances; a missing platform row reports the complete measured
+  CSV needed for regeneration. Revolving the same disk through 180 degrees exposes
+  OCC faces in wall/start-cut/end-cut order. Naming those faces and applying
+  `mesh.Curve(6)` gives an explicit cut on which `ng.Integrate(field*normal, BND)`
+  evaluates the actual NGSolve coefficient. The start face has outward normal `-e_y`,
+  so the positive toroidal flux uses the negative boundary integral. For the normalized
+  circular field this measures 0.9999999916288673; negating the field reverses the sign.
+  Use this explicit-cut construction for flux regressions instead of a separate NumPy
+  formula that can become disconnected from the field under test. When diagnosing
+  tangency on this half-torus, restrict `ng.BND` with
+  `definedon=mesh.Boundaries("wall")`: the artificial cut faces intentionally carry
+  nonzero normal flux and are not part of the physical-wall tangency invariant.
+
 - Milestone 4.2 (NGSolve 6.2.2606): the symmetric Coulomb-gauge saddle form on
   `FESpace([HCurl, H1])` is invertible with UMFPACK when both spaces carry the full
   fixed-boundary trace (`dirichlet=".*"`). For a compatible analytic current,
