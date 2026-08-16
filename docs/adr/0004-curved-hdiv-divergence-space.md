@@ -1,5 +1,9 @@
 # ADR 0004 — Curved-mesh terminal space for the compatible magnetic complex
 
+> **Superseded by ADR 0005, Option 1.** The containment measurements and NGSolve API
+> observations below remain valid, but the inference that the paired weak constraint
+> cannot enforce pointwise current continuity on curved meshes does not.
+
 ## Context
 
 Milestone 4.1 establishes the affine-tetrahedral polynomial sequence
@@ -253,4 +257,4 @@ the meantime; where the current is described as divergence-free in the code, doc
 output metadata, say weakly divergence-free on curved geometry and cite the measured
 bound.
 
-## DECISION: option 4 approved
+## DECISION: Option 4 was approved, then superseded by ADR 0005 Option 1.

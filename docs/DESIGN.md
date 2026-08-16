@@ -240,16 +240,18 @@ linearization.
    into the paired HDiv space at roundoff and then applying `ng.div` to that HDiv
    GridFunction, with a divergent HDiv negative control; it MUST NOT be inferred from
    either the terminal ordinary-L2 arrow or `GridFunction.Diff(ng.x)` (ADR 0004).
-2. **Current continuity (affine exact; curved convergent):** raw (M2) currents are
-   projected to an H(div) field satisfying the Sec. 10 scalar-L2 constraint. On affine
-   meshes this is strongly divergence-free to roundoff. On curved meshes it is weakly
-   divergence-free in the chosen multiplier space; both ‖∇·J_h‖ and the gauge
-   multiplier λ_h MUST converge to zero under h- and geometry-order refinement. At
-   production resolution the dimensionless defect
-   L_ref‖∇·J_h‖/‖J_h‖ MUST be below 0.03. The relative projection correction
+2. **Current continuity (exact):** raw (M2) currents are projected to an H(div) field
+   satisfying the paired Sec. 10 scalar-L2 constraint. On affine and curved meshes the
+   constraint forces ∇·J_h = 0 pointwise to roundoff: under the contravariant Piola map,
+   the `1/det(J)` in the physical divergence cancels the `det(J)` in the volume form,
+   and the reference divergence exactly spans the paired reference L2 space (ADR 0005).
+   Milestone 4.4 MUST verify this on curved ball and torus meshes and MUST include
+   undersized and oversized terminal-order controls that make the pairing falsifiable.
+   Its λ_h is a continuity multiplier, not a gauge multiplier, and is not expected to
+   converge to zero. The relative projection correction
    ‖J_h − J_raw‖/‖J_raw‖ MUST also be recorded and converge to zero — a large or
    non-convergent correction means the M3 discretization and M2 reconstruction are
-   inconsistent. If λ_h stalls at a nonzero value, revisit ADR 0004.
+   inconsistent.
 3. **Pressure-profile realization:** the transplant MUST reproduce p₀(s) to
    quadrature/interpolation accuracy; test the normalized layer-cake identity
    ∫φ(p)d³r = V_Ω∫₀¹φ(p₀(s))ds for a spline family of test functions φ, and the
@@ -311,9 +313,13 @@ high-order spaces where it helps.
 established by small differential-complex tests (∇, ∇×, ∇· mapping between the chosen
 spaces) **before** the 3D solver is built. Agents MUST NOT assume that equal integer
 `order` arguments across NGSolve spaces automatically produce the desired sequence.
-On curved NGSolve elements, the HCurl→HDiv magnetic subcomplex still composes exactly,
-but ordinary scalar `L2` is not the Piola density-mapped strong image of `div(HDiv)`;
-use it as the weak current constraint/diagnostic space per ADR 0004.
+On curved NGSolve elements, the HCurl→HDiv magnetic subcomplex still composes exactly.
+The divergence of a general mapped HDiv field is not strongly contained in ordinary
+scalar `L2`, because the divergence carries the contravariant-Piola `1/det(J)` factor.
+That containment fact does not weaken the paired current constraint: in
+`(div J_h, q)_Omega`, the volume Jacobian cancels the Piola factor, so orthogonality to
+the paired ordinary-L2 space forces the reference and physical divergences to vanish
+pointwise (ADR 0005).
 
 Coefficients (**b**, B_safe, κ's, D_u, p) enter forms as NGSolve
 `CoefficientFunction`s evaluated at quadrature points; **b** is a CF of the current
@@ -573,17 +579,21 @@ natural J_h·n̂ = 0 on the closed boundary, and explicit handling of any global
 component not fixed by the local constraint. The projection MUST also preserve the N
 shell-current moments ΔI₀ used by (M3b), either as explicit projection constraints or to
 a tolerance demonstrated to converge faster than the field error; a constrained
-projected current with the wrong I_tor(s) is unacceptable. On affine meshes the L2
-constraint makes J_h strongly divergence-free to roundoff. On curved meshes ordinary
-scalar L2 provides only weak orthogonality: code, documentation, and output metadata
-MUST call J_h weakly divergence-free and report the unresolved strong divergence.
-Manufactured tests MUST demonstrate predicted convergence of both ‖∇·J_h‖ and λ_h
-under h- and geometry-order refinement, with a checked-in rate table, and the production
-dimensionless backstop L_ref‖∇·J_h‖/‖J_h‖ < 0.03 MUST hold. If λ_h stalls at a nonzero
-value, revisit ADR 0004. Diagnostics MUST include divergence norm before/after, λ_h,
-the dimensionless divergence defect, relative projection correction, cumulative and
-shellwise current residuals before/after, and the Ampère compatibility residual. The
-projection is linear ⇒ differentiable ⇒ safe inside Newton.
+projected current with the wrong I_tor(s) is unacceptable. With the terminal L2 order
+paired to HDiv as established in Sec. 7.1, the constraint makes J_h pointwise
+divergence-free to roundoff on affine and curved meshes. On curved elements this is a
+coercion result, not strong containment of a general `div(HDiv)` field in ordinary L2:
+the Piola `1/det(J)` cancels the volume `det(J)` in the weak pairing, reducing the
+constraint to the exact reference-space pairing (ADR 0005). Manufactured tests MUST
+exercise the actual mixed projection on curved ball and torus meshes, verify strong
+divergence at roundoff, and include both an undersized terminal space (which leaves
+visible divergence) and an oversized terminal space (whose redundant constraint makes
+the saddle system singular). Here λ_h is the **continuity multiplier**, not the
+Sec. 7.3 magnetic gauge multiplier; it generally has a legitimate nonzero limit.
+Diagnostics MUST include divergence norm before/after, the continuity-multiplier norm,
+relative projection correction, cumulative and shellwise current residuals before/after,
+and the Ampère compatibility residual. The projection is linear ⇒ differentiable ⇒ safe
+inside Newton.
 If the correction does not converge rapidly under refinement, replace the sequential
 M3-plus-projection construction with a mixed solve coupling u, **J**, and the
 continuity multiplier (ADR required).
@@ -1173,9 +1183,9 @@ unless changed by an ADR citing these measurements.
 **Phase 4 — compatible magnetic kernel.** 4.1 de Rham space/order-pairing tests,
 including the exact curved magnetic subcomplex.
 4.2 gauge-fixed curl–curl with manufactured magnetostatics. 4.3 harmonic flux field on
-a simple analytic torus. 4.4 affine-exact/curved-weak current projection + diagnostics,
-including curved strong-divergence and multiplier convergence and preservation of the
-(M3b) shell-current moments in the current passed to Ampère.
+a simple analytic torus. 4.4 exact paired current projection + diagnostics on affine and
+curved meshes, including wrong-terminal-order controls, Ampère compatibility, and
+preservation of the (M3b) shell-current moments in the current passed to Ampère.
 
 **Phase 5 — reduced end-to-end solver.** 5.1 axisymmetric reduced model per note §11,
 including the normalized p₀(s), I₀(s), and the enclosed-current relation of §11.2.

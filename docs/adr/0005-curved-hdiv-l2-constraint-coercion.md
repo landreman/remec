@@ -122,4 +122,4 @@ the ordinary-L2 projection of a *general* curved `div(HDiv)` field is not a roun
 identity. Neither fact prevents the paired weak constraint from being strongly
 coercive.
 
-## DECISION: pending human sign-off
+## DECISION: Option 1 approved.

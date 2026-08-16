@@ -60,24 +60,34 @@ NGSolve's Piola mappings preserve the magnetic part of the complex on curved geo
 The automated regression uses an order-3 curved, 107-tetrahedron OCC ball at base order
 2: the HCurl-to-HDiv projection defect is \(7.12\times10^{-16}\), and applying `ng.div`
 to that projected HDiv GridFunction gives relative divergence \(7.42\times10^{-15}\).
-A random-HDiv negative control measures 3.28, proving the diagnostic has teeth.
-Ordinary scalar NGSolve `L2`,
-however, is not the density-mapped terminal space on a curved element, so projecting a
-general `div(HDiv)` field into it is not a roundoff identity (measured relative defects
-0.23--0.32 on one coarse, quadrature-sensitive mesh; ADR 0004's h/order sweep and
-mapping argument are the load-bearing evidence). Curved-mesh magnetic verification
-must therefore project `ng.curl(A_h)` into HDiv and evaluate `ng.div(B_h)` on the
-resulting GridFunction; the nested call `ng.div(ng.curl(A_h))` is not supported in
-NGSolve 6.2.2606, and `GridFunction.Diff(ng.x)` is a vacuous coefficient derivative.
-Approved ADR 0004
-therefore preserves magnetic `div(curl)=0` as an exact curved invariant while treating
-the ordinary-L2 current constraint as weak on curved geometry. Milestone 4.4 must
-measure strong-current-divergence and gauge-multiplier convergence and enforce the
-approved dimensionless 0.03 backstop. The API facts are recorded in `docs/dev_notes.md`.
+A random-HDiv negative control measures 3.28, proving the diagnostic has teeth. The
+test loads and asserts these measurements, mesh size, space orders, and degree-of-
+freedom counts from `tests/manufactured/de_rham_curved.csv`.
+
+Ordinary scalar NGSolve `L2` is not the density-mapped terminal space on a curved
+element, so projecting a general `div(HDiv)` field into it is not a roundoff identity
+(measured relative defects 0.23--0.32 on one coarse, quadrature-sensitive mesh). That
+containment fact from ADR 0004 does not weaken the current constraint. ADR 0005 observes
+that the Piola `1/det(J)` in the physical divergence cancels the volume `det(J)` in the
+weak pairing; because the reference divergence spans the paired reference L2 space,
+the constraint forces physical divergence to vanish pointwise. Exploratory §10 mixed
+solves measured relative divergence below 7.0e-16 on curved balls and tori, while an
+undersized terminal space left O(1) divergence and an oversized terminal space made the
+redundant saddle system singular. Milestone 4.4 must turn those pairing controls into
+automated manufactured tests. Its λ is a continuity multiplier with a legitimate
+nonzero limit, not the magnetic gauge multiplier.
+
+Curved-mesh magnetic verification must project `ng.curl(A_h)` into HDiv and evaluate
+`ng.div(B_h)` on the resulting GridFunction; the nested call
+`ng.div(ng.curl(A_h))` is not supported in NGSolve 6.2.2606, and
+`GridFunction.Diff(ng.x)` is a vacuous coefficient derivative. These API facts are
+recorded in `docs/dev_notes.md`.
 
 Mutation checks confirmed that replacing the offsets by equal `order` arguments fails
 the order/dimension contract, and deleting the tetrahedral-family guard fails the
-non-tetrahedral rejection test.
+non-tetrahedral rejection test. Replacing the projected curved curl with a random HDiv
+field fails at O(1) divergence, and changing its checked-in negative-control measurement
+from 3.28 to 3.28e-6 fails the row-specific regression assertion.
 
 ## Milestone 3.7 — constrained gradient-variant comparison
 

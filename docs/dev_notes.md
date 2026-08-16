@@ -21,10 +21,15 @@
   direct `ng.div(ng.curl(A_h))` raises because the intermediate coefficient function
   has no `derivname`. Do not use `B_h.Diff(ng.x)`: for a GridFunction-backed coefficient
   function it is coefficient differentiation and returns zero even for a divergent
-  field. Per approved ADR 0004 Option 4, use `L2` as the weak curved-current
-  divergence-constraint/diagnostic space; do not assert strong curved `div(HDiv)`
-  membership in ordinary `L2`, and measure strong-divergence and multiplier convergence
-  in milestone 4.4. An exploratory
+  field. ADR 0005 Option 1 supersedes ADR 0004's relaxation: although general curved
+  `div(HDiv)` is not strongly contained in ordinary `L2`, the paired weak constraint is
+  exact because the Piola `1/det(J)` cancels the volume `det(J)` and the reference
+  divergence spans the paired reference L2 space. Actual curved §10 saddle solves gave
+  relative divergence below 7.0e-16; an undersized terminal order left O(1) divergence,
+  while an oversized order made the redundant saddle constraint singular. Its λ is a
+  continuity multiplier with a legitimate nonzero limit, not the magnetic gauge
+  multiplier. Milestone 4.4 must automate those positive and negative controls. An
+  exploratory
   `MakeStructured3DMesh(secondorder=True, mapping=<nonlinear>)` construction segfaulted
   in this local wheel; `netgen.occ` mesh generation followed by `mesh.Curve(order)` was
   stable and should be the verification path for curved tetrahedra.

@@ -382,33 +382,33 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   every alternating global dimension is exactly one. On the 107-tetrahedron curved
   ball, the HCurl-to-HDiv defect is 7.12e-16 and the projected field's relative
   divergence is 7.42e-15, while the random-HDiv control is 3.28. See
-  `tests/manufactured/de_rham_pairing.csv` and `docs/verification.md`.
+  `tests/manufactured/de_rham_pairing.csv`, `tests/manufactured/de_rham_curved.csv`, and
+  `docs/verification.md`.
   <br>Next: milestone 4.2 should reuse these tetrahedral offsets for its H1 gauge and
   HCurl vector-potential spaces. On curved tetrahedra measure the (M1) magnetic
   invariant by projecting `curl(A_h)` into HDiv and evaluating `ng.div(B_h)`, because
   `ng.div(ng.curl(A_h))` raises on NGSolve 6.2.2606 and `B_h.Diff(ng.x)` is a vacuous
-  coefficient derivative. NGSolve's ordinary scalar L2 is a weak diagnostic/
-  constraint space, not the Piola density-mapped strong image of `div(HDiv)`; approved
-  ADR 0004 keeps magnetic divergence exact and makes curved-current divergence a
-  measured convergence invariant.
+  coefficient derivative. A general curved `div(HDiv)` field is not strongly contained
+  in ordinary scalar L2, but ADR 0005 establishes that the paired weak constraint still
+  forces current divergence to zero pointwise through determinant cancellation.
 - [ ] **4.2** Gauge-fixed curl–curl — `DESIGN.md` §7.3, §11 · note: §6 (M1)
   <br>Acceptance: manufactured magnetostatics; gauge null-space handled.
   <br>Measured: —
 - [ ] **4.3** Harmonic flux field on an analytic torus — `DESIGN.md` §7.2 · note: §6 (M1)
   <br>Measured: —
 - [ ] **4.4** Constrained current projection — `DESIGN.md` §10 · note: (M1)–(M3b), §5.4
-  <br>Acceptance: discrete ∇·B at roundoff; affine current divergence at roundoff;
-  on curved geometry, checked-in rate tables demonstrate predicted strong-divergence
-  and gauge-multiplier convergence under both h- and geometry-order refinement, with
-  production `L_ref ||div J_h||_L2 / ||J_h||_L2 < 0.03`; Ampère compatibility; projected
-  current preserves the prescribed (M3b) shell moments I_tor(s)=I₀(s) to the stated
-  tolerance. If the curved gauge multiplier stalls at a nonzero value, revisit ADR 0004.
+  <br>Acceptance: discrete ∇·B and paired projected-current divergence at roundoff on
+  affine and curved geometry; curved ball and torus mixed-projection tests include the
+  paired terminal order as a positive control, an undersized order that leaves visible
+  divergence, and an oversized order whose redundant constraint is detected as
+  singular; Ampère compatibility; projected current preserves the prescribed (M3b)
+  shell moments I_tor(s)=I₀(s) to the stated tolerance. Report the continuity-multiplier
+  norm, but do not require it to vanish.
   <br>Measured: —
-  <br>Design input: ADR 0004 Option 4 approved; ordinary scalar L2 is the weak curved
-  constraint space, while strong current divergence is a measured convergence invariant.
-  ADR 0005 is now pending because direct §10 mixed-projection measurements contradict
-  that inference and recover pointwise divergence freedom at roundoff with the paired
-  terminal order. Do not implement 4.4 until the supersession question is signed off.
+  <br>Design input: ADR 0005 Option 1 approved, superseding ADR 0004. General curved
+  `div(HDiv)` is not strongly contained in ordinary scalar L2, but determinant
+  cancellation makes the paired weak constraint pointwise coercive. Its λ is the
+  continuity multiplier and may have a nonzero limit.
 
 ## Phase 5 — reduced end-to-end solver
 
@@ -489,5 +489,5 @@ that dependency. Phase 7 may run in parallel with Phase 8.
 | ADR | Affected milestone | Question | Status |
 |---|---|---|---|
 | 0003 | 2.3 | Must the M4b mollifier-width JVP differentiate `epsilon = c h |grad chi|`? | Option 1 accepted |
-| 0004 | 4.4 | What terminal space/constraint makes curved HDiv current strongly divergence-free? | Option 4 approved; challenged by ADR 0005 |
-| 0005 | 4.4 | Does the paired ordinary-L2 constraint coerce curved HDiv divergence pointwise to zero? | Pending human sign-off |
+| 0004 | 4.4 | What terminal space/constraint makes curved HDiv current strongly divergence-free? | Option 4 superseded by ADR 0005 |
+| 0005 | 4.4 | Does the paired ordinary-L2 constraint coerce curved HDiv divergence pointwise to zero? | Option 1 approved |
