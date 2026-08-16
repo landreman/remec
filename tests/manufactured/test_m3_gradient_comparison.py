@@ -32,6 +32,7 @@ def _recorded_du_rows() -> dict[tuple[str, float], dict[str, float]]:
                 name: float(row[name])
                 for name in (
                     "epsilon_j",
+                    "epsilon_kappa_over_epsilon_j",
                     "cross_variant_relative_l2",
                     "cross_variant_over_epsilon_j",
                     "multiplier_current_l2",
@@ -65,6 +66,8 @@ def _recorded_misalignment_rows() -> dict[tuple[str, str], dict[str, float]]:
                     "cross_variant_relative_l2",
                     "misalignment_amplification",
                     "multiplier_current_l2",
+                    "g_advection_coupling_l2",
+                    "g_reaction_coupling_l2",
                     "minimum_shell_radial_cells",
                     "minimum_shell_mollifier_widths",
                 )
@@ -382,18 +385,20 @@ def test_constrained_comparison_reports_cost_and_invariant_diagnostics(
     assert active_floor_result.diagnostics["floor_activity_l2"] > 0.25
 
 
-def test_fixed_state_variants_are_o_epsilon_j_and_have_one_common_limit(
+def test_fixed_state_variants_are_o_epsilon_j_but_target_is_not_admissible(
     resonant_scan: dict[float, dict[str, tuple[ConstrainedCurrentContinuitySolver, Any]]],
 ) -> None:
-    r"""At fixed ``(B,p,s,I_0,drive)``, disagreement is ``O(epsilon_J)`` and vanishes."""
+    r"""The fixed-state gap is ``O(epsilon_J)`` while mean ``utilde`` grows as ``1/D_u``."""
     recorded = _recorded_du_rows()
     differences: list[float] = []
     multiplier_norms: dict[str, list[float]] = {"perpendicular": [], "full": []}
+    shell_mean_products: dict[str, list[float]] = {"perpendicular": [], "full": []}
     for diffusivity in (0.04, 0.02, 0.01):
         perpendicular, perpendicular_result = resonant_scan[diffusivity]["perpendicular"]
         full, full_result = resonant_scan[diffusivity]["full"]
         difference = _relative_l2_difference(perpendicular, full)
         epsilon_j = diffusivity / sqrt(4.0001)  # Bbar=min |B|; reference length is one.
+        epsilon_kappa_over_epsilon_j = 0.01 / diffusivity
         differences.append(difference)
 
         assert 0.8 < difference / epsilon_j < 1.3
@@ -410,6 +415,10 @@ def test_fixed_state_variants_are_o_epsilon_j_and_have_one_common_limit(
         ):
             expected = recorded[variant, diffusivity]
             assert epsilon_j == pytest.approx(expected["epsilon_j"], abs=1.0e-14)
+            assert epsilon_kappa_over_epsilon_j == pytest.approx(
+                expected["epsilon_kappa_over_epsilon_j"],
+                abs=1.0e-14,
+            )
             assert difference == pytest.approx(
                 expected["cross_variant_relative_l2"],
                 rel=5.0e-6,
@@ -435,7 +444,6 @@ def test_fixed_state_variants_are_o_epsilon_j_and_have_one_common_limit(
                 rel=5.0e-6,
             )
             assert result.diagnostics["maximum_shell_mean_utilde"] > 1.0e-6
-            assert result.diagnostics["maximum_shell_mean_utilde"] < 1.0
             assert result.diagnostics["g_advection_coupling_l2"] > 1.0e-3
             assert result.diagnostics["g_reaction_coupling_l2"] > 1.0e-12
             assert result.diagnostics["regularizing_toroidal_current_l2"] == pytest.approx(
@@ -443,14 +451,34 @@ def test_fixed_state_variants_are_o_epsilon_j_and_have_one_common_limit(
                 rel=5.0e-6,
             )
             multiplier_norms[variant].append(result.diagnostics["multiplier_current_l2"])
+            shell_mean_products[variant].append(
+                diffusivity * result.diagnostics["maximum_shell_mean_utilde"]
+            )
+            assert result.diagnostics["minimum_field_magnitude"] == pytest.approx(
+                expected["minimum_field_magnitude"],
+                rel=5.0e-6,
+            )
+            assert result.diagnostics["minimum_shell_radial_cells"] == pytest.approx(
+                expected["minimum_shell_radial_cells"],
+                rel=5.0e-6,
+            )
+            assert result.diagnostics["minimum_shell_mollifier_widths"] == pytest.approx(
+                expected["minimum_shell_mollifier_widths"],
+                rel=5.0e-6,
+            )
 
-    convergence_rate = log(differences[-2] / differences[-1]) / log(2.0)
+    convergence_rates = [
+        log(differences[index] / differences[index + 1]) / log(2.0)
+        for index in range(len(differences) - 1)
+    ]
     assert differences == sorted(differences, reverse=True)
     assert differences[-1] < 0.3 * differences[0]
-    assert convergence_rate > 0.8
+    assert min(convergence_rates) > 0.8
     for norms in multiplier_norms.values():
         assert norms == sorted(norms, reverse=True)
         assert norms[-1] < 0.3 * norms[0]
+    for products in shell_mean_products.values():
+        assert max(products) / min(products) < 1.02
 
 
 def test_resonant_layer_records_smearing_oscillation_and_parallel_noise(
@@ -550,6 +578,14 @@ def test_field_misalignment_sensitivity_has_an_aligned_control() -> None:
             )
             assert result.diagnostics["multiplier_current_l2"] == pytest.approx(
                 expected["multiplier_current_l2"],
+                rel=5.0e-3,
+            )
+            assert result.diagnostics["g_advection_coupling_l2"] == pytest.approx(
+                expected["g_advection_coupling_l2"],
+                rel=5.0e-3,
+            )
+            assert result.diagnostics["g_reaction_coupling_l2"] == pytest.approx(
+                expected["g_reaction_coupling_l2"],
                 rel=5.0e-3,
             )
             assert result.diagnostics["minimum_shell_radial_cells"] == pytest.approx(

@@ -335,11 +335,16 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   resonant `(B,p,s,I₀,drive)` state, D_u = 0.04 → 0.02 → 0.01 reduces the relative
   physical-u cross-variant difference from 2.0207e-2 → 1.0489e-2 → 5.1913e-3,
   with difference/ε_J = 1.0104 / 1.0489 / 1.0383 and adjacent decay rates 0.946 /
-  1.015. A fixed B_x=0.01 makes the bordered P block nonzero:
-  ‖B·∇G‖₂ = 3.86e-3 → 4.06e-3 and maximum |⟨ũ⟩| = 8.74e-3 → 3.539e-2,
-  so neither admissibility monitor is a structural zero. Both variants independently
-  realize the same I₀ below 2.99e-17 relative, while the multiplier-current norm falls
-  from about 1.55e-2 → 4.06e-3. The nonuniform ∇φ makes the regularizing
+  1.015. A fixed B_x=0.01 makes the bordered P block nonzero. This fixed-εκ target is
+  explicitly rejected as a strict admissible D_u→0 sequence: εκ/ε_J = 0.25 / 0.50 /
+  1.00, maximum |⟨ũ⟩| grows 8.74e-3 → 3.539e-2, and
+  D_u max|⟨ũ⟩| stays within 1.02 at about 3.5e-4. Thus the scan establishes the
+  cross-variant O(ε_J) gap, not a regular common physical limit; milestone 3.6 records
+  the vanishing-mean admissible-family check. Both variants independently realize the
+  same I₀ below 2.99e-17 relative, while the multiplier-current norm falls from about
+  1.55e-2 → 4.06e-3. The resonant P coupling is carried by the advection term
+  (‖B·∇G‖₂ = 3.86e-3 → 4.06e-3); the misalignment table separately pins its nonzero
+  reaction contribution. The nonuniform ∇φ makes the regularizing
   toroidal-current norm nonzero and variant-distinct (1.109e-2 / 9.955e-3 at
   D_u=0.02). At that D_u, the ∇⊥/full layer FWHM values are 0.41050 / 0.40702
   (9.85 / 9.77 normal cells), both have one radial turning point, and full ∇ lowers
@@ -349,8 +354,8 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   giving misalignment amplifications of 1.395 / 1.278. Each frozen solve records one
   A assembly/factorization, five direct responses, and four within-call factorization
   reuses; Krylov iterations are not applicable and the preconditioner is none.
-  Separated bordered-solve timings favor full ∇ by 8.03% (resonant) and 3.88%
-  (misaligned), but single-run wall times are volatile and cross-iteration reuse is not
+  Across the resonant rows, full ∇ assembles A about 2.3 times faster; bordered-solve
+  differences are below the run-to-run timing spread. Cross-iteration reuse is not
   implemented. The evidence does not justify changing the default from ∇⊥. See
   `tests/manufactured/m3_gradient_du_limit.csv`,
   `tests/manufactured/m3_gradient_misalignment.csv`, and `docs/verification.md`.

@@ -49,23 +49,37 @@ $\epsilon_J=D_u/\sqrt{4.0001}$. The resulting order-unity normalized coefficient
 specific to that conservative $\bar B$ convention and is not assigned physical
 significance.
 
-| $D_u$ | $\epsilon_J$ | relative $u_\perp-u_{\rm full}$ L² | difference / $\epsilon_J$ |
-| ---: | ---: | ---: | ---: |
-| 0.04 | 0.0199998 | 2.0207e-2 | 1.0104 |
-| 0.02 | 0.0099999 | 1.0489e-2 | 1.0489 |
-| 0.01 | 0.0049999 | 5.1913e-3 | 1.0383 |
+| $D_u$ | $\epsilon_J$ | $\epsilon_\kappa/\epsilon_J$ | relative $u_\perp-u_{\rm full}$ L² | difference / $\epsilon_J$ |
+| ---: | ---: | ---: | ---: | ---: |
+| 0.04 | 0.0199998 | 0.25 | 2.0207e-2 | 1.0104 |
+| 0.02 | 0.0099999 | 0.50 | 1.0489e-2 | 1.0489 |
+| 0.01 | 0.0049999 | 1.00 | 5.1913e-3 | 1.0383 |
 
-The adjacent decay rates are 0.946 and 1.015, so the disagreement is measured
-$O(\epsilon_J)$ and both variants approach one common limit on a genuinely fixed
-state. Each variant realizes the same input current with independent M3b relative
-residual below $2.99\times10^{-17}$. The target is admissible over the measured scan: for
-$D_u=0.04\to0.01$, the multiplier-current norm falls from about
-$1.55\times10^{-2}$ to $4.06\times10^{-3}$, while the maximum shell
-$|\langle\tilde u\rangle|$ is nonzero and bounded, increasing from 0.00874 to
-0.03539. The actual multiplier-to-$\tilde u$ forcing is also nonzero:
-$\|\mathbf B\cdot\nabla G\|_2=3.86\times10^{-3}$ to $4.06\times10^{-3}$ and the
-reaction contribution is $2.65\times10^{-12}$ to $3.04\times10^{-12}$. Thus neither
-admissibility monitor is a structural zero. The smooth-floor
+The adjacent decay rates are 0.946 and 1.015, so the cross-variant disagreement is
+measured $O(\epsilon_J)$ on this genuinely fixed state. Each variant realizes the same
+input current with independent M3b relative residual below $2.99\times10^{-17}$.
+However, this fixed-$\epsilon_\kappa$ target is **not** a strict admissible
+$D_u\to0$ sequence under note §5.5(vii): as
+$\epsilon_\kappa/\epsilon_J$ rises from 0.25 to 1.00, the maximum shell
+$|\langle\tilde u\rangle|$ rises from about 0.00874 to 0.03539. The checked test pins
+$D_u\max_s|\langle\tilde u\rangle_s|$ to within a factor 1.02 (about
+$3.49\times10^{-4}$ to $3.54\times10^{-4}$), demonstrating the observed $1/D_u$
+growth instead of calling it bounded. The note's vanishing-mean condition requires
+$\epsilon_\kappa\to0$ alongside $D_u$; milestone 3.6 records that admissible-family
+behavior. The smallest row here is already poorly separated
+($\epsilon_\kappa/\epsilon_J=1$), so this table supports only the measured
+cross-variant $O(\epsilon_J)$ statement, not convergence to a regular common physical
+limit. The multiplier-current norm nevertheless falls from about
+$1.55\times10^{-2}$ to $4.06\times10^{-3}$, with adjacent rates 0.983 and 0.942.
+
+The actual multiplier-to-$\tilde u$ forcing is nonzero. In the resonant scan the
+coupling is carried by the advection term
+$-G'\mathbf B\cdot\nabla s$, whose L² norm is
+$3.86\times10^{-3}$ to $4.06\times10^{-3}$; the reaction share is only
+$2.65\times10^{-12}$ to $3.04\times10^{-12}$ because this benchmark uses
+$\mu_0=10^{-8}$. The misalignment table separately pins both contributions, with
+advection norms 1.92--2.24 and reaction norms 0.0109--0.0132, so the reaction path is
+not inferred from the numerically negligible resonant share. The smooth-floor
 activity, evaluated directly as the L² norm of
 $B_{\rm floor}^2/(B^2+B_{\rm floor}^2)$, is $1.735\times10^{-17}$ with sampled
 $\min|\mathbf B|=2.000025$; a separate $B_{\rm floor}=2$ case exceeds 0.25 and
@@ -102,7 +116,10 @@ comparison merely measuring ordinary refinement error. The fine-grid cross-varia
 differences are $3.9467\times10^{-2}$ aligned and $2.9210\times10^{-2}$ misaligned.
 The larger aligned cross-variant difference does not mean its mesh sensitivity is
 worse: misalignment is measured by the within-variant coarse/fine amplification above,
-not by the absolute distance between closures.
+not by the absolute distance between closures. Rotating the field for the aligned
+control also changes $\mathbf B\cdot\nabla p$ and $\mathbf B\cdot\nabla s$ by 7.6%, so
+the absolute amplification includes a small state change; the ratio between the two
+variant amplifications, $1.395/1.278\simeq1.09$, is the comparative signal.
 The multiplier-current norms are also variant-distinct in both controls, and all
 independently evaluated M3b residuals remain below $7.01\times10^{-17}$. These rows
 are in
@@ -116,12 +133,11 @@ are `not_applicable` and the preconditioner is `none`. No cross-call cache exist
 the frozen API; Phase 5 must measure cross-iteration reuse in the actual Picard driver.
 The timing columns separate $A$ assembly, right-hand-side assembly, diagnostic-only
 SUPG assembly, factorization/responses, the bordered production solve, post-solve
-diagnostics, and the total call. At $D_u=0.02$, transverse/full $A$ assembly times are
-0.1485/0.06515 s (56.1% lower for full ∇), while bordered-solve times are
-1.0482/0.9640 s (8.03% lower). On the fine misaligned mesh those pairs are
-0.2206/0.1272 s (42.3%) and 1.9317/1.8568 s (3.88%). These single-run local wall
-times are volatile and show only a modest end-to-end difference; they do not establish
-a nonlinear cache or preconditioner advantage.
+diagnostics, and the total call. Across the three resonant rows, full-∇ assembles $A$
+about 2.3 times faster (within-row transverse/full ratios 2.21--2.46); the fine
+misalignment ratio is 1.73. Bordered-solve differences are below the observed
+run-to-run timing spread and are not attributed to either closure. These single-run
+local wall times do not establish a nonlinear cache or preconditioner advantage.
 
 The full-gradient closure provides small damping and smearing changes, lower absolute
 h-sensitivity in both alignment controls, and modest local timing differences in these
