@@ -5,6 +5,17 @@
 > descriptions of NGSolve expression behavior, but not of the production current-profile
 > closure. Follow `DESIGN.md` §9.2 and `STATUS.md` milestones 3.5–3.6.
 
+- Milestone 4.3 (Netgen/NGSolve 6.2.2606): `netgen.csg.Torus` generated 45,205
+  tetrahedra for the R=2, a=0.6 verification torus regardless of requested `maxh` in
+  the tested 0.65--2.0 range. Revolving an OCC `WorkPlane` circular face around the
+  z-axis produced a deterministic 1,414-tetrahedron mesh and remained stable under
+  `mesh.Curve(order)` for orders 1--4. Exact-disk Gauss points near the boundary can
+  lie outside the piecewise-linear order-1 volume mesh, so the analytic poloidal-cut
+  acceptance diagnostic evaluates its supplied normal-component callable directly;
+  it does not pretend that the faceted mesh contains the exact cut. The volume form
+  still evaluates the NGSolve coefficient on the curved torus and separately reports
+  its boundary-normal geometry error.
+
 - Milestone 4.2 (NGSolve 6.2.2606): the symmetric Coulomb-gauge saddle form on
   `FESpace([HCurl, H1])` is invertible with UMFPACK when both spaces carry the full
   fixed-boundary trace (`dirichlet=".*"`). For a compatible analytic current,

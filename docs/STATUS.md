@@ -415,8 +415,22 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   Before putting the block inside a Picard loop, separate tetrahedral order validation
   from `make_tetrahedral_de_rham_sequence` allocation so each solve does not construct
   four unused validation spaces.
-- [ ] **4.3** Harmonic flux field on an analytic torus — `DESIGN.md` §7.2 · note: §6 (M1)
-  <br>Measured: —
+- [x] **4.3** Harmonic flux field on an analytic torus — `DESIGN.md` §7.2 · note: §6 (M1)
+  <br>Measured: macOS / CPython 3.12.2 / NGSolve 6.2.2606 — on the circular
+  torus R=2, a=0.6, the normalized harmonic field
+  `B_h=C(-y,x,0)/(x²+y²)` has independently integrated poloidal-cut flux
+  0.9999999999997669 (absolute error 2.33e-13). Across curved geometry orders
+  1 → 2 → 3 → 4 on 1,414 tetrahedra, the boundary-normal/volume norm falls
+  1.1123e-1 → 5.8917e-3 → 2.9034e-3 → 1.0541e-4; weak curl and divergence
+  residuals remain below 8.52e-18. Absolute volume error decreases at every order,
+  reaching 1.67e-5 (1.18e-6 relative), and sampled |B_h| stays in
+  [0.66448, 1.23427]. A zero-tangential-trace manufactured curl has toroidal flux
+  below 1e-10. See `tests/manufactured/harmonic_flux_torus.csv` and
+  `docs/verification.md`.
+  <br>Next: milestone 4.4 should use the order-4 analytic torus when testing the paired
+  current projection on curved multiply connected geometry, preserve the harmonic
+  coefficient outside the curl–curl solve, and distinguish the measured 1.05e-4 geometry
+  tangency defect from the algebraic div(curl) invariant.
 - [ ] **4.4** Constrained current projection — `DESIGN.md` §10 · note: (M1)–(M3b), §5.4
   <br>Acceptance: discrete ∇·B and paired projected-current divergence at roundoff on
   affine and curved geometry; curved ball and torus mixed-projection tests include the

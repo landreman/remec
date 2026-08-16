@@ -11,6 +11,57 @@
 > numbers remain valid. Milestone 3.5 migrated the public contract and layer-cake
 > oracle to p₀(s) and the factor V_Ω∫₀¹·ds.
 
+## Milestone 4.3 — harmonic flux on an analytic torus
+
+The circular solid torus
+
+\[
+(\sqrt{x^2+y^2}-R)^2+z^2<a^2,\qquad R=2,\quad a=0.6,
+\]
+
+links the cylindrical axis. Its nontrivial harmonic component for note (M1) is
+
+\[
+\mathbf B_h=C\nabla\phi
+=C\frac{(-y,x,0)}{x^2+y^2},\qquad
+C^{-1}=2\pi\left(R-\sqrt{R^2-a^2}\right).
+\]
+
+The normalization follows from an analytic integral only when constructing the field;
+the acceptance diagnostic independently applies 24-by-24 Gauss quadrature to
+\(\mathbf B_h\cdot\mathbf e_y\) on the \(\phi=0\) poloidal disk. It measures
+\(0.9999999999997669\), an absolute unit-flux error of \(2.33\times10^{-13}\). The
+weak curl and divergence diagnostics assemble the analytic residual against scalar and
+vector H¹ test spaces and report their mass-Riesz norms relative to \(\|B_h\|_2\).
+
+The OCC torus is curved at geometry orders 1--4 on one deterministic 1,414-tetrahedron
+mesh. The checked-in table `tests/manufactured/harmonic_flux_torus.csv` is reproduced in
+full:
+
+| geometry order | volume | weak curl residual | weak div residual | boundary-normal / volume norm |
+| ---: | ---: | ---: | ---: | ---: |
+| 1 | 13.65983927 | 8.37e-18 | 2.97e-18 | 1.1123e-1 |
+| 2 | 14.20666427 | 8.51e-18 | 2.93e-18 | 5.8917e-3 |
+| 3 | 14.21316539 | 7.60e-18 | 2.59e-18 | 2.9034e-3 |
+| 4 | 14.21224706 | 6.35e-18 | 2.26e-18 | 1.0541e-4 |
+
+The exact volume is \(2\pi^2Ra^2=14.21223034\); absolute volume error and the
+boundary-normal geometry error both decrease at every order. The finest volume relative
+error is \(1.18\times10^{-6}\). Sampled \(|B_h|\) stays positive on every row, with
+global extrema 0.66448 and 1.23427. Thus invariant 1 is preserved analytically and the
+remaining tangency defect is explicitly measured as curved-geometry error rather than
+misreported as algebraic roundoff.
+
+A manufactured vector potential
+\(A_z=[a^2-((R_{\rm cyl}-R)^2+z^2)](1+0.2x+0.1z)\) vanishes on the exact boundary.
+Its projection into `HCurl(order=2, dirichlet=".*")`, with constrained DOFs eliminated,
+has measured tangential-trace norm below \(10^{-14}\). Independent cut quadrature
+measures the toroidal flux of the analytic \(\nabla\times A\) below \(10^{-10}\),
+verifying that the essential zero tangential trace cannot change the harmonic flux
+coefficient. Mutation checks are conspicuous: halving \(C\) changes the measured flux
+to 0.5, and rotating \(B_h\) from toroidal to radial raises the finest boundary-normal
+ratio from \(1.05\times10^{-4}\) to 1.32.
+
 ## Milestone 4.2 — gauge-fixed curl–curl magnetostatics
 
 The fixed-boundary magnetic kernel solves the mixed Coulomb-gauge form of note (M1),
