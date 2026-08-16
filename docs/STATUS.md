@@ -373,16 +373,17 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   identities at order-scaled roundoff, with exact Euler characteristic one; load and
   assert every row of the checked-in measurement table; reject element families and
   orders whose NGSolve convention has not been established. On an order-3 curved OCC
-  tetrahedral ball, verify the HCurl-to-HDiv mapping and `ng.div` of that projected HDiv
-  field below 1e-12, while a random-HDiv negative control remains conspicuously nonzero.
+  tetrahedral ball at base orders 0--5, verify the HCurl-to-HDiv mapping and strong
+  divergence of that projected HDiv field below the curved-calibrated order-scaled gate
+  `128 eps (p+2)^3`, while a random-HDiv negative control remains conspicuously nonzero.
   <br>Measured: macOS / CPython 3.12.2 / NGSolve 6.2.2606 — the affine tetrahedral
   sequence is `H1(p+1) -> HCurl(p) -> HDiv(max(p-1,0)) -> L2(max(p-2,0))`.
   Across twelve mesh/order rows the maximum individual mapping defect is 2.42e-14,
   maximum `curl(grad)` defect is 1.15e-12, and maximum `div(curl)` defect is 2.40e-13;
-  every alternating global dimension is exactly one. On the 107-tetrahedron curved
-  ball, the measured volume is 4.1894736 (unit-sphere reference 4.1887902), the
-  HCurl-to-HDiv defect is 7.12e-16, and the projected field's relative divergence is
-  7.42e-15, while the random-HDiv control is 3.28. See
+  every alternating global dimension is exactly one. Across base orders 0--5 on the
+  107-tetrahedron curved ball, the measured volume is 4.1894736 (unit-sphere reference
+  4.1887902), the maximum HCurl-to-HDiv defect is 1.04e-14, maximum projected-field
+  relative divergence is 2.79e-12, and the smallest random-HDiv control is 2.71. See
   `tests/manufactured/de_rham_pairing.csv`, `tests/manufactured/de_rham_curved.csv`, and
   `docs/verification.md`.
   <br>Next: milestone 4.2 should reuse these tetrahedral offsets for its H1 gauge and
@@ -402,8 +403,8 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   affine and curved geometry; curved ball and torus mixed-projection tests include the
   paired terminal order as a positive control, an undersized order that leaves visible
   divergence, and an oversized order whose extra constraint rows are proven redundant
-  by a rank test independent of factorization behavior; Ampère compatibility; projected
-  current preserves the prescribed (M3b)
+  at relative singular-value tolerance 1e-10 by a rank test independent of factorization
+  behavior; Ampère compatibility; projected current preserves the prescribed (M3b)
   shell moments I_tor(s)=I₀(s) to the stated tolerance. Report the continuity-multiplier
   norm, but do not require it to vanish.
   <br>Measured: —

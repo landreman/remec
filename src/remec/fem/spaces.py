@@ -38,8 +38,8 @@ def make_tetrahedral_de_rham_sequence(mesh: Any, *, order: int) -> DeRhamSequenc
     """Build the tetrahedral discrete de Rham complex used to preserve (M1).
 
     ``order`` is the HCurl/base order ``p``, not the independent H1 order used for
-    ``chi`` and ``utilde`` elsewhere in DESIGN section 7.1.  Base orders 0--5 are
-    covered by the manufactured verification table.
+    ``chi`` and ``utilde`` elsewhere in DESIGN section 7.1. Base orders 0--5 are
+    covered by the affine and curved manufactured verification tables.
 
     Implements the space pairing
     ``H1(p+1) --grad--> HCurl(p) --curl--> HDiv(max(p-1, 0))

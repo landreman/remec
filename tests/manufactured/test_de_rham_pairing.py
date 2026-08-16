@@ -42,16 +42,22 @@ def _recorded_rows() -> dict[tuple[int, int], dict[str, str]]:
     return indexed
 
 
-def _recorded_curved_row() -> dict[str, str]:
+def _recorded_curved_rows() -> dict[int, dict[str, str]]:
     with _CURVED_TABLE_PATH.open(newline="", encoding="utf-8") as stream:
         rows = list(csv.DictReader(stream))
-    assert len(rows) == 1, "curved verification table must contain exactly one row"
-    return rows[0]
+    indexed = {int(row["base_order"]): row for row in rows}
+    assert len(indexed) == len(rows), "curved verification table contains duplicate orders"
+    return indexed
 
 
 def _roundoff_gate(base_order: int) -> float:
     """Scale roundoff allowance with polynomial degree and basis conditioning."""
     return float(32.0 * np.finfo(float).eps * (base_order + 2) ** 3)
+
+
+def _curved_roundoff_gate(base_order: int) -> float:
+    """Allow mapped-basis conditioning measured across curved base orders 0--5."""
+    return float(128.0 * np.finfo(float).eps * (base_order + 2) ** 3)
 
 
 def _recorded_defect_gate(recorded: float) -> float:
@@ -210,7 +216,8 @@ def test_tetrahedral_de_rham_sequence_maps_and_composes_at_roundoff(
         )
 
 
-def test_curved_tetrahedral_magnetic_subcomplex_composes_at_roundoff() -> None:
+@pytest.mark.parametrize("base_order", _BASE_ORDERS)
+def test_curved_tetrahedral_magnetic_subcomplex_composes_at_roundoff(base_order: int) -> None:
     """The magnetic half of (M1) remains exact on curved tetrahedra.
 
     ADR 0005 distinguishes the exact HCurl-to-HDiv composition from ordinary-L2
@@ -218,7 +225,7 @@ def test_curved_tetrahedral_magnetic_subcomplex_composes_at_roundoff() -> None:
     mapping and then applies ``ng.div`` to the projected HDiv GridFunction. A random
     HDiv negative control proves the diagnostic is not a vacuous symbolic derivative.
     """
-    recorded = _recorded_curved_row()
+    recorded = _recorded_curved_rows()[base_order]
     assert recorded["geometry"] == "occ_ball"
     geometry = OCCGeometry(Sphere(Pnt(0.0, 0.0, 0.0), 1.0))
     mesh = ng.Mesh(geometry.GenerateMesh(maxh=0.9))
@@ -226,7 +233,6 @@ def test_curved_tetrahedral_magnetic_subcomplex_composes_at_roundoff() -> None:
     assert geometry_order >= 2, "curved regression requires non-affine geometry"
     mesh.Curve(geometry_order)
 
-    base_order = int(recorded["base_order"])
     sequence = make_tetrahedral_de_rham_sequence(mesh, order=base_order)
     assert mesh.ne == int(recorded["elements"])
     assert sequence.hcurl_order == int(recorded["hcurl_order"])
@@ -271,9 +277,9 @@ def test_curved_tetrahedral_magnetic_subcomplex_composes_at_roundoff() -> None:
     recorded_curl_defect = float(recorded["curl_mapping_defect"])
     recorded_divergence_defect = float(recorded["div_curl_defect"])
     recorded_control = float(recorded["divergent_control"])
-    assert curl.relative_defect < 1.0e-12
+    assert curl.relative_defect < _curved_roundoff_gate(base_order)
     assert curl.relative_defect <= _recorded_defect_gate(recorded_curl_defect)
-    assert divergence_defect < 1.0e-12
+    assert divergence_defect < _curved_roundoff_gate(base_order)
     assert divergence_defect <= _recorded_defect_gate(recorded_divergence_defect)
     assert control_divergence_defect > 1.0e-2
     assert recorded_control / 8.0 <= control_divergence_defect <= 8.0 * recorded_control
@@ -285,6 +291,7 @@ def test_de_rham_pairing_table_covers_the_validated_sweep_exactly() -> None:
     assert set(rows) == {
         (subdivisions, base_order) for subdivisions in _SUBDIVISIONS for base_order in _BASE_ORDERS
     }
+    assert set(_recorded_curved_rows()) == set(_BASE_ORDERS)
 
 
 @pytest.mark.parametrize("bad_order", [-1, 6, True, 1.5])

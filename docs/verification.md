@@ -57,15 +57,26 @@ and bounds each recomputed defect against its recorded row. The record is
 `tests/manufactured/de_rham_pairing.csv`.
 
 NGSolve's Piola mappings preserve the magnetic part of the complex on curved geometry.
-The automated regression uses an order-3 curved, 107-tetrahedron OCC ball at base order
-2: the HCurl-to-HDiv projection defect is \(7.12\times10^{-16}\), and applying `ng.div`
-to that projected HDiv GridFunction gives relative divergence \(7.42\times10^{-15}\).
-A random-HDiv negative control measures 3.28, proving the diagnostic has teeth. The
-test loads and asserts these measurements, mesh size, space orders, degree-of-freedom
-counts, and the curved volume 4.1894736 from
-`tests/manufactured/de_rham_curved.csv`. It also checks that the volume is within
-2e-3 of the unit-sphere value 4.1887902, so changing the geometry order to an affine
-mesh cannot preserve the test.
+The automated regression uses an order-3 curved, 107-tetrahedron OCC ball across every
+validated base order 0--5. Mapped-basis conditioning grows more quickly than in the
+affine sweep, so the independently calibrated roundoff gate is
+\(128\epsilon_{\rm mach}(p+2)^3\):
+
+| base p | HCurl/HDiv orders | curl mapping defect | div(curl) defect | random-HDiv control | curved gate |
+| ---: | :---: | ---: | ---: | ---: | ---: |
+| 0 | 0/0 | 3.69e-16 | 2.53e-15 | 4.33 | 2.27e-13 |
+| 1 | 1/0 | 3.70e-16 | 2.49e-15 | 4.33 | 7.67e-13 |
+| 2 | 2/1 | 7.09e-16 | 7.46e-15 | 3.28 | 1.82e-12 |
+| 3 | 3/2 | 2.10e-15 | 8.03e-14 | 2.84 | 3.55e-12 |
+| 4 | 4/3 | 5.09e-15 | 7.43e-13 | 2.75 | 6.14e-12 |
+| 5 | 5/4 | 1.04e-14 | 2.79e-12 | 2.71 | 9.75e-12 |
+
+The negative controls remain O(1), proving the divergence diagnostic has teeth, while
+the worst curved-gate utilization is 0.287. The test loads and asserts these
+measurements, mesh size, space orders, degree-of-freedom counts, and curved volume from
+all six rows of `tests/manufactured/de_rham_curved.csv`. The volume 4.1894736 is also
+checked within 2e-3 of the unit-sphere value 4.1887902, so changing the geometry order
+to an affine mesh cannot preserve the test.
 
 Ordinary scalar NGSolve `L2` is not the density-mapped terminal space on a curved
 element, so projecting a general `div(HDiv)` field into it is not a roundoff identity
@@ -77,8 +88,10 @@ the constraint forces physical divergence to vanish pointwise. Exploratory §10 
 solves measured relative divergence below 7.0e-16 on curved balls and tori, while an
 undersized terminal space left O(1) divergence. For the oversized `HDiv(2)-L2(2)`
 control, the constraint block has rank 428 across 1070 rows, directly exposing 642
-redundant rows independent of whether a chosen factorization raises. Milestone 4.4 must
-turn those pairing controls into automated manufactured tests. Its λ is a continuity
+redundant rows independent of whether a chosen factorization raises. Its relative
+smallest singular value is 1.05e-15, versus 2.02e-2 for the full-rank paired block;
+relative numerical-rank tolerance 1e-10 therefore separates them cleanly. Milestone 4.4
+must turn those pairing controls into automated manufactured tests. Its λ is a continuity
 multiplier with a legitimate nonzero limit, not the magnetic gauge multiplier; alternate
 trace choices that leave a constant kernel require mean-zero normalization before its
 norm is reported.
@@ -96,7 +109,9 @@ field fails at O(1) divergence, and changing its checked-in negative-control mea
 from 3.28 to 3.28e-6 fails the row-specific regression assertion. Changing the recorded
 geometry order from 3 to 1 fails the explicit non-affine-order assertion; even without
 that assertion, the measured volume changes from 4.1894736 to 3.7960606 and fails the
-independent curvature check.
+independent curvature check. Extending the curved table from only base order 2 to the
+validated 0--5 sweep makes a fixed 1e-12 divergence ceiling fail at p=5 (2.79e-12),
+while the curved-calibrated order-scaled gate passes with 29% utilization.
 
 ## Milestone 3.7 — constrained gradient-variant comparison
 

@@ -68,7 +68,9 @@ Varying only the terminal order on the same curved ball made the pairing decisiv
 
 The solver-independent oversized negative control is the constraint block's rank
 deficiency and redundant rows, not whether a particular direct factorization reports
-the resulting singular saddle system in a particular way.
+the resulting singular saddle system in a particular way. On this mesh the paired
+`L2(1)` and oversized `L2(2)` smallest-to-largest singular-value ratios are 2.02e-2 and
+1.05e-15, so a relative numerical-rank tolerance of 1e-10 cleanly separates them.
 
 The same review also found a separate terminology and acceptance error in ADR 0004.
 The `λ_h` in §10 is the **continuity multiplier**, not the H1 Coulomb-gauge multiplier

@@ -236,11 +236,11 @@ linearization.
 1. **Magnetic divergence (exact):** ∇_h·(∇_h×A_h) = 0 algebraically to roundoff on
    affine and curved meshes; a regression test MUST measure this independently of
    nonlinear convergence. On curved NGSolve meshes this is the mapped HCurl→HDiv
-   basis identity. It MUST be measured by first verifying the projection of `curl(A_h)`
-   into the paired HDiv space at roundoff and then applying `ng.div` to that HDiv
-   GridFunction, with a divergent HDiv negative control; it MUST NOT be inferred from
-   either the terminal ordinary-L2 arrow or `GridFunction.Diff(ng.x)` (ADR 0005; the
-   NGSolve API observations from superseded ADR 0004 remain valid).
+   basis identity. The test MUST verify that the curl maps into the paired HDiv space,
+   measure strong divergence of that HDiv representative at order-scaled roundoff, and
+   include a divergent HDiv negative control. Backend-specific NGSolve evaluation facts
+   are recorded in `docs/dev_notes.md` (ADR 0005; the observations from superseded
+   ADR 0004 remain valid).
 2. **Current continuity (exact):** raw (M2) currents are projected to an H(div) field
    satisfying the paired Sec. 10 scalar-L2 constraint. On affine and curved meshes the
    constraint forces ∇·J_h = 0 pointwise to roundoff: under the contravariant Piola map,
@@ -248,8 +248,10 @@ linearization.
    and the reference divergence exactly spans the paired reference L2 space (ADR 0005).
    Milestone 4.4 MUST verify this on curved ball and torus meshes and MUST include
    undersized and oversized terminal-order controls that make the pairing falsifiable;
-   the oversized control MUST establish redundant constraint rows by a rank test rather
-   than depend on a particular factorization raising an exception.
+   the oversized control MUST establish redundant constraint rows using numerical rank
+   with relative singular-value tolerance 1e-10, rather than depend on a particular
+   factorization raising an exception. The measured paired/oversized smallest-to-largest
+   singular-value ratios are 2.02e-2 and 1.05e-15, respectively.
    Its λ_h is a continuity multiplier, not a gauge multiplier, and is not expected to
    converge to zero. The relative projection correction
    ‖J_h − J_raw‖/‖J_raw‖ MUST also be recorded and converge to zero — a large or
@@ -593,6 +595,8 @@ divergence at roundoff, and include both an undersized terminal space (which lea
 visible divergence) and an oversized terminal space whose extra constraint rows are
 proven redundant by rank deficiency of the constraint block. A singular direct
 factorization MAY illustrate that redundancy but MUST NOT be the acceptance observable.
+Use relative singular-value tolerance 1e-10; the measured paired and oversized ratios
+are 2.02e-2 and 1.05e-15, leaving eight and five orders of margin respectively.
 Here λ_h is the **continuity multiplier**, not the
 Sec. 7.3 magnetic gauge multiplier; it generally has a legitimate nonzero limit.
 Diagnostics MUST include divergence norm before/after, the continuity-multiplier norm,

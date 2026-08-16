@@ -28,7 +28,9 @@
   relative divergence below 7.0e-16; an undersized terminal order left O(1) divergence,
   while an oversized order produced a constraint block of rank 428 with 1070 rows (642
   redundant). Test that rank fact rather than a solver-specific singular-factorization
-  exception. Its λ is a continuity multiplier with a legitimate nonzero limit, not the
+  exception; the paired/oversized smallest-to-largest singular-value ratios were 2.02e-2
+  and 1.05e-15, cleanly separated by relative rank tolerance 1e-10. Its λ is a
+  continuity multiplier with a legitimate nonzero limit, not the
   magnetic gauge multiplier; normalize its mean if a non-natural trace leaves constants
   in the multiplier kernel. Milestone 4.4 must automate those positive and negative
   controls. An
@@ -36,6 +38,10 @@
   `MakeStructured3DMesh(secondorder=True, mapping=<nonlinear>)` construction segfaulted
   in this local wheel; `netgen.occ` mesh generation followed by `mesh.Curve(order)` was
   stable and should be the verification path for curved tetrahedra.
+  On the same `Curve(3)` ball across base orders 0--5, `div(curl)` grows with mapped-
+  basis conditioning from 2.53e-15 to 2.79e-12 while a random-HDiv control remains
+  2.71--4.33. Use the measured curved gate `128*eps*(p+2)^3`; the affine constant 32 is
+  insufficient at p=5 even though the identity remains exact.
 
 - Milestone 3.6 (NGSolve 6.2.2606): the open linear spline
   `BSpline(2, [s0, *nodes, sN], nodal_values)(s)` gives the piecewise-linear G basis
