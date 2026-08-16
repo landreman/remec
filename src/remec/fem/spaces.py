@@ -16,9 +16,11 @@ class DeRhamSequence:
     ``H1(p+1) --grad--> HCurl(p) --curl--> HDiv(p-1) --div--> L2(p-2)``,
     with the two downstream orders floored at zero.  It makes
     ``div(curl(A_h)) = 0`` algebraic on affine and curved tetrahedra, as required
-    by (M1).  On curved elements ordinary NGSolve ``L2`` is not the density-mapped
-    terminal space. Verify the magnetic invariant by projecting ``curl(A_h)`` into
-    the paired HDiv space and applying ``ng.div`` to that HDiv GridFunction.
+    by (M1). On curved elements ordinary NGSolve ``L2`` is not the density-mapped
+    strong image of a general HDiv divergence, but its paired weak constraint remains
+    pointwise coercive by ADR 0005. Verify the magnetic invariant by projecting
+    ``curl(A_h)`` into the paired HDiv space and applying ``ng.div`` to that HDiv
+    GridFunction.
     """
 
     base_order: int

@@ -17,6 +17,7 @@ from remec.fem.spaces import make_tetrahedral_de_rham_sequence
 _BASE_ORDERS = (0, 1, 2, 3, 4, 5)
 _SUBDIVISIONS = (1, 2)
 _TABLE_PATH = Path(__file__).with_name("de_rham_pairing.csv")
+_CURVED_TABLE_PATH = Path(__file__).with_name("de_rham_curved.csv")
 _DEFECT_COLUMNS = (
     "grad_mapping_defect",
     "curl_mapping_defect",
@@ -39,6 +40,13 @@ def _recorded_rows() -> dict[tuple[int, int], dict[str, str]]:
     indexed = {(int(row["subdivisions"]), int(row["base_order"])): row for row in rows}
     assert len(indexed) == len(rows), "verification table contains duplicate mesh/order rows"
     return indexed
+
+
+def _recorded_curved_row() -> dict[str, str]:
+    with _CURVED_TABLE_PATH.open(newline="", encoding="utf-8") as stream:
+        rows = list(csv.DictReader(stream))
+    assert len(rows) == 1, "curved verification table must contain exactly one row"
+    return rows[0]
 
 
 def _roundoff_gate(base_order: int) -> float:
@@ -205,19 +213,25 @@ def test_tetrahedral_de_rham_sequence_maps_and_composes_at_roundoff(
 def test_curved_tetrahedral_magnetic_subcomplex_composes_at_roundoff() -> None:
     """The magnetic half of (M1) remains exact on curved tetrahedra.
 
-    ADR 0004 weakens only the terminal curved ``HDiv --div--> L2`` interpretation
-    used for the current projection.  It leaves ``B_h = curl(A_h)`` exact.  This test
-    verifies the HCurl-to-HDiv mapping and then applies ``ng.div`` to that projected
-    HDiv GridFunction. A random HDiv negative control proves the diagnostic is not a
-    vacuous symbolic derivative.
+    ADR 0005 distinguishes the exact HCurl-to-HDiv composition from ordinary-L2
+    containment of a general curved HDiv divergence. This test verifies the magnetic
+    mapping and then applies ``ng.div`` to the projected HDiv GridFunction. A random
+    HDiv negative control proves the diagnostic is not a vacuous symbolic derivative.
     """
+    recorded = _recorded_curved_row()
+    assert recorded["geometry"] == "occ_ball"
     geometry = OCCGeometry(Sphere(Pnt(0.0, 0.0, 0.0), 1.0))
     mesh = ng.Mesh(geometry.GenerateMesh(maxh=0.9))
-    geometry_order = 3
+    geometry_order = int(recorded["geometry_order"])
     mesh.Curve(geometry_order)
 
-    base_order = 2
+    base_order = int(recorded["base_order"])
     sequence = make_tetrahedral_de_rham_sequence(mesh, order=base_order)
+    assert mesh.ne == int(recorded["elements"])
+    assert sequence.hcurl_order == int(recorded["hcurl_order"])
+    assert sequence.hdiv_order == int(recorded["hdiv_order"])
+    assert sequence.hcurl.ndof == int(recorded["hcurl_dofs"])
+    assert sequence.hdiv.ndof == int(recorded["hdiv_dofs"])
     vector_potential = _random_field(sequence.hcurl, seed=4199)
     magnetic_field = ng.curl(vector_potential)
     integration_order = 2 * max(base_order, geometry_order) + 6
@@ -250,9 +264,15 @@ def test_curved_tetrahedral_magnetic_subcomplex_composes_at_roundoff() -> None:
         scale=control_norm,
         order=integration_order,
     )
+    recorded_curl_defect = float(recorded["curl_mapping_defect"])
+    recorded_divergence_defect = float(recorded["div_curl_defect"])
+    recorded_control = float(recorded["divergent_control"])
     assert curl.relative_defect < 1.0e-12
+    assert curl.relative_defect <= _recorded_defect_gate(recorded_curl_defect)
     assert divergence_defect < 1.0e-12
+    assert divergence_defect <= _recorded_defect_gate(recorded_divergence_defect)
     assert control_divergence_defect > 1.0e-2
+    assert recorded_control / 8.0 <= control_divergence_defect <= 8.0 * recorded_control
 
 
 def test_de_rham_pairing_table_covers_the_validated_sweep_exactly() -> None:
