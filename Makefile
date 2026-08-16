@@ -4,13 +4,14 @@
 default:
 	@grep -E '^[A-Za-z][A-Za-z0-9_-]*:' $(MAKEFILE_LIST) | cut -d: -f1
 
-# PR-CI subset: fast tests only
+# PR-CI subset: fast tests only. Budget: < 2 min on the reference laptop (DESIGN.md
+# §22.1). The durations report is the early warning; read it.
 test:
-	python -m pytest -m "not slow"
+	python -m pytest -m "not slow" --durations=15
 
-# Everything, including nightly-marked tests
+# Everything, including nightly-marked tests. Budget: < 5 min (DESIGN.md §22.1).
 test-full:
-	python -m pytest
+	python -m pytest --durations=25
 
 # Formatting, linting, types
 lint:

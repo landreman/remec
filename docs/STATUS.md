@@ -480,6 +480,29 @@ that dependency. Phase 7 may run in parallel with Phase 8.
 
 ---
 
+## Test-time budget (cross-cutting; `DESIGN.md` §22.1)
+
+`make test` < 2 min, `make test-full` < 5 min, any not-slow test < ~20 s, any `slow`
+test < ~90 s — reference laptop, macOS/CPython 3.12, `-n 3 --dist=loadscope`. Every
+milestone re-checks this as item 7 of the definition of done and records the new
+`make test` wall-clock here.
+
+Measured 2026-08-16 on `plan_short_tests` (173 tests, one marked `slow`):
+`make test-full` 182 s ✅; `make test` **171 s ❌ over the 2-minute budget**. The four
+offenders, all in `tests/manufactured/`, also break the ~20 s per-test cap:
+
+| Test | Time |
+|---|---|
+| `test_m3_constrained.py::test_constrained_manufactured_h_p_and_shell_scans_match_rate_table[perpendicular]` | 54 s |
+| `test_m3_constrained.py::…_match_rate_table[full]` | 52 s |
+| `test_m3_gradient_comparison.py::test_field_misalignment_sensitivity_has_an_aligned_control` | 25 s |
+| `test_m3_constrained.py::test_fixed_i0_du_scan_has_a_regular_multiplier_limit[perpendicular, full]` | 21 s each |
+
+Next: the next milestone to touch M3 brings the not-slow suite back under budget —
+split each h/p/shell scan into a cheap two-level rate check that stays in PR CI and a
+`slow` full scan for nightly, and share the gradient-comparison setup solve. Do not
+meet the budget by weakening a rate expectation or a tolerance (`AGENTS.md`).
+
 ## Release gates
 
 - **0.1** — Phases 0–5 complete, including corrected normalized p₀(s)/I₀(s) and

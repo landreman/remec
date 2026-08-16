@@ -180,3 +180,14 @@
   the tests retain order 8. `pytest-xdist` runs module scopes on three processes by
   default; every M3 test uses one NGSolve worker per process, avoiding thread
   oversubscription.
+
+- Test-suite baseline, 2026-08-16 (reference laptop, macOS/CPython 3.12, NGSolve
+  6.2.2606, `-n 3 --dist=loadscope`): 173 tests, `make test-full` 182 s, `make test`
+  171 s. The budgets are now normative — `DESIGN.md` §22.1 — and `make test` is over
+  its 2-minute limit; the offenders and the plan are recorded in `STATUS.md` under
+  "Test-time budget". Two consequences worth knowing before optimizing: `--dist=loadscope`
+  keeps a module's tests on one worker, so wall-clock is set by the *slowest module*, not
+  by the total — moving one 50 s test out of the heaviest module buys more than trimming
+  several small ones elsewhere; and setup time shows up in `--durations` separately
+  (`test_m3_gradient_comparison` spends 15 s in a module-scoped fixture), so read the
+  `setup` rows, not just the `call` rows.

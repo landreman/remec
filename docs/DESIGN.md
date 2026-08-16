@@ -1093,6 +1093,41 @@ consistency (a predictive run driven by the recovered S_p^eff returns the interp
 solution); Picard/Newton agreement; restart round-trip; wout/DESC import regressions;
 finite-β code-to-code comparisons (HINT2/SPEC/PIES) where data are available (later).
 
+### 22.1 Test-time budget (normative)
+
+Verification only has value if it is run. The suite MUST therefore stay cheap enough to
+run on every change. Wall-clock budgets, measured on the reference development laptop
+(Apple-silicon macOS) with the parallel configuration declared in `pyproject.toml`
+(`-n 3 --dist=loadscope`):
+
+| Suite | Command | Budget |
+|---|---|---|
+| PR subset (`not slow`) | `make test` | **< 2 minutes** |
+| Any single not-slow test | — | **< ~20 seconds** |
+| Full suite | `make test-full` | **< 5 minutes** |
+| Any single `slow` test | — | **< ~90 seconds** |
+
+Tests that cannot meet the not-slow caps MUST carry `@pytest.mark.slow` and therefore run
+only in `.github/workflows/nightly.yml`. The split between §22's PR-CI items and its
+nightly items is the same split: small manufactured cases, the small pollution test, and
+unit tests in PR CI; full order/resolution/anisotropy scans, larger M3 cases, and
+end-to-end physics regressions nightly. Where a nightly test has a meaningful reduced
+form, the reduced form SHOULD also exist in the not-slow subset, so a regression is seen
+in the PR that causes it rather than the following morning.
+
+The budgets are enforced by review and by the slowest-test report that `make test` emits,
+not by wall-clock assertions inside tests: timing assertions are flaky across machines and
+CI runners, and a suite that fails for being slow on a loaded runner trains agents to
+ignore failures. What is *not* an acceptable way to meet a budget: reducing an expected
+convergence rate, loosening an accuracy tolerance, dropping a mutation-detection check
+(§22, the conspicuous-omission tests), or marking a *failing* test `slow` or `xfail`
+(§26). Reducing resolution, sharing solves across assertions, compiling coefficient
+expressions, and deleting tests that a design change has made irrelevant are acceptable
+and encouraged; `AGENTS.md` gives the working procedure.
+
+Because these budgets constrain what may be added, a milestone that genuinely needs more
+PR-CI time than the budget allows is an ADR (§26), not a silent overrun.
+
 ---
 
 ## 23. CI and releases
@@ -1103,9 +1138,13 @@ installation; ruff format/lint; type checks on the pure-Python API where practic
 tests; small manufactured tests; the small pollution test; a small threaded-execution
 test; checkpoint round-trip; wheel build + `pip install dist/*.whl` smoke test.
 
-**Scheduled CI:** anisotropy/order scans; full Sovinec measurements; larger M3 tests;
-axisymmetric end-to-end; thread-scaling sanity; memory benchmarks; optional ngsxfem
-tests; PETSc-branch tests when that branch exists.
+The test step is the `not slow` subset and is held to the §22.1 budget.
+
+**Scheduled CI:** the `slow`-marked tests, run nightly by `make test-full`: anisotropy/
+order scans; full Sovinec measurements; larger M3 tests; axisymmetric end-to-end;
+thread-scaling sanity; memory benchmarks; optional ngsxfem tests; PETSc-branch tests when
+that branch exists. Nightly is the release valve for cost, which makes it the place where
+runtime accumulates unnoticed — hence the per-test and full-suite caps in §22.1.
 
 **Packaging:** `pyproject.toml` declares `ngsolve` as a binary-wheel dependency within a
 tested version range; optional extras `remec[io]`, `remec[xfem]`, `remec[vmec]`,
@@ -1277,7 +1316,9 @@ docstrings/comments and include the mathematical formulas for nontrivial forms; 
 explicit types on public APIs; keep NGSolve-specific code behind internal modules;
 report solver tolerances and residual definitions; add a regression test for every
 fixed numerical bug; distinguish algebraic convergence from discretization accuracy;
-preserve restart compatibility or increment the schema version; prefer installed-NGSolve
+preserve restart compatibility or increment the schema version; keep the suite inside the
+§22.1 time budget, marking a test `slow` when it cannot be made cheap and running the
+`slow` tests that touch the code they changed; prefer installed-NGSolve
 reality over this document's API assertions, recording discrepancies in
 `docs/dev_notes.md` (design-level changes require an ADR).
 

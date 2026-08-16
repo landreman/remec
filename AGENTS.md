@@ -36,7 +36,7 @@ python -m pip install -e ".[dev]"
 ## Commands
 
 ```bash
-make test          # pytest -q, the PR-CI subset
+make test          # not-slow subset, the PR-CI gate; prints the 15 slowest tests
 make test-full     # includes slow/nightly-marked tests
 make lint          # ruff format --check && ruff check && mypy src/remec
 make check         # lint + test; this is the gate
@@ -63,6 +63,7 @@ review-ready or submitted milestone as `[~]`.
    numbers, and note anything the next milestone should know. Use `[~]` only while the
    work is genuinely incomplete and not ready for review.
 6. Any NGSolve API surprise is appended to `docs/dev_notes.md`.
+7. The test-time budgets below still hold with the milestone's new tests in place.
 
 ## Test-first, and tests that can fail
 
@@ -73,6 +74,67 @@ A test that passes for an implementation you know to be wrong is worse than no t
 Where `docs/DESIGN.md` §22 names a term whose omission must be conspicuous — e.g. the
 `D_u ∇⊥u·∇p` term in M3 — write the test so that deleting the term makes it fail, and
 say in the PR body which mutation you verified it catches.
+
+## Test speed — a budget, not an aspiration
+
+A slow suite is a suite that stops being run. The budgets are normative
+(`docs/DESIGN.md` §22.1); these are the working rules.
+
+**The budgets**, wall-clock on the reference laptop (Apple-silicon macOS, the `-n 3`
+xdist configuration in `pyproject.toml`):
+
+| What | Budget |
+|---|---|
+| `make test` (`-m "not slow"`) | **< 2 min** |
+| any single not-slow test | **< ~20 s** |
+| `make test-full` | **< 5 min** |
+| any single `slow` test | **< ~90 s** |
+
+`make test` prints the 15 slowest tests on every run. Read that list; it is the only
+early warning you get. Nothing fails purely on wall-clock — wall-clock assertions are
+flaky across machines — so the budget is your responsibility, not CI's.
+
+**Marking `slow`.** A test that cannot be brought under the not-slow caps gets
+`@pytest.mark.slow` and runs only in `.github/workflows/nightly.yml` (`make test-full`).
+Prefer marking the *longest* tests, and prefer keeping a cheap version of the same check
+in the not-slow suite: a two-point rate check at low resolution in PR CI, the full
+resolution/anisotropy scan nightly.
+
+**While working a milestone.** You need not run the whole slow suite. Run `make test`,
+plus every `slow` test that touches the code you changed (`pytest -m slow <path or -k>`),
+and say in the PR body which slow tests you ran. If `make test` is over budget after
+adding your tests, you may mark unrelated slow-but-passing tests `slow` to fit — but
+**never** mark a test `slow` to get a failure out of your way. Marking a failing test
+`slow` is the same offence as `xfail`-ing it (see STOP conditions).
+
+**How to make a test fast**, in the order to try:
+
+1. Lowest resolution that still demonstrates the claim. A convergence rate needs enough
+   points to fit a slope, not a pretty table.
+2. Do not recompute. Hoist mesh construction, assembly, and solves into module- or
+   session-scoped fixtures and let several assertions share one solve. Note that
+   `--dist=loadscope` keeps a module's tests on one worker, so module-scoped fixtures
+   pay off.
+3. `CoefficientFunction.Compile()` — see the `_compiled()` helpers and the timing entry
+   in `docs/dev_notes.md`. It cut assembly ~24x for the M3 forms and is bitwise
+   identical, so no recorded rate table moves.
+4. Cheaper diagnostics: `diagnostic_detail="core"`, lower integration order, fewer
+   sampled points, looser *algebraic* solver tolerance (never a looser *accuracy*
+   tolerance in an assertion).
+
+**Deleting tests.** If a test has been made irrelevant by a code change, an ADR, or a
+change to the development plan, delete it and say so in the PR body. Dead tests cost
+time and mislead reviewers. If it is still meaningful but expensive, mark it `slow`
+instead.
+
+**Retrofitting old tests.** If your milestone's own tests are lean and the suite is
+still over budget, speed up the slowest existing tests, worst first. When you reduce an
+existing test's resolution, minimize the loss of meaningful coverage — keep the same
+mutation-detection and the same asymptotic rate, and record the before/after numbers in
+`docs/STATUS.md` and any affected table in `docs/verification.md`. Rate tables checked
+into `tests/manufactured/` must be regenerated, not hand-edited. Reducing an expected
+convergence rate or loosening an accuracy tolerance to save time is a STOP condition,
+not an optimization.
 
 ## Scope discipline
 
