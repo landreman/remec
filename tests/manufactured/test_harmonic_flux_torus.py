@@ -7,12 +7,14 @@ import sys
 from dataclasses import dataclass
 from itertools import pairwise
 from pathlib import Path
+from typing import Any
 
 import ngsolve as ng
 import numpy as np
 import pytest
 
 from remec.fem._harmonic_flux import (
+    _weak_magnetic_residuals,
     build_analytic_torus_harmonic_field,
     poloidal_cut_flux,
 )
@@ -30,7 +32,6 @@ class _HarmonicRow:
     weak_curl_relative_residual: float
     weak_divergence_relative_residual: float
     boundary_normal_relative_norm: float
-    toroidal_flux: float
     sampled_magnetic_magnitude_minimum: float
     sampled_magnetic_magnitude_maximum: float
 
@@ -42,7 +43,7 @@ def _measured_row(geometry_order: int) -> _HarmonicRow:
         max_element_size=1.2,
         geometry_order=geometry_order,
     )
-    mesh = torus.mesh()
+    mesh = torus.build_mesh()._mesh
     solution = build_analytic_torus_harmonic_field(mesh, torus, test_order=2)
     return _HarmonicRow(
         geometry_order=geometry_order,
@@ -51,11 +52,6 @@ def _measured_row(geometry_order: int) -> _HarmonicRow:
         weak_curl_relative_residual=solution.weak_curl_relative_residual,
         weak_divergence_relative_residual=solution.weak_divergence_relative_residual,
         boundary_normal_relative_norm=solution.boundary_normal_relative_norm,
-        toroidal_flux=poloidal_cut_flux(
-            torus,
-            solution.poloidal_normal_component,
-            quadrature_order=24,
-        ),
         sampled_magnetic_magnitude_minimum=solution.sampled_magnetic_magnitude_minimum,
         sampled_magnetic_magnitude_maximum=solution.sampled_magnetic_magnitude_maximum,
     )
@@ -73,7 +69,7 @@ def _actual_csv(rows: dict[int, _HarmonicRow]) -> str:
     """Format all measured rows so a cross-platform mismatch is reproducible."""
     header = (
         "platform,geometry_order,elements,curved_volume,weak_curl_relative_residual,"
-        "weak_divergence_relative_residual,boundary_normal_relative_norm,toroidal_flux,"
+        "weak_divergence_relative_residual,boundary_normal_relative_norm,"
         "sampled_magnetic_magnitude_minimum,sampled_magnetic_magnitude_maximum"
     )
     body = [
@@ -86,7 +82,6 @@ def _actual_csv(rows: dict[int, _HarmonicRow]) -> str:
                 f"{row.weak_curl_relative_residual:.16e}",
                 f"{row.weak_divergence_relative_residual:.16e}",
                 f"{row.boundary_normal_relative_norm:.16e}",
-                f"{row.toroidal_flux:.16e}",
                 f"{row.sampled_magnetic_magnitude_minimum:.16e}",
                 f"{row.sampled_magnetic_magnitude_maximum:.16e}",
             )
@@ -102,15 +97,25 @@ def harmonic_rows() -> dict[int, _HarmonicRow]:
     return {order: _measured_row(order) for order in _GEOMETRY_ORDERS}
 
 
-def test_harmonic_field_satisfies_m1_and_has_unit_toroidal_flux(
+@pytest.fixture(scope="module")
+def poloidal_cut() -> tuple[AnalyticSolidTorus, Any]:
+    """Share the explicit high-order cut mesh across the flux regressions."""
+    torus = AnalyticSolidTorus(
+        major_radius=2.0,
+        minor_radius=0.6,
+        max_element_size=1.2,
+        geometry_order=4,
+    )
+    return torus, torus._build_poloidal_cut_mesh(geometry_order=6)
+
+
+def test_harmonic_field_satisfies_m1(
     harmonic_rows: dict[int, _HarmonicRow],
 ) -> None:
     r"""The harmonic ``B_h`` preserves (M1), tangency, and normalized flux."""
     for row in harmonic_rows.values():
-        roundoff_gate = 128.0 * np.finfo(float).eps * (row.geometry_order + 2) ** 3
-        assert row.weak_curl_relative_residual < roundoff_gate
-        assert row.weak_divergence_relative_residual < roundoff_gate
-        assert row.toroidal_flux == pytest.approx(1.0, abs=1.0e-10)
+        assert row.weak_curl_relative_residual < 1.0e-14
+        assert row.weak_divergence_relative_residual < 1.0e-14
         assert 0.65 < row.sampled_magnetic_magnitude_minimum < 0.68
         assert 1.22 < row.sampled_magnetic_magnitude_maximum < 1.25
 
@@ -129,15 +134,46 @@ def test_harmonic_field_satisfies_m1_and_has_unit_toroidal_flux(
     assert harmonic_rows[4].curved_volume == pytest.approx(exact_volume, rel=2.0e-6)
 
 
-def test_curl_field_carries_zero_toroidal_flux() -> None:
-    r"""A curl with zero tangential boundary trace cannot alter the (M1) flux."""
-    torus = AnalyticSolidTorus(
-        major_radius=2.0,
-        minor_radius=0.6,
-        max_element_size=1.2,
-        geometry_order=3,
+def test_harmonic_field_has_oriented_unit_toroidal_flux(
+    poloidal_cut: tuple[AnalyticSolidTorus, Any],
+) -> None:
+    """The actual NGSolve ``B_h`` has positive unit flux through the mesh cut."""
+    torus, cut_bundle = poloidal_cut
+    field = torus.harmonic_basis(cut_bundle)[0]
+    assert poloidal_cut_flux(cut_bundle, field) == pytest.approx(1.0, abs=2.0e-8)
+    assert poloidal_cut_flux(cut_bundle, -field) == pytest.approx(-1.0, abs=2.0e-8)
+
+
+def test_weak_residual_diagnostics_detect_nonharmonic_fields(
+    poloidal_cut: tuple[AnalyticSolidTorus, Any],
+) -> None:
+    """The (M1) weak diagnostics reject independent divergence and curl controls."""
+    _, cut_bundle = poloidal_cut
+    mesh = cut_bundle._mesh
+    divergent = ng.CoefficientFunction((ng.x, ng.y, ng.z))
+    rotational = ng.CoefficientFunction((0.0, 0.0, ng.x * ng.y))
+    _, _, divergence_norm = _weak_magnetic_residuals(
+        mesh,
+        divergent,
+        test_order=2,
+        integration_order=16,
     )
-    mesh = torus.mesh()
+    _, curl_norm, _ = _weak_magnetic_residuals(
+        mesh,
+        rotational,
+        test_order=2,
+        integration_order=16,
+    )
+    assert divergence_norm > 1.0
+    assert curl_norm > 0.1
+
+
+def test_curl_field_carries_zero_toroidal_flux(
+    poloidal_cut: tuple[AnalyticSolidTorus, Any],
+) -> None:
+    r"""A curl with zero tangential boundary trace cannot alter the (M1) flux."""
+    torus, cut_bundle = poloidal_cut
+    mesh = cut_bundle._mesh
     cylindrical_radius = ng.sqrt(ng.x**2 + ng.y**2)
     boundary_factor = torus.minor_radius**2 - (
         (cylindrical_radius - torus.major_radius) ** 2 + ng.z**2
@@ -151,12 +187,13 @@ def test_curl_field_carries_zero_toroidal_flux() -> None:
                 ng.InnerProduct(vector_potential, vector_potential),
                 mesh,
                 ng.BND,
+                definedon=mesh.Boundaries("wall"),
                 order=14,
             )
         )
     )
     assert boundary_trace_norm < 2.0e-3
-    vector_space = ng.HCurl(mesh, order=2, dirichlet=".*")
+    vector_space = ng.HCurl(mesh, order=2, dirichlet="wall")
     discrete_potential = ng.GridFunction(vector_space)
     discrete_potential.Set(vector_potential)
     discrete_potential.vec.data = (
@@ -172,27 +209,21 @@ def test_curl_field_carries_zero_toroidal_flux() -> None:
                 ),
                 mesh,
                 ng.BND,
+                definedon=mesh.Boundaries("wall"),
                 order=14,
             )
         )
     )
     assert tangential_trace_norm < 1.0e-14
 
-    def curl_normal_component(x_coordinate: np.ndarray, z_coordinate: np.ndarray) -> np.ndarray:
-        radial_offset = x_coordinate - torus.major_radius
-        boundary = torus.minor_radius**2 - (radial_offset**2 + z_coordinate**2)
-        multiplier = 1.0 + 0.2 * x_coordinate + 0.1 * z_coordinate
-        # At y=0 and x>0, (curl A).e_y = -partial_x A_z.
-        return 2.0 * radial_offset * multiplier - 0.2 * boundary
-
-    assert poloidal_cut_flux(
-        torus,
-        curl_normal_component,
-        quadrature_order=24,
-    ) == pytest.approx(
-        0.0,
-        abs=1.0e-10,
+    assert poloidal_cut_flux(cut_bundle, ng.curl(discrete_potential)) == pytest.approx(
+        0.0, abs=1.0e-12
     )
+
+    unconstrained_space = ng.HCurl(mesh, order=2)
+    nonzero_trace_potential = ng.GridFunction(unconstrained_space)
+    nonzero_trace_potential.Set(ng.CoefficientFunction((0.0, 0.0, ng.x)))
+    assert abs(poloidal_cut_flux(cut_bundle, ng.curl(nonzero_trace_potential))) > 1.0
 
 
 def test_harmonic_flux_table_matches_every_geometry_order(
@@ -210,7 +241,6 @@ def test_harmonic_flux_table_matches_every_geometry_order(
         table_row = recorded[order]
         assert int(table_row["elements"]) == row.elements, mismatch_report
         assert row.curved_volume == pytest.approx(float(table_row["curved_volume"]), abs=2e-8)
-        assert row.toroidal_flux == pytest.approx(float(table_row["toroidal_flux"]), abs=2e-11)
         for column in (
             "weak_curl_relative_residual",
             "weak_divergence_relative_residual",

@@ -8,6 +8,14 @@ from typing import Any
 
 
 @dataclass(frozen=True, slots=True)
+class _TorusMeshBundle:
+    """Internal carrier that keeps the NGSolve mesh out of the public API."""
+
+    _mesh: Any
+    boundary_names: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class AnalyticSolidTorus:
     """Simple circular solid torus linking the cylindrical axis.
 
@@ -37,13 +45,11 @@ class AnalyticSolidTorus:
         if not 1 <= self.geometry_order <= 4:
             raise ValueError("geometry_order must be in the verified range 1 through 4")
 
-    def mesh(self) -> Any:
-        """Create the curved tetrahedral verification mesh."""
-        import ngsolve as ng  # type: ignore[import-untyped]
+    def _revolved_solid(self, angle: float) -> Any:
+        """Return the OCC solid swept through ``angle`` degrees."""
         from netgen.occ import (  # type: ignore[import-untyped]
             Axes,
             Axis,
-            OCCGeometry,
             Revolve,
             WorkPlane,
             X,
@@ -57,7 +63,56 @@ class AnalyticSolidTorus:
             .Circle(self.minor_radius)
             .Face()
         )
-        solid = Revolve(meridional_disk, Axis((0.0, 0.0, 0.0), Z), 360.0)
+        return Revolve(meridional_disk, Axis((0.0, 0.0, 0.0), Z), angle)
+
+    def build_mesh(self) -> _TorusMeshBundle:
+        """Create the curved tetrahedral verification mesh with a named wall."""
+        import ngsolve as ng  # type: ignore[import-untyped]
+        from netgen.occ import OCCGeometry
+
+        solid = self._revolved_solid(360.0)
+        solid.faces.name = "wall"
         mesh = ng.Mesh(OCCGeometry(solid).GenerateMesh(maxh=self.max_element_size))
         mesh.Curve(self.geometry_order)
-        return mesh
+        return _TorusMeshBundle(_mesh=mesh, boundary_names=("wall",))
+
+    def _build_poloidal_cut_mesh(self, *, geometry_order: int = 6) -> _TorusMeshBundle:
+        """Build a half torus whose start face is an explicit poloidal cut."""
+        import ngsolve as ng
+        from netgen.occ import OCCGeometry
+
+        solid = self._revolved_solid(180.0)
+        for face, name in zip(solid.faces, ("wall", "cut_start", "cut_end"), strict=True):
+            face.name = name
+        mesh = ng.Mesh(OCCGeometry(solid).GenerateMesh(maxh=self.max_element_size))
+        mesh.Curve(geometry_order)
+        return _TorusMeshBundle(
+            _mesh=mesh,
+            boundary_names=("wall", "cut_start", "cut_end"),
+        )
+
+    def boundary_regions(self) -> dict[str, str]:
+        """Return the named physical wall region."""
+        return {"wall": "wall"}
+
+    def characteristic_length(self) -> float:
+        """Return the largest diameter used to nondimensionalize the torus."""
+        return 2.0 * (self.major_radius + self.minor_radius)
+
+    def harmonic_basis(self, mesh_bundle: _TorusMeshBundle) -> list[object]:
+        """Return the one normalized harmonic field of this solid torus."""
+        from remec.fem._harmonic_flux import build_analytic_torus_harmonic_field
+
+        solution = build_analytic_torus_harmonic_field(mesh_bundle._mesh, self)
+        return [solution.field]
+
+    def metadata(self) -> dict[str, object]:
+        """Return reproducible geometry metadata without backend objects."""
+        return {
+            "geometry": "AnalyticSolidTorus",
+            "major_radius": self.major_radius,
+            "minor_radius": self.minor_radius,
+            "max_element_size": self.max_element_size,
+            "geometry_order": self.geometry_order,
+            "boundary_regions": self.boundary_regions(),
+        }

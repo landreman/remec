@@ -2,17 +2,13 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
 from math import pi, sqrt
 from typing import Any
 
 import numpy as np
-from numpy.typing import NDArray
 
-from remec.geometry.solid_torus import AnalyticSolidTorus
-
-FloatArray = NDArray[np.float64]
+from remec.geometry.solid_torus import AnalyticSolidTorus, _TorusMeshBundle
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,17 +24,8 @@ class HarmonicFluxField:
     sampled_magnetic_magnitude_minimum: float
     sampled_magnetic_magnitude_maximum: float
 
-    def poloidal_normal_component(
-        self,
-        x_coordinate: FloatArray,
-        z_coordinate: FloatArray,
-    ) -> FloatArray:
-        """Evaluate ``B_h . e_y`` on the positive-y poloidal cut."""
-        del z_coordinate
-        return self.normalization / x_coordinate
 
-
-def _dual_l2_norm(space: Any, residual: Any, mesh: Any, *, integration_order: int) -> float:
+def _dual_l2_norm(space: Any, residual: Any, *, integration_order: int) -> float:
     """Return the mass-Riesz norm of a residual tested on ``space``."""
     import ngsolve as ng  # type: ignore[import-untyped]
 
@@ -52,6 +39,50 @@ def _dual_l2_norm(space: Any, residual: Any, mesh: Any, *, integration_order: in
     riesz = mass.mat.Inverse(space.FreeDofs(), inverse="sparsecholesky") * load.vec
     squared_norm = float(ng.InnerProduct(load.vec, riesz))
     return sqrt(max(squared_norm, 0.0))
+
+
+def _weak_magnetic_residuals(
+    mesh: Any,
+    field: Any,
+    *,
+    test_order: int,
+    integration_order: int,
+) -> tuple[float, float, float]:
+    r"""Measure weak curl and divergence residuals for note equation ``(M1)``.
+
+    For a vector field ``B``, this assembles the mass-Riesz norms of
+    ``curl(B)`` in vector H¹ and ``div(B)`` in scalar H¹, plus ``||B||_L2``.
+    """
+    import ngsolve as ng
+
+    divergence = field[0].Diff(ng.x) + field[1].Diff(ng.y) + field[2].Diff(ng.z)
+    curl = ng.CoefficientFunction(
+        (
+            field[2].Diff(ng.y) - field[1].Diff(ng.z),
+            field[0].Diff(ng.z) - field[2].Diff(ng.x),
+            field[1].Diff(ng.x) - field[0].Diff(ng.y),
+        )
+    )
+    field_norm = float(
+        ng.sqrt(
+            ng.Integrate(
+                ng.InnerProduct(field, field),
+                mesh,
+                order=integration_order,
+            )
+        )
+    )
+    weak_divergence_norm = _dual_l2_norm(
+        ng.H1(mesh, order=test_order),
+        divergence,
+        integration_order=integration_order,
+    )
+    weak_curl_norm = _dual_l2_norm(
+        ng.VectorH1(mesh, order=test_order),
+        curl,
+        integration_order=integration_order,
+    )
+    return field_norm, weak_curl_norm, weak_divergence_norm
 
 
 def _quadrature_extrema(
@@ -112,37 +143,14 @@ def build_analytic_torus_harmonic_field(
             0.0,
         )
     )
-    divergence = field[0].Diff(ng.x) + field[1].Diff(ng.y) + field[2].Diff(ng.z)
-    curl = ng.CoefficientFunction(
-        (
-            field[2].Diff(ng.y) - field[1].Diff(ng.z),
-            field[0].Diff(ng.z) - field[2].Diff(ng.x),
-            field[1].Diff(ng.x) - field[0].Diff(ng.y),
-        )
-    )
     integration_order = 2 * max(test_order, torus.geometry_order) + 8
-    field_norm = float(
-        ng.sqrt(
-            ng.Integrate(
-                ng.InnerProduct(field, field),
-                mesh,
-                order=integration_order,
-            )
-        )
+    field_norm, weak_curl_norm, weak_divergence_norm = _weak_magnetic_residuals(
+        mesh,
+        field,
+        test_order=test_order,
+        integration_order=integration_order,
     )
     scale = max(field_norm, np.finfo(float).tiny)
-    weak_divergence_norm = _dual_l2_norm(
-        ng.H1(mesh, order=test_order),
-        divergence,
-        mesh,
-        integration_order=integration_order,
-    )
-    weak_curl_norm = _dual_l2_norm(
-        ng.VectorH1(mesh, order=test_order),
-        curl,
-        mesh,
-        integration_order=integration_order,
-    )
     boundary_normal_norm = float(
         ng.sqrt(
             ng.Integrate(
@@ -172,38 +180,34 @@ def build_analytic_torus_harmonic_field(
 
 
 def poloidal_cut_flux(
-    torus: AnalyticSolidTorus,
-    normal_component: Callable[[FloatArray, FloatArray], FloatArray],
+    cut_mesh_bundle: _TorusMeshBundle,
+    field: Any,
     *,
-    quadrature_order: int = 24,
+    quadrature_order: int = 20,
 ) -> float:
-    r"""Integrate ``field . e_y`` across the positive-y poloidal cut.
+    r"""Integrate an NGSolve field through the positive-y poloidal cut.
 
-    The cut is the disk ``y=0`` centered at ``(R,0,0)``. Tensor-product Gauss
-    quadrature in polar coordinates deliberately evaluates the physical field rather
-    than reusing the analytic normalization formula.
+    ``cut_start`` has the half-torus outward normal ``-e_y``, so the leading minus
+    sign orients this diagnostic in the positive toroidal direction.
     """
-    if not isinstance(torus, AnalyticSolidTorus):
-        raise TypeError("torus must be an AnalyticSolidTorus")
-    if not callable(normal_component):
-        raise TypeError("normal_component must be callable")
+    if not isinstance(cut_mesh_bundle, _TorusMeshBundle):
+        raise TypeError("cut_mesh_bundle must be a torus mesh bundle")
+    if "cut_start" not in cut_mesh_bundle.boundary_names:
+        raise ValueError("mesh bundle does not contain the poloidal cut")
     if isinstance(quadrature_order, bool) or not isinstance(quadrature_order, int):
         raise TypeError("quadrature_order must be an integer")
     if quadrature_order < 2:
         raise ValueError("quadrature_order must be at least two")
 
-    nodes, weights = np.polynomial.legendre.leggauss(quadrature_order)
-    radii = 0.5 * torus.minor_radius * (nodes + 1.0)
-    radial_weights = 0.5 * torus.minor_radius * weights
-    angles = pi * (nodes + 1.0)
-    angular_weights = pi * weights
-    radial_grid, angular_grid = np.meshgrid(radii, angles, indexing="ij")
-    cut_weights = np.outer(radial_weights, angular_weights) * radial_grid
-    x_coordinates = torus.major_radius + radial_grid * np.cos(angular_grid)
-    z_coordinates = radial_grid * np.sin(angular_grid)
-    values = np.asarray(normal_component(x_coordinates, z_coordinates), dtype=float)
-    if values.shape != radial_grid.shape:
-        raise ValueError("normal_component must preserve the input array shape")
-    if not np.all(np.isfinite(values)):
-        raise ValueError("field produced non-finite values on the poloidal cut")
-    return float(np.sum(values * cut_weights))
+    import ngsolve as ng
+
+    mesh = cut_mesh_bundle._mesh
+    return -float(
+        ng.Integrate(
+            field * ng.specialcf.normal(3),
+            mesh,
+            ng.BND,
+            definedon=mesh.Boundaries("cut_start"),
+            order=quadrature_order,
+        )
+    )

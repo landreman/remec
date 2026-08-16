@@ -37,3 +37,18 @@ def test_analytic_torus_rejects_invalid_element_size(max_element_size: float) ->
             minor_radius=0.5,
             max_element_size=max_element_size,
         )
+
+
+def test_analytic_torus_implements_geometry_protocol_without_public_backend_mesh() -> None:
+    torus = AnalyticSolidTorus(major_radius=2.0, minor_radius=0.6)
+    assert torus.boundary_regions() == {"wall": "wall"}
+    assert torus.characteristic_length() == pytest.approx(5.2)
+    assert torus.metadata() == {
+        "geometry": "AnalyticSolidTorus",
+        "major_radius": 2.0,
+        "minor_radius": 0.6,
+        "max_element_size": 1.2,
+        "geometry_order": 3,
+        "boundary_regions": {"wall": "wall"},
+    }
+    assert not hasattr(torus, "mesh")
