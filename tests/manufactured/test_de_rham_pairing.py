@@ -2,18 +2,28 @@
 
 from __future__ import annotations
 
+import csv
 from dataclasses import dataclass
+from pathlib import Path
 
 import ngsolve as ng
 import numpy as np
 import pytest
+from netgen.occ import OCCGeometry, Pnt, Sphere
 from ngsolve.meshes import MakeStructured3DMesh
 
 from remec.fem.spaces import make_tetrahedral_de_rham_sequence
 
-_BASE_ORDERS = (0, 1, 2, 3)
+_BASE_ORDERS = (0, 1, 2, 3, 4, 5)
 _SUBDIVISIONS = (1, 2)
-_ROUNDOFF_GATE = 1.0e-12
+_TABLE_PATH = Path(__file__).with_name("de_rham_pairing.csv")
+_DEFECT_COLUMNS = (
+    "grad_mapping_defect",
+    "curl_mapping_defect",
+    "div_mapping_defect",
+    "curl_grad_defect",
+    "div_curl_defect",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,6 +31,24 @@ class _Projection:
     field: ng.GridFunction
     relative_defect: float
     source_norm: float
+
+
+def _recorded_rows() -> dict[tuple[int, int], dict[str, str]]:
+    with _TABLE_PATH.open(newline="", encoding="utf-8") as stream:
+        rows = list(csv.DictReader(stream))
+    indexed = {(int(row["subdivisions"]), int(row["base_order"])): row for row in rows}
+    assert len(indexed) == len(rows), "verification table contains duplicate mesh/order rows"
+    return indexed
+
+
+def _roundoff_gate(base_order: int) -> float:
+    """Scale roundoff allowance with polynomial degree and basis conditioning."""
+    return float(32.0 * np.finfo(float).eps * (base_order + 2) ** 3)
+
+
+def _recorded_defect_gate(recorded: float) -> float:
+    """Allow backend-level roundoff drift while retaining row-specific regression data."""
+    return max(8.0 * recorded, 64.0 * np.finfo(float).eps)
 
 
 def _random_field(space: object, *, seed: int) -> ng.GridFunction:
@@ -81,7 +109,8 @@ def test_tetrahedral_de_rham_sequence_maps_and_composes_at_roundoff(
     """The chosen spaces form the exact affine-tetrahedral chain behind (M1).
 
     Random coefficients excite every source-space basis direction on 6 and 48
-    structured tetrahedra.  L2 projection then verifies the three mappings
+    structured tetrahedra at the validated base orders 0--5.  L2 projection verifies
+    the three mappings
 
     ``H1 --grad--> HCurl --curl--> HDiv --div--> L2``
 
@@ -97,11 +126,10 @@ def test_tetrahedral_de_rham_sequence_maps_and_composes_at_roundoff(
         nz=subdivisions,
     )
     sequence = make_tetrahedral_de_rham_sequence(mesh, order=base_order)
-    expected_orders = (
-        base_order + 1,
-        base_order,
-        max(base_order - 1, 0),
-        max(base_order - 2, 0),
+    recorded = _recorded_rows()[(subdivisions, base_order)]
+    assert recorded["element_family"] == "tetrahedron"
+    expected_orders = tuple(
+        int(recorded[column]) for column in ("h1_order", "hcurl_order", "hdiv_order", "l2_order")
     )
     assert (
         sequence.h1_order,
@@ -113,7 +141,13 @@ def test_tetrahedral_de_rham_sequence_maps_and_composes_at_roundoff(
     dimensions = tuple(
         space.ndof for space in (sequence.h1, sequence.hcurl, sequence.hdiv, sequence.l2)
     )
-    assert dimensions[0] - dimensions[1] + dimensions[2] - dimensions[3] == 1
+    recorded_dimensions = tuple(
+        int(recorded[column]) for column in ("h1_dofs", "hcurl_dofs", "hdiv_dofs", "l2_dofs")
+    )
+    assert dimensions == recorded_dimensions
+    euler_characteristic = dimensions[0] - dimensions[1] + dimensions[2] - dimensions[3]
+    assert euler_characteristic == int(recorded["euler_characteristic"]) == 1
+    assert mesh.ne == int(recorded["elements"])
 
     seed = 4100 + 100 * subdivisions + base_order
     scalar = _random_field(sequence.h1, seed=seed)
@@ -140,30 +174,83 @@ def test_tetrahedral_de_rham_sequence_maps_and_composes_at_roundoff(
         integration_order=integration_order,
     )
 
-    assert gradient.relative_defect < _ROUNDOFF_GATE
-    assert curl.relative_defect < _ROUNDOFF_GATE
-    assert divergence.relative_defect < _ROUNDOFF_GATE
-    assert (
-        _relative_norm(
+    defects = {
+        "grad_mapping_defect": gradient.relative_defect,
+        "curl_mapping_defect": curl.relative_defect,
+        "div_mapping_defect": divergence.relative_defect,
+        "curl_grad_defect": _relative_norm(
             ng.curl(gradient.field),
             mesh,
             scale=gradient.source_norm,
             order=integration_order,
-        )
-        < _ROUNDOFF_GATE
-    )
-    assert (
-        _relative_norm(
+        ),
+        "div_curl_defect": _relative_norm(
             ng.div(curl.field),
             mesh,
             scale=curl.source_norm,
             order=integration_order,
+        ),
+    }
+    for column in _DEFECT_COLUMNS:
+        actual = defects[column]
+        table_value = float(recorded[column])
+        assert actual < _roundoff_gate(base_order), (column, actual)
+        assert actual <= _recorded_defect_gate(table_value), (
+            column,
+            actual,
+            table_value,
         )
-        < _ROUNDOFF_GATE
+
+
+def test_curved_tetrahedral_magnetic_subcomplex_composes_at_roundoff() -> None:
+    """The magnetic half of (M1) remains exact on curved tetrahedra.
+
+    ADR 0004 weakens only the terminal curved ``HDiv --div--> L2`` interpretation
+    used for the current projection.  It leaves ``B_h = curl(A_h)`` exact.  This test
+    verifies the HCurl-to-HDiv mapping and evaluates the supported symbolic coordinate
+    trace of ``B_h`` instead of the unsupported nested ``ng.div(ng.curl(A_h))`` call.
+    """
+    geometry = OCCGeometry(Sphere(Pnt(0.0, 0.0, 0.0), 1.0))
+    mesh = ng.Mesh(geometry.GenerateMesh(maxh=0.9))
+    geometry_order = 3
+    mesh.Curve(geometry_order)
+
+    base_order = 2
+    sequence = make_tetrahedral_de_rham_sequence(mesh, order=base_order)
+    vector_potential = _random_field(sequence.hcurl, seed=4199)
+    magnetic_field = ng.curl(vector_potential)
+    integration_order = 2 * max(base_order, geometry_order) + 6
+    curl = _mass_project(
+        magnetic_field,
+        sequence.hdiv,
+        mesh,
+        integration_order=integration_order,
+    )
+
+    symbolic_divergence = (
+        magnetic_field.Diff(ng.x)[0] + magnetic_field.Diff(ng.y)[1] + magnetic_field.Diff(ng.z)[2]
+    )
+    assert curl.relative_defect < 1.0e-12
+    assert (
+        _relative_norm(
+            symbolic_divergence,
+            mesh,
+            scale=curl.source_norm,
+            order=integration_order,
+        )
+        < 1.0e-12
     )
 
 
-@pytest.mark.parametrize("bad_order", [-1, True, 1.5])
+def test_de_rham_pairing_table_covers_the_validated_sweep_exactly() -> None:
+    """The checked-in verification table cannot silently omit a tested order or mesh."""
+    rows = _recorded_rows()
+    assert set(rows) == {
+        (subdivisions, base_order) for subdivisions in _SUBDIVISIONS for base_order in _BASE_ORDERS
+    }
+
+
+@pytest.mark.parametrize("bad_order", [-1, 6, True, 1.5])
 def test_tetrahedral_de_rham_sequence_rejects_invalid_orders(bad_order: object) -> None:
     """The base-order contract rejects values NGSolve could reinterpret ambiguously."""
     mesh = MakeStructured3DMesh(hexes=False, nx=1, ny=1, nz=1)

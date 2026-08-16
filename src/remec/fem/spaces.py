@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+_MAX_VALIDATED_BASE_ORDER = 5
+
 
 @dataclass(frozen=True, slots=True)
 class DeRhamSequence:
@@ -32,6 +34,10 @@ class DeRhamSequence:
 def make_tetrahedral_de_rham_sequence(mesh: Any, *, order: int) -> DeRhamSequence:
     """Build the tetrahedral discrete de Rham complex used to preserve (M1).
 
+    ``order`` is the HCurl/base order ``p``, not the independent H1 order used for
+    ``chi`` and ``utilde`` elsewhere in DESIGN section 7.1.  Base orders 0--5 are
+    covered by the manufactured verification table.
+
     Implements the space pairing
     ``H1(p+1) --grad--> HCurl(p) --curl--> HDiv(max(p-1, 0))
     --div--> L2(max(p-2, 0))`` on affine tetrahedra.  The mapped HCurl/HDiv
@@ -41,16 +47,27 @@ def make_tetrahedral_de_rham_sequence(mesh: Any, *, order: int) -> DeRhamSequenc
         raise TypeError("order must be an integer")
     if order < 0:
         raise ValueError("order must be non-negative")
+    if order > _MAX_VALIDATED_BASE_ORDER:
+        raise ValueError(
+            f"order must not exceed the validated base order {_MAX_VALIDATED_BASE_ORDER}"
+        )
 
     import ngsolve as ng  # type: ignore[import-untyped]
 
-    if getattr(mesh, "dim", None) != 3:
-        raise ValueError("the tetrahedral de Rham sequence requires a three-dimensional mesh")
     try:
-        volume_elements = tuple(mesh.Elements(ng.VOL))
+        mesh_dimension = mesh.dim
+        volume_elements = iter(mesh.Elements(ng.VOL))
     except AttributeError as error:
         raise TypeError("mesh must be an NGSolve mesh") from error
-    if not volume_elements or any(element.type != ng.ET.TET for element in volume_elements):
+    if mesh_dimension != 3:
+        raise ValueError("the tetrahedral de Rham sequence requires a three-dimensional mesh")
+
+    has_volume_elements = False
+    for element in volume_elements:
+        has_volume_elements = True
+        if element.type != ng.ET.TET:
+            raise ValueError("the tetrahedral de Rham sequence requires only tetrahedral elements")
+    if not has_volume_elements:
         raise ValueError("the tetrahedral de Rham sequence requires only tetrahedral elements")
 
     h1_order = order + 1
