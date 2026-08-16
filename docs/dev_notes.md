@@ -169,3 +169,14 @@
   unchanged — `Compile()` reorders nothing, it only caches — so no recorded rate table
   moves. Compile any integrand whose coefficient tree repeats a normalization or a
   projector; the win grows with `bonus_intorder` and with expression depth.
+
+- PR-CI timing (NGSolve 6.2.2606): the constrained M3–M3b verification rows that
+  repeatedly check h/p/N and profile behavior use `diagnostic_detail="core"`. This
+  still evaluates residuals, independent (M2) shell currents, G couplings, shell means,
+  and shell-resolution gates, but intentionally omits supplemental SUPG, floor,
+  sampled-field, and parallel-current L2 diagnostics. The default remains `"full"`;
+  the gradient-comparison cost and active-floor test exercises it. Cross-mesh p≤2 L2
+  comparisons converge to better than 1e-5 relative between mapped orders 8 and 20, so
+  the tests retain order 8. `pytest-xdist` runs module scopes on three processes by
+  default; every M3 test uses one NGSolve worker per process, avoiding thread
+  oversubscription.

@@ -213,18 +213,18 @@ The second benchmark uses a constant in-plane field at 22.5 degrees. The structu
 triangle edges lie at 0, 45, and 90 degrees, so the field bisects the nearest two edge
 directions and is deliberately maximally misaligned within that mesh family. A
 zero-degree field on the same meshes is the aligned control. On the
-$20\times20\to28\times28$ refinement, aligned physical-$u$ coarse-to-fine relative L²
-changes are $1.4068\times10^{-2}$ (∇⊥) and $1.2687\times10^{-2}$ (full ∇); the
-misaligned values are $1.9625\times10^{-2}$ and $1.6215\times10^{-2}$. Thus
-misalignment amplifies h-sensitivity by 1.395 and 1.278 respectively, rather than the
+$16\times16\to22\times22$ refinement, aligned physical-$u$ coarse-to-fine relative L²
+changes are $1.8009\times10^{-2}$ (∇⊥) and $1.7696\times10^{-2}$ (full ∇); the
+misaligned values are $2.3927\times10^{-2}$ and $2.1049\times10^{-2}$. Thus
+misalignment amplifies h-sensitivity by 1.329 and 1.189 respectively, rather than the
 comparison merely measuring ordinary refinement error. The fine-grid cross-variant
-differences are $3.9467\times10^{-2}$ aligned and $2.9210\times10^{-2}$ misaligned.
+differences are $4.0019\times10^{-2}$ aligned and $2.8936\times10^{-2}$ misaligned.
 The larger aligned cross-variant difference does not mean its mesh sensitivity is
 worse: misalignment is measured by the within-variant coarse/fine amplification above,
 not by the absolute distance between closures. Rotating the field for the aligned
 control also changes $\mathbf B\cdot\nabla p$ and $\mathbf B\cdot\nabla s$ by 7.6%, so
 the absolute amplification includes a small state change; the ratio between the two
-variant amplifications, $1.395/1.278\simeq1.09$, is the comparative signal.
+variant amplifications, $1.329/1.189\simeq1.12$, is the comparative signal.
 The multiplier-current norms are also variant-distinct in both controls, and all
 independently evaluated M3b residuals remain below $7.01\times10^{-17}$. These rows
 are in
@@ -320,23 +320,25 @@ L² errors converge as follows:
 
 | Variant | Subdivisions (per axis) | Error (coarse → fine) | Measured h-rate |
 | --- | ---: | ---: | ---: |
-| perpendicular | 20 → 28 | 2.9070e-4 → 1.4811e-4 | 2.0041 |
-| full | 20 → 28 | 2.9609e-4 → 1.5085e-4 | 2.0042 |
+| perpendicular | 20 → 28 | 2.9235e-4 → 1.4953e-4 | 1.9925 |
+| full | 20 → 28 | 2.9772e-4 → 1.5226e-4 | 1.9929 |
 
 At 24 subdivisions, raising $p=1\to2$ reduces the error from
-$3.3789\times10^{-4}$ to $2.0165\times10^{-4}$ (perpendicular) and from
-$3.8692\times10^{-4}$ to $2.0538\times10^{-4}$ (full). The $p=3$ values,
-$2.0163\times10^{-4}$ and $2.0537\times10^{-4}$, expose the second-order mollified-
+$3.3866\times10^{-4}$ to $2.0316\times10^{-4}$ (perpendicular) and from
+$3.8762\times10^{-4}$ to $2.0689\times10^{-4}$ (full). The $p=3$ values,
+$2.0315\times10^{-4}$ and $2.0686\times10^{-4}$, expose the second-order mollified-
 shell ceiling rather than an algebraic-solve limit. Across the h/p rows, the largest
-M3 relative residual is $1.131\times10^{-16}$ and the largest independently evaluated
-M3b relative residual is $1.063\times10^{-16}$.
+M3 relative residual is $1.404\times10^{-16}$ and the largest independently evaluated
+M3b relative residual is $1.152\times10^{-16}$. These rows use an order-7 shell
+quadrature rule, which retains the measured second-order h rate and the p-improvement
+gate while avoiding oversampling the smooth manufactured shell moments.
 
 Doubling the shell count from 4 to 8 on a $32\times32$ mesh changes the physical field
-by $2.145\times10^{-4}$ (perpendicular) and $2.176\times10^{-4}$ (full) in relative L²,
-evaluated on one common order-20 mapped-quadrature rule. The former point sample moves
-by $6.99\times10^{-6}$ and $7.33\times10^{-6}$, respectively, but is retained only as
+by $2.088\times10^{-4}$ (perpendicular) and $2.118\times10^{-4}$ (full) in relative L²,
+evaluated on one common order-8 mapped-quadrature rule. The former point sample moves
+by $3.36\times10^{-6}$ and $3.51\times10^{-6}$, respectively, but is retained only as
 a secondary reproducibility value rather than the convergence norm. The eight-shell
-grid spans 3.991 local radial-cell widths and 3.991 mapped mollifier widths per shell,
+grid spans 3.981 local radial-cell widths and 3.981 mapped mollifier widths per shell,
 at the lower edge of the required 3–4-cell resolution. Two distinct $I_0(s)$ profiles
 are realized by independently reconstructed cumulative currents to the $10^{-10}$
 solver gate for both variants on the coupled state with $\mathbf B\cdot\nabla s\ne0$,

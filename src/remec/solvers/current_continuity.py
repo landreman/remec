@@ -150,6 +150,7 @@ class ConstrainedCurrentContinuitySolver:
         quadrature_order: int = 8,
         volume_levels: int = 17,
         spatial_width_cells: float = 1.0,
+        diagnostic_detail: Literal["full", "core"] = "full",
         logger: JsonEventLogger | None = None,
     ) -> None:
         if polynomial_order < 1:
@@ -162,12 +163,15 @@ class ConstrainedCurrentContinuitySolver:
             raise ValueError("volume_levels must be at least three")
         if not isfinite(spatial_width_cells) or spatial_width_cells <= 0.0:
             raise ValueError("spatial_width_cells must be finite and positive")
+        if diagnostic_detail not in ("full", "core"):
+            raise ValueError("diagnostic_detail must be 'full' or 'core'")
         self.polynomial_order = polynomial_order
         self.runtime = RuntimeOptions() if runtime is None else runtime
         self.stabilization = stabilization
         self.quadrature_order = quadrature_order
         self.volume_levels = volume_levels
         self.spatial_width_cells = spatial_width_cells
+        self.diagnostic_detail = diagnostic_detail
         self.logger = logger
         self._internal_solution: Any = None
 
@@ -207,6 +211,7 @@ class ConstrainedCurrentContinuitySolver:
             "quadrature_order": self.quadrature_order,
             "volume_levels": self.volume_levels,
             "spatial_width_cells": self.spatial_width_cells,
+            "diagnostic_detail": self.diagnostic_detail,
             "shell_edges": edges,
             "target_cumulative_current": target,
             "edge_value": edge_value,
@@ -219,6 +224,7 @@ class ConstrainedCurrentContinuitySolver:
             "regularization_gradient": self.runtime.regularization_gradient,
             "stabilization": self.stabilization,
             "shell_count": len(edges) - 1,
+            "diagnostic_detail": self.diagnostic_detail,
         }
         if self.logger is not None:
             self.logger.info("m3_m3b_solve_started", **log_fields)
@@ -236,6 +242,7 @@ class ConstrainedCurrentContinuitySolver:
             quadrature_order=self.quadrature_order,
             volume_levels=self.volume_levels,
             spatial_width_cells=self.spatial_width_cells,
+            diagnostic_detail=self.diagnostic_detail,
         )
         self._internal_solution = internal
         if self.logger is not None:

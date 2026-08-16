@@ -299,12 +299,12 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   <br>Measured: macOS / CPython 3.12.2 / NGSolve 6.2.2606 — the unknown-G
   piecewise-linear border uses one A factorization plus a shell-sized Schur solve and
   independently reconstructs all parallel, diamagnetic, and regularizing (M2) moments.
-  Across the coupled h/p table, maximum relative residuals are 1.131e-16 (M3) and
-  1.063e-16 (M3b). At p=2, 20 → 28 subdivisions gives physical-u L² rates 2.0041
-  (∇⊥) and 2.0042 (full ∇); the p=1 → 2 errors decrease from 3.379e-4 → 2.016e-4
-  and 3.869e-4 → 2.054e-4, with the p=3 results at the second-order mollified-shell
-  ceiling. Doubling 4 → 8 shells changes the physical field by 2.145e-4 (∇⊥) and
-  2.176e-4 (full ∇) in relative L² while every finest shell spans 3.991 local
+  Across the coupled h/p table, maximum relative residuals are 1.404e-16 (M3) and
+  1.152e-16 (M3b). At p=2, 20 → 28 subdivisions gives physical-u L² rates 1.9925
+  (∇⊥) and 1.9929 (full ∇); the p=1 → 2 errors decrease from 3.387e-4 → 2.032e-4
+  and 3.876e-4 → 2.069e-4, with the p=3 results at the second-order mollified-shell
+  ceiling. Doubling 4 → 8 shells changes the physical field by 2.088e-4 (∇⊥) and
+  2.118e-4 (full ∇) in relative L² while every finest shell spans 3.981 local
   cells/mollifier widths. Two distinct I₀ profiles on the nondegenerate coupled state
   realize their independently evaluated currents below 1e-10; both G couplings and a
   nonzero ũ are exercised. Two old F profiles with one edge value cancel below 1e-10.
@@ -349,9 +349,9 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   D_u=0.02). At that D_u, the ∇⊥/full layer FWHM values are 0.41050 / 0.40702
   (9.85 / 9.77 normal cells), both have one radial turning point, and full ∇ lowers
   fifth-harmonic parallel-noise transfer by 4.49%; all scan rows clear six FWHM cells.
-  On aligned and 22.5°-misaligned 20² → 28² controls,
-  coarse-to-fine changes are 1.4068e-2 / 1.2687e-2 and 1.9625e-2 / 1.6215e-2,
-  giving misalignment amplifications of 1.395 / 1.278. Each frozen solve records one
+  On aligned and 22.5°-misaligned 16² → 22² controls,
+  coarse-to-fine changes are 1.8009e-2 / 1.7696e-2 and 2.3927e-2 / 2.1049e-2,
+  giving misalignment amplifications of 1.329 / 1.189. Each frozen solve records one
   A assembly/factorization, five direct responses, and four within-call factorization
   reuses; Krylov iterations are not applicable and the preconditioner is none.
   Across the resonant rows, full ∇ assembles A about 2.3 times faster; bordered-solve

@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import csv
-from math import cos, log, pi, sin, sqrt
+from math import log, pi
 from pathlib import Path
 
 import ngsolve as ng
+import numpy as np
 import pytest
 
 from remec import RuntimeOptions
@@ -108,30 +109,26 @@ def _layer_case(
     return coefficients, profile
 
 
-def _harmonic_amplitude(solver: CurrentContinuitySolver, x_coordinate: float) -> float:
-    r"""Return the physical-(M2) ``J_parallel/B`` harmonic amplitude."""
-    y_coordinates = [index / 65.0 for index in range(65)]
-    values = [
-        solver.parallel_current_over_field_at(x_coordinate, y_coordinate) - 0.2
-        for y_coordinate in y_coordinates
-    ]
-    sine_component = (
-        2.0
-        * sum(
-            value * sin(2.0 * pi * y_coordinate)
-            for value, y_coordinate in zip(values, y_coordinates, strict=True)
-        )
-        / len(values)
+def _harmonic_amplitudes(
+    solver: CurrentContinuitySolver,
+    x_coordinates: np.ndarray,
+) -> np.ndarray:
+    r"""Return batched physical-(M2) ``J_parallel/B`` fundamental amplitudes."""
+    y_coordinates = np.arange(65, dtype=float) / 65.0
+    internal = solver._solution()
+    mesh = internal.mesh()
+    points = mesh(
+        np.repeat(x_coordinates, len(y_coordinates)),
+        np.tile(y_coordinates, len(x_coordinates)),
     )
-    cosine_component = (
-        2.0
-        * sum(
-            value * cos(2.0 * pi * y_coordinate)
-            for value, y_coordinate in zip(values, y_coordinates, strict=True)
-        )
-        / len(values)
+    values = np.asarray(internal._parallel_current_over_field(points), dtype=float).reshape(
+        len(x_coordinates),
+        len(y_coordinates),
     )
-    return sqrt(sine_component**2 + cosine_component**2)
+    values -= np.mean(values, axis=1, keepdims=True)
+    sine_component = 2.0 * values.dot(np.sin(2.0 * pi * y_coordinates)) / len(y_coordinates)
+    cosine_component = 2.0 * values.dot(np.cos(2.0 * pi * y_coordinates)) / len(y_coordinates)
+    return np.hypot(sine_component, cosine_component)
 
 
 def _interpolated_crossing(
@@ -149,19 +146,19 @@ def _interpolated_crossing(
 def _layer_fwhm(solver: CurrentContinuitySolver) -> float:
     """Measure the full width at half maximum of the resonant M2 current harmonic."""
     sample_count = 281
-    x_coordinates = [0.15 + 0.7 * index / (sample_count - 1) for index in range(sample_count)]
-    amplitudes = [_harmonic_amplitude(solver, x_coordinate) for x_coordinate in x_coordinates]
-    peak_index = max(range(sample_count), key=amplitudes.__getitem__)
+    x_coordinates = np.linspace(0.15, 0.85, sample_count)
+    amplitudes = _harmonic_amplitudes(solver, x_coordinates)
+    peak_index = int(np.argmax(amplitudes))
     assert 0 < peak_index < sample_count - 1
     half_maximum = 0.5 * amplitudes[peak_index]
-    left_candidates = [index for index in range(peak_index) if amplitudes[index] < half_maximum]
-    right_candidates = [
-        index for index in range(peak_index + 1, sample_count) if amplitudes[index] < half_maximum
-    ]
-    assert left_candidates, "layer FWHM has no left half-maximum crossing in the sample window"
-    assert right_candidates, "layer FWHM has no right half-maximum crossing in the sample window"
-    left_below = max(left_candidates)
-    right_below = min(right_candidates)
+    left_candidates = np.flatnonzero(amplitudes[:peak_index] < half_maximum)
+    right_candidates = peak_index + 1 + np.flatnonzero(amplitudes[peak_index + 1 :] < half_maximum)
+    assert len(left_candidates), "layer FWHM has no left half-maximum crossing in the sample window"
+    assert len(right_candidates), (
+        "layer FWHM has no right half-maximum crossing in the sample window"
+    )
+    left_below = int(left_candidates[-1])
+    right_below = int(right_candidates[0])
     left_crossing = _interpolated_crossing(
         x_coordinates[left_below],
         amplitudes[left_below],
@@ -191,29 +188,49 @@ def _log_log_slope(abscissae: list[float], ordinates: list[float]) -> float:
     ) / sum((value - mean_abscissa) ** 2 for value in log_abscissae)
 
 
-@pytest.mark.parametrize("variant", ["perpendicular", "full"])
-def test_resonant_m3_layer_width_scales_as_diffusivity_to_one_third(variant: str) -> None:
-    r"""Eq. ``layer_width`` gives ``delta ~ D_u**(1/3)`` for both M3 variants."""
-    slab = Slab2D(
-        maxh=1.0 / 16.0,
-        subdivisions=(64, 16),
-        periodic_y=True,
+def _solve_layer_case(
+    variant: str,
+    diffusivity: float,
+    *,
+    subdivisions: tuple[int, int] = (64, 16),
+) -> tuple[CurrentContinuitySolver, object]:
+    """Solve one periodic legacy-layer verification row."""
+    nx, ny = subdivisions
+    coefficients, profile = _layer_case(diffusivity)
+    solver = CurrentContinuitySolver(
+        polynomial_order=3,
+        runtime=RuntimeOptions(regularization_gradient=variant),  # type: ignore[arg-type]
+        stabilization="supg",
     )
+    result = solver.solve_utilde(
+        Slab2D(maxh=1.0 / ny, subdivisions=(nx, ny), periodic_y=True),
+        coefficients,
+        profile,
+        boundary="left|right",
+    )
+    return solver, result
+
+
+@pytest.fixture(scope="module")
+def layer_scan() -> dict[tuple[str, float], tuple[CurrentContinuitySolver, object]]:
+    """Cache the ten fixed layer-scaling solves shared by all layer contracts."""
+    return {
+        (variant, diffusivity): _solve_layer_case(variant, diffusivity)
+        for variant in ("perpendicular", "full")
+        for diffusivity in _DIFFUSIVITIES
+    }
+
+
+@pytest.mark.parametrize("variant", ["perpendicular", "full"])
+def test_resonant_m3_layer_width_scales_as_diffusivity_to_one_third(
+    variant: str,
+    layer_scan: dict[tuple[str, float], tuple[CurrentContinuitySolver, object]],
+) -> None:
+    r"""Eq. ``layer_width`` gives ``delta ~ D_u**(1/3)`` for both M3 variants."""
     recorded_rows = _recorded_rows()
     widths: list[float] = []
     for diffusivity in _DIFFUSIVITIES:
-        coefficients, profile = _layer_case(diffusivity)
-        solver = CurrentContinuitySolver(
-            polynomial_order=3,
-            runtime=RuntimeOptions(regularization_gradient=variant),  # type: ignore[arg-type]
-            stabilization="supg",
-        )
-        result = solver.solve_utilde(
-            slab,
-            coefficients,
-            profile,
-            boundary="left|right",
-        )
+        solver, result = layer_scan[variant, diffusivity]
         width = _layer_fwhm(solver)
         resolution = solver.assess_layer_resolution(
             layer_width=width,
@@ -252,26 +269,20 @@ def test_resonant_m3_layer_width_scales_as_diffusivity_to_one_third(variant: str
     )
 
 
-def test_thinnest_resonant_layer_fwhm_is_mesh_independent() -> None:
+def test_thinnest_resonant_layer_fwhm_is_mesh_independent(
+    layer_scan: dict[tuple[str, float], tuple[CurrentContinuitySolver, object]],
+) -> None:
     """The six-cell FWHM verdict is unchanged by one layer-aligned h-refinement."""
     diffusivity = _DIFFUSIVITIES[0]
-    coefficients, profile = _layer_case(diffusivity)
     recorded_rows = _recorded_refinement_rows()
     measured_widths: dict[tuple[int, int], float] = {}
 
     for subdivisions in ((64, 16), (96, 24)):
-        nx, ny = subdivisions
-        solver = CurrentContinuitySolver(
-            polynomial_order=3,
-            runtime=RuntimeOptions(regularization_gradient="perpendicular"),
-            stabilization="supg",
-        )
-        solver.solve_utilde(
-            Slab2D(maxh=1.0 / ny, subdivisions=subdivisions, periodic_y=True),
-            coefficients,
-            profile,
-            boundary="left|right",
-        )
+        nx, _ = subdivisions
+        if subdivisions == (64, 16):
+            solver, _ = layer_scan["perpendicular", diffusivity]
+        else:
+            solver, _ = _solve_layer_case("perpendicular", diffusivity, subdivisions=subdivisions)
         measured_width = _layer_fwhm(solver)
         expected = recorded_rows[subdivisions]
         measured_widths[subdivisions] = measured_width
@@ -287,7 +298,10 @@ def test_thinnest_resonant_layer_fwhm_is_mesh_independent() -> None:
 
 
 @pytest.mark.parametrize("variant", ["perpendicular", "full"])
-def test_resonant_utilde_layer_retains_direct_u_and_m2_cross_checks(variant: str) -> None:
+def test_resonant_utilde_layer_retains_direct_u_and_m2_cross_checks(
+    variant: str,
+    layer_scan: dict[tuple[str, float], tuple[CurrentContinuitySolver, object]],
+) -> None:
     r"""Preferred utilde and direct (M3) agree in physical u and reconstructed (M2)."""
     slab = Slab2D(
         maxh=1.0 / 16.0,
@@ -307,17 +321,7 @@ def test_resonant_utilde_layer_retains_direct_u_and_m2_cross_checks(variant: str
         boundary="left|right",
         boundary_value=profile.value,
     )
-    transformed = CurrentContinuitySolver(
-        polynomial_order=3,
-        runtime=runtime,
-        stabilization="supg",
-    )
-    transformed.solve_utilde(
-        slab,
-        coefficients,
-        profile,
-        boundary="left|right",
-    )
+    transformed, _ = layer_scan[variant, 0.01]
 
     for solver in (direct, transformed):
         for x_coordinate in (0.35, 0.50, 0.65):

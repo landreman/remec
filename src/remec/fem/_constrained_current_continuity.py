@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from itertools import pairwise
 from math import isfinite, sqrt
 from time import perf_counter
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 
 import numpy as np
 from numpy.typing import NDArray
@@ -325,6 +325,7 @@ def solve_constrained_current_continuity(
     volume_levels: int = 65,
     spatial_width_cells: float = 1.0,
     residual_tolerance: float = 1.0e-10,
+    diagnostic_detail: Literal["full", "core"] = "full",
 ) -> _ConstrainedCurrentContinuitySolution:
     r"""Solve the square bordered system for note equations ``(M3)``--``(M3b)``.
 
@@ -345,6 +346,11 @@ def solve_constrained_current_continuity(
     separate multiplier-current term is double counted in ``C_G``.  A single sparse
     factorization of ``A`` supplies all response columns; the dense solve is only the
     one-dimensional Schur complement.
+
+    ``diagnostic_detail="core"`` retains the residual, shell-current, coupling, and
+    shell-resolution diagnostics needed to verify ``(M2)``--``(M3b)``.  It omits
+    supplemental SUPG, smooth-floor, sampled-field, and parallel-current L2
+    diagnostics.  The default ``"full"`` evaluates the complete production record.
     """
     solve_started = perf_counter()
     if polynomial_order < 1:
@@ -361,6 +367,8 @@ def solve_constrained_current_continuity(
         raise ValueError("edge_value must be finite")
     if not isfinite(residual_tolerance) or residual_tolerance <= 0.0:
         raise ValueError("residual_tolerance must be finite and positive")
+    if diagnostic_detail not in ("full", "core"):
+        raise ValueError("diagnostic_detail must be 'full' or 'core'")
     if slab.lower != (0.0, 0.0) or slab.upper != (1.0, 1.0):
         raise ValueError("the constrained M3-M3b verification kernel supports the unit square")
     boundary_names = tuple(boundary.split("|"))
@@ -663,14 +671,16 @@ def solve_constrained_current_continuity(
         parallel_current_over_field = physical_u
     bordered_solve_wall_seconds = perf_counter() - solve_started
     diagnostics_started = perf_counter()
-    diagnostic_assembly_started = perf_counter()
-    with ng.TaskManager():
-        if supg_bilinear_form is not None and supg_drive_form is not None:
-            supg_bilinear_form.Assemble()
-            supg_drive_form.Assemble()
-            for column in supg_p_forms:
-                column.Assemble()
-    diagnostic_assembly_wall_seconds = perf_counter() - diagnostic_assembly_started
+    diagnostic_assembly_wall_seconds = 0.0
+    if diagnostic_detail == "full":
+        diagnostic_assembly_started = perf_counter()
+        with ng.TaskManager():
+            if supg_bilinear_form is not None and supg_drive_form is not None:
+                supg_bilinear_form.Assemble()
+                supg_drive_form.Assemble()
+                for column in supg_p_forms:
+                    column.Assemble()
+        diagnostic_assembly_wall_seconds = perf_counter() - diagnostic_assembly_started
     independent_moments = _component_moments(
         volume_map,
         edges,
@@ -706,19 +716,20 @@ def solve_constrained_current_continuity(
             f"{constraint_relative_residual_norm:.3e} exceeds {residual_tolerance:.0e}"
         )
 
-    if supg_bilinear_form is not None and supg_drive_form is not None and tau is not None:
-        supg_residual = supg_drive_form.vec.CreateVector()
-        supg_residual.data = supg_bilinear_form.mat * utilde.vec - supg_drive_form.vec
-        for coefficient, column in zip(free_g_coefficients, supg_p_forms[:-1], strict=True):
-            supg_residual.data += float(coefficient) * column.vec
-        supg_residual.data += edge_value * supg_p_forms[-1].vec
-        free_supg_residual = ng.Projector(free_dofs, True) * supg_residual
-        supg_stabilization_norm = float(ng.Norm(free_supg_residual))
-        supg_tau_min, supg_tau_max = _quadrature_extrema(mesh, _compiled(tau), 20)
-    else:
-        supg_stabilization_norm = 0.0
-        supg_tau_min = 0.0
-        supg_tau_max = 0.0
+    if diagnostic_detail == "full":
+        if supg_bilinear_form is not None and supg_drive_form is not None and tau is not None:
+            supg_residual = supg_drive_form.vec.CreateVector()
+            supg_residual.data = supg_bilinear_form.mat * utilde.vec - supg_drive_form.vec
+            for coefficient, column in zip(free_g_coefficients, supg_p_forms[:-1], strict=True):
+                supg_residual.data += float(coefficient) * column.vec
+            supg_residual.data += edge_value * supg_p_forms[-1].vec
+            free_supg_residual = ng.Projector(free_dofs, True) * supg_residual
+            supg_stabilization_norm = float(ng.Norm(free_supg_residual))
+            supg_tau_min, supg_tau_max = _quadrature_extrema(mesh, _compiled(tau), 20)
+        else:
+            supg_stabilization_norm = 0.0
+            supg_tau_min = 0.0
+            supg_tau_max = 0.0
 
     multiplier_current = coefficients.current_diffusivity * _regularized_gradient(
         g_gradient,
@@ -754,25 +765,11 @@ def solve_constrained_current_continuity(
     def l2(expression: Any) -> float:
         return sqrt(max(0.0, float(ng.Integrate(_compiled(expression), mesh, order=20))))
 
-    floor_activity = coefficients.magnetic_floor**2 / (
-        ng.InnerProduct(magnetic_field, magnetic_field) + coefficients.magnetic_floor**2
-    )
-    floor_activity_l2 = l2(floor_activity**2)
-    physical_magnitude = ng.sqrt(ng.InnerProduct(magnetic_field, magnetic_field))
-    minimum_field_magnitude = _minimum_sampled_value(
-        mesh,
-        physical_magnitude,
-        integration_order=20,
-    )
-
     diagnostics_wall_seconds = perf_counter() - diagnostics_started
     total_wall_seconds = perf_counter() - solve_started
     diagnostics = {
         "m3_residual_norm": m3_residual_norm,
         "m3b_constraint_residual_norm": constraint_residual_norm,
-        "m3_supg_stabilization_norm": supg_stabilization_norm,
-        "m3_supg_tau_min": supg_tau_min,
-        "m3_supg_tau_max": supg_tau_max,
         "schur_condition_number": schur_condition_number,
         "a_assemblies": float(a_assemblies),
         "a_factorizations": float(a_factorizations),
@@ -785,13 +782,10 @@ def solve_constrained_current_continuity(
         "bordered_solve_wall_seconds": bordered_solve_wall_seconds,
         "diagnostics_wall_seconds": diagnostics_wall_seconds,
         "total_wall_seconds": total_wall_seconds,
-        "minimum_field_magnitude": minimum_field_magnitude,
-        "floor_activity_l2": floor_activity_l2,
         "maximum_shell_mean_utilde": float(np.max(np.abs(shell_means))),
         "multiplier_current_l2": l2(ng.InnerProduct(multiplier_current, multiplier_current)),
         "g_advection_coupling_l2": l2(g_advection_coupling**2),
         "g_reaction_coupling_l2": l2(g_reaction_coupling**2),
-        "parallel_current_over_field_l2": l2(parallel_current_over_field**2),
         "parallel_toroidal_current_l2": sqrt(float(np.dot(weights, parallel_samples**2))),
         "diamagnetic_toroidal_current_l2": sqrt(float(np.dot(weights, diamagnetic_samples**2))),
         "regularizing_toroidal_current_l2": sqrt(float(np.dot(weights, regularizing_samples**2))),
@@ -825,6 +819,25 @@ def solve_constrained_current_continuity(
             )
         ),
     }
+    if diagnostic_detail == "full":
+        floor_activity = coefficients.magnetic_floor**2 / (
+            ng.InnerProduct(magnetic_field, magnetic_field) + coefficients.magnetic_floor**2
+        )
+        physical_magnitude = ng.sqrt(ng.InnerProduct(magnetic_field, magnetic_field))
+        diagnostics.update(
+            {
+                "m3_supg_stabilization_norm": supg_stabilization_norm,
+                "m3_supg_tau_min": supg_tau_min,
+                "m3_supg_tau_max": supg_tau_max,
+                "minimum_field_magnitude": _minimum_sampled_value(
+                    mesh,
+                    physical_magnitude,
+                    integration_order=20,
+                ),
+                "floor_activity_l2": l2(floor_activity**2),
+                "parallel_current_over_field_l2": l2(parallel_current_over_field**2),
+            }
+        )
     if not all(isfinite(value) and value >= 0.0 for value in diagnostics.values()):
         raise RuntimeError("constrained M3-M3b solve produced a non-finite diagnostic")
 

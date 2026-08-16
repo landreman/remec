@@ -23,6 +23,7 @@ from remec.solvers.current_continuity import (
 
 _RATE_TABLE = Path(__file__).with_name("m3_constrained_rates.csv")
 _DU_TABLE = Path(__file__).with_name("m3_constrained_du_scan.csv")
+_CROSS_MESH_L2_INTEGRATION_ORDER = 8
 
 
 def _regularized_gradient(gradient: object, magnetic_field: object, variant: str) -> object:
@@ -253,9 +254,12 @@ def _regular_limit_case(
 
 
 def _relative_l2_difference(first: Any, second: Any) -> float:
-    """Integrate two grid functions on one common mapped-quadrature rule."""
+    """Integrate two p≤2 fields on a converged common mapped-quadrature rule."""
     element_types = {element.type for element in second.mesh().Elements(ng.VOL)}
-    rules = {element_type: ng.IntegrationRule(element_type, 20) for element_type in element_types}
+    rules = {
+        element_type: ng.IntegrationRule(element_type, _CROSS_MESH_L2_INTEGRATION_ORDER)
+        for element_type in element_types
+    }
     weights = np.asarray(
         [
             float(point.weight) * float(second.mesh().GetTrafo(element)(point).measure)
@@ -274,8 +278,51 @@ def _relative_l2_difference(first: Any, second: Any) -> float:
     return difference_norm / second_norm
 
 
+@pytest.fixture(scope="module")
+def coupled_solve_cache() -> Any:
+    """Cache base-profile h/p/N rows reused by the distinct-``I_0`` contract."""
+    cache: dict[tuple[str, int, int, int], tuple[Any, Any, object, float]] = {}
+
+    def solve(
+        variant: str,
+        polynomial_order: int,
+        subdivisions: int,
+        shell_count: int,
+    ) -> tuple[Any, Any, object, float]:
+        key = variant, polynomial_order, subdivisions, shell_count
+        if key not in cache:
+            coefficients, geometry, profile, exact_u, edge_value = _coupled_manufactured_case(
+                variant
+            )
+            solver = ConstrainedCurrentContinuitySolver(
+                polynomial_order=polynomial_order,
+                runtime=RuntimeOptions(regularization_gradient=variant),  # type: ignore[arg-type]
+                quadrature_order=7,
+                diagnostic_detail="core",
+            )
+            result = solver.solve(
+                Slab2D(
+                    maxh=1.0 / subdivisions,
+                    subdivisions=(subdivisions, subdivisions),
+                    periodic_y=True,
+                ),
+                coefficients,
+                geometry,
+                profile,
+                shell_edges=np.linspace(0.0, 1.0, shell_count + 1),
+                edge_value=edge_value,
+            )
+            cache[key] = solver, result, exact_u, edge_value
+        return cache[key]
+
+    return solve
+
+
 @pytest.mark.parametrize("variant", ["perpendicular", "full"])
-def test_two_distinct_i0_profiles_realize_independent_m2_currents(variant: str) -> None:
+def test_two_distinct_i0_profiles_realize_independent_m2_currents(
+    variant: str,
+    coupled_solve_cache: Any,
+) -> None:
     r"""Two ``I_0(s)`` inputs return their own independently reconstructed (M2) currents."""
     edges = np.linspace(0.0, 1.0, 5)
     coefficients, geometry, base_profile, exact_u, edge_value = _coupled_manufactured_case(variant)
@@ -292,18 +339,23 @@ def test_two_distinct_i0_profiles_realize_independent_m2_currents(variant: str) 
     realized: list[np.ndarray] = []
     digests: list[str] = []
     for profile_index, profile in enumerate((base_profile, perturbed_profile)):
-        solver = ConstrainedCurrentContinuitySolver(
-            polynomial_order=2,
-            runtime=RuntimeOptions(regularization_gradient=variant),  # type: ignore[arg-type]
-        )
-        result = solver.solve(
-            Slab2D(maxh=1.0 / 24.0, subdivisions=(24, 24), periodic_y=True),
-            coefficients,
-            geometry,
-            profile,
-            shell_edges=edges,
-            edge_value=edge_value,
-        )
+        if profile_index == 0:
+            solver, result, _, _ = coupled_solve_cache(variant, 2, 24, 4)
+        else:
+            solver = ConstrainedCurrentContinuitySolver(
+                polynomial_order=2,
+                runtime=RuntimeOptions(regularization_gradient=variant),  # type: ignore[arg-type]
+                quadrature_order=7,
+                diagnostic_detail="core",
+            )
+            result = solver.solve(
+                Slab2D(maxh=1.0 / 24.0, subdivisions=(24, 24), periodic_y=True),
+                coefficients,
+                geometry,
+                profile,
+                shell_edges=edges,
+                edge_value=edge_value,
+            )
         expected = np.asarray(profile.enclosed_current(edges), dtype=float)
         measured = np.asarray(result.independent_cumulative_current)
 
@@ -359,6 +411,7 @@ def test_fixed_i0_du_scan_has_a_regular_multiplier_limit(variant: str) -> None:
         solver = ConstrainedCurrentContinuitySolver(
             polynomial_order=2,
             runtime=RuntimeOptions(regularization_gradient=variant),  # type: ignore[arg-type]
+            diagnostic_detail="core",
         )
         result = solver.solve(
             Slab2D(maxh=1.0 / 24.0, subdivisions=(24, 24), periodic_y=True),
@@ -421,32 +474,24 @@ def test_fixed_i0_du_scan_has_a_regular_multiplier_limit(variant: str) -> None:
 
 
 @pytest.mark.parametrize("variant", ["perpendicular", "full"])
-def test_constrained_manufactured_h_p_and_shell_scans_match_rate_table(variant: str) -> None:
+def test_constrained_manufactured_h_p_and_shell_scans_match_rate_table(
+    variant: str,
+    coupled_solve_cache: Any,
+) -> None:
     r"""Coupled (M3)--(M3b) errors converge in h/p and remain stable when N doubles."""
     with _RATE_TABLE.open(newline="") as table_file:
         rows = [row for row in csv.DictReader(table_file) if row["variant"] == variant]
-    coefficients, geometry, profile, exact_u, edge_value = _coupled_manufactured_case(variant)
     measured: dict[tuple[str, int, int, int], dict[str, float]] = {}
     n_solutions: dict[int, Any] = {}
     for row in rows:
         order = int(row["polynomial_order"])
         subdivisions = int(row["subdivisions"])
         shell_count = int(row["shell_count"])
-        solver = ConstrainedCurrentContinuitySolver(
-            polynomial_order=order,
-            runtime=RuntimeOptions(regularization_gradient=variant),  # type: ignore[arg-type]
-        )
-        result = solver.solve(
-            Slab2D(
-                maxh=1.0 / subdivisions,
-                subdivisions=(subdivisions, subdivisions),
-                periodic_y=True,
-            ),
-            coefficients,
-            geometry,
-            profile,
-            shell_edges=np.linspace(0.0, 1.0, shell_count + 1),
-            edge_value=edge_value,
+        solver, result, exact_u, edge_value = coupled_solve_cache(
+            variant,
+            order,
+            subdivisions,
+            shell_count,
         )
         internal = solver._solution()
         error = sqrt(
