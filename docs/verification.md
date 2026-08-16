@@ -24,7 +24,9 @@ H^1_{p+1}\xrightarrow{\nabla}H(\mathrm{curl})_p
 
 This is deliberately not four spaces constructed with equal `order` arguments.  The
 factory rejects non-tetrahedral element families rather than silently applying these
-offsets to NGSolve's different tensor-product convention.
+offsets to NGSolve's different tensor-product convention. Here `base p` is specifically
+the HCurl factory argument; it is not the independent H¹ order assigned to χ and ũ in
+`DESIGN.md` §7.1. The validated factory range is base order 0--5.
 
 For every row below, deterministic random coefficients excite every degree of freedom
 in each source space.  An independently assembled L² mass projection measures whether
@@ -39,25 +41,34 @@ the full complex including the constant scalar kernel.
 | 1 | 6 | 1 | 2/1/0/0 | 4.15e-16 | 1.98e-15 | 1.40e-15 |
 | 1 | 6 | 2 | 3/2/1/0 | 1.14e-15 | 1.26e-14 | 1.23e-15 |
 | 1 | 6 | 3 | 4/3/2/1 | 3.42e-15 | 5.57e-14 | 1.15e-14 |
+| 1 | 6 | 4 | 5/4/3/2 | 1.20e-14 | 2.93e-13 | 5.29e-14 |
+| 1 | 6 | 5 | 6/5/4/3 | 2.42e-14 | 7.82e-13 | 1.28e-13 |
 | 2 | 48 | 0 | 1/0/0/0 | 3.48e-16 | 3.97e-15 | 1.95e-15 |
 | 2 | 48 | 1 | 2/1/0/0 | 4.42e-16 | 4.36e-15 | 2.34e-15 |
 | 2 | 48 | 2 | 3/2/1/0 | 1.13e-15 | 2.31e-14 | 2.70e-15 |
 | 2 | 48 | 3 | 4/3/2/1 | 3.11e-15 | 1.03e-13 | 2.53e-14 |
+| 2 | 48 | 4 | 5/4/3/2 | 7.87e-15 | 3.84e-13 | 7.09e-14 |
+| 2 | 48 | 5 | 6/5/4/3 | 1.76e-14 | 1.15e-12 | 2.40e-13 |
 
-All defects clear the automated \(10^{-12}\) roundoff gate.  The complete
-machine-readable record, including all four dimensions and the Euler characteristic,
-is `tests/manufactured/de_rham_pairing.csv`.
+All defects clear the automated order-scaled roundoff gate
+\(32\epsilon_{\rm mach}(p+2)^3\). The test loads the complete machine-readable record,
+asserts every space order, degree-of-freedom count, and Euler characteristic exactly,
+and bounds each recomputed defect against its recorded row. The record is
+`tests/manufactured/de_rham_pairing.csv`.
 
-NGSolve's Piola mappings preserve the magnetic part of the complex on curved geometry:
-an exploratory order-3 OCC ball measured gradient/curl mapping and both successive-
-derivative identities below \(6.95\times10^{-13}\).  Ordinary scalar NGSolve `L2`,
+NGSolve's Piola mappings preserve the magnetic part of the complex on curved geometry.
+The automated regression uses an order-3 curved, 107-tetrahedron OCC ball at base order
+2: the HCurl-to-HDiv projection defect is \(7.18\times10^{-16}\), and the symbolic
+coordinate-derivative trace of `curl(A_h)` is exactly zero. Ordinary scalar NGSolve `L2`,
 however, is not the density-mapped terminal space on a curved element, so projecting a
 general `div(HDiv)` field into it is not a roundoff identity (measured relative defects
 0.23--0.32).  Curved-mesh magnetic verification must therefore form
 `B_h = ng.curl(A_h)` and measure its symbolic coordinate-derivative trace; the nested
-call `ng.div(ng.curl(A_h))` is not supported in NGSolve 6.2.2606.  The curved-current
-terminal-space decision is pending in ADR 0004; the API facts are recorded in
-`docs/dev_notes.md` for milestones 4.2 and 4.4.
+call `ng.div(ng.curl(A_h))` is not supported in NGSolve 6.2.2606. Approved ADR 0004
+therefore preserves magnetic `div(curl)=0` as an exact curved invariant while treating
+the ordinary-L2 current constraint as weak on curved geometry. Milestone 4.4 must
+measure strong-current-divergence and gauge-multiplier convergence and enforce the
+approved dimensionless 0.03 backstop. The API facts are recorded in `docs/dev_notes.md`.
 
 Mutation checks confirmed that replacing the offsets by equal `order` arguments fails
 the order/dimension contract, and deleting the tetrahedral-family guard fails the

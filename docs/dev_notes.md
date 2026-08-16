@@ -18,8 +18,10 @@
   mesh (M1) invariant by setting `B_h = ng.curl(A_h)` and evaluating the symbolic trace
   `B_h.Diff(ng.x)[0] + B_h.Diff(ng.y)[1] + B_h.Diff(ng.z)[2]`; a direct
   `ng.div(ng.curl(A_h))` raises because the intermediate coefficient function has no
-  `derivname`. Use `L2` as the weak divergence-constraint/diagnostic space pending ADR
-  0004; do not assert strong curved `div(HDiv)` membership in ordinary `L2`. An exploratory
+  `derivname`. Per approved ADR 0004 Option 4, use `L2` as the weak curved-current
+  divergence-constraint/diagnostic space; do not assert strong curved `div(HDiv)`
+  membership in ordinary `L2`, and measure strong-divergence and multiplier convergence
+  in milestone 4.4. An exploratory
   `MakeStructured3DMesh(secondorder=True, mapping=<nonlinear>)` construction segfaulted
   in this local wheel; `netgen.occ` mesh generation followed by `mesh.Curve(order)` was
   stable and should be the verification path for curved tetrahedra.

@@ -233,13 +233,21 @@ linearization.
 
 ## 5. Numerical invariants (monitored or preserved by construction)
 
-1. **Magnetic divergence:** ∇_h·(∇_h×A_h) = 0 algebraically to roundoff; a regression
-   test MUST measure this independently of nonlinear convergence.
-2. **Current continuity:** raw (M2) currents are projected to a discretely
-   divergence-free H(div) field (Sec. 10); the relative projection correction
-   ‖J_h − J_raw‖/‖J_raw‖ MUST be recorded and MUST converge to zero under refinement —
-   a large or non-convergent correction means the M3 discretization and M2
-   reconstruction are inconsistent.
+1. **Magnetic divergence (exact):** ∇_h·(∇_h×A_h) = 0 algebraically to roundoff on
+   affine and curved meshes; a regression test MUST measure this independently of
+   nonlinear convergence. On curved NGSolve meshes this is the mapped HCurl→HDiv
+   basis identity and MUST be measured by the symbolic coordinate-derivative trace,
+   not inferred from the terminal ordinary-L2 arrow (ADR 0004).
+2. **Current continuity (affine exact; curved convergent):** raw (M2) currents are
+   projected to an H(div) field satisfying the Sec. 10 scalar-L2 constraint. On affine
+   meshes this is strongly divergence-free to roundoff. On curved meshes it is weakly
+   divergence-free in the chosen multiplier space; both ‖∇·J_h‖ and the gauge
+   multiplier λ_h MUST converge to zero under h- and geometry-order refinement. At
+   production resolution the dimensionless defect
+   L_ref‖∇·J_h‖/‖J_h‖ MUST be below 0.03. The relative projection correction
+   ‖J_h − J_raw‖/‖J_raw‖ MUST also be recorded and converge to zero — a large or
+   non-convergent correction means the M3 discretization and M2 reconstruction are
+   inconsistent. If λ_h stalls at a nonzero value, revisit ADR 0004.
 3. **Pressure-profile realization:** the transplant MUST reproduce p₀(s) to
    quadrature/interpolation accuracy; test the normalized layer-cake identity
    ∫φ(p)d³r = V_Ω∫₀¹φ(p₀(s))ds for a spline family of test functions φ, and the
@@ -297,11 +305,13 @@ multiplier chosen to form a stable mixed pair. Mesh geometry order comparable to
 order (curved elements). Static condensation (`condense=True`) SHOULD be used for
 high-order spaces where it helps.
 
-**De Rham pairing caution:** the exact space/order pairing that yields the commuting
-discrete sequence MUST be established by small de Rham-sequence tests (∇, ∇×, ∇· mapping
-between the chosen spaces) **before** the 3D solver is built. Agents MUST NOT assume
-that equal integer `order` arguments across NGSolve spaces automatically produce the
-desired sequence.
+**De Rham pairing caution:** the exact affine polynomial space/order pairing MUST be
+established by small differential-complex tests (∇, ∇×, ∇· mapping between the chosen
+spaces) **before** the 3D solver is built. Agents MUST NOT assume that equal integer
+`order` arguments across NGSolve spaces automatically produce the desired sequence.
+On curved NGSolve elements, the HCurl→HDiv magnetic subcomplex still composes exactly,
+but ordinary scalar `L2` is not the Piola density-mapped strong image of `div(HDiv)`;
+use it as the weak current constraint/diagnostic space per ADR 0004.
 
 Coefficients (**b**, B_safe, κ's, D_u, p) enter forms as NGSolve
 `CoefficientFunction`s evaluated at quadrature points; **b** is a CF of the current
@@ -551,7 +561,7 @@ Requirements:
 
 ---
 
-## 10. Current construction and divergence-free projection
+## 10. Current construction and constrained projection
 
 Construct J_raw = u**B** + (**B**×∇p)/B_safe² − D_u∇ᵣũ at quadrature points, where ∇ᵣ
 MUST match the regularization gradient selected for the M3 solve (Sec. 9.4), with each
@@ -560,11 +570,18 @@ projection: (J_h, v) + (λ_h, ∇·v) = (J_raw, v), (∇·J_h, q) = 0, with J_h 
 natural J_h·n̂ = 0 on the closed boundary, and explicit handling of any global current
 component not fixed by the local constraint. The projection MUST also preserve the N
 shell-current moments ΔI₀ used by (M3b), either as explicit projection constraints or to
-a tolerance demonstrated to converge faster than the field error; a divergence-free
-projected current with the wrong I_tor(s) is unacceptable. Diagnostics MUST include
-divergence norm before/after, relative projection correction, cumulative and shellwise
-current residuals before/after, and the Ampère compatibility residual. The projection is
-linear ⇒ differentiable ⇒ safe inside Newton.
+a tolerance demonstrated to converge faster than the field error; a constrained
+projected current with the wrong I_tor(s) is unacceptable. On affine meshes the L2
+constraint makes J_h strongly divergence-free to roundoff. On curved meshes ordinary
+scalar L2 provides only weak orthogonality: code, documentation, and output metadata
+MUST call J_h weakly divergence-free and report the unresolved strong divergence.
+Manufactured tests MUST demonstrate predicted convergence of both ‖∇·J_h‖ and λ_h
+under h- and geometry-order refinement, with a checked-in rate table, and the production
+dimensionless backstop L_ref‖∇·J_h‖/‖J_h‖ < 0.03 MUST hold. If λ_h stalls at a nonzero
+value, revisit ADR 0004. Diagnostics MUST include divergence norm before/after, λ_h,
+the dimensionless divergence defect, relative projection correction, cumulative and
+shellwise current residuals before/after, and the Ampère compatibility residual. The
+projection is linear ⇒ differentiable ⇒ safe inside Newton.
 If the correction does not converge rapidly under refinement, replace the sequential
 M3-plus-projection construction with a mixed solve coupling u, **J**, and the
 continuity multiplier (ADR required).
@@ -1151,11 +1168,12 @@ D_u→0 limit at fixed I₀(s), and a machine-readable performance/robustness co
 parallel grid-noise damping) recorded in `docs/verification.md`; the default remains ∇⊥
 unless changed by an ADR citing these measurements.
 
-**Phase 4 — compatible magnetic kernel.** 4.1 de Rham space/order-pairing tests.
+**Phase 4 — compatible magnetic kernel.** 4.1 de Rham space/order-pairing tests,
+including the exact curved magnetic subcomplex.
 4.2 gauge-fixed curl–curl with manufactured magnetostatics. 4.3 harmonic flux field on
-a simple analytic torus. 4.4 divergence-free current projection + diagnostics,
-including preservation of the (M3b) shell-current moments in the current passed to
-Ampère.
+a simple analytic torus. 4.4 affine-exact/curved-weak current projection + diagnostics,
+including curved strong-divergence and multiplier convergence and preservation of the
+(M3b) shell-current moments in the current passed to Ampère.
 
 **Phase 5 — reduced end-to-end solver.** 5.1 axisymmetric reduced model per note §11,
 including the normalized p₀(s), I₀(s), and the enclosed-current relation of §11.2.

@@ -367,34 +367,44 @@ that dependency. Phase 7 may run in parallel with Phase 8.
 
 ## Phase 4 — compatible magnetic kernel
 
-- [~] **4.1** de Rham space/order pairing — `DESIGN.md` §7.1 · note: §6 (M1)
-  <br>Acceptance: on 6- and 48-tetrahedron contractible cubes at base orders 0--3,
+- [x] **4.1** de Rham space/order pairing — `DESIGN.md` §7.1 · note: §6 (M1)
+  <br>Acceptance: on 6- and 48-tetrahedron contractible cubes at base orders 0--5,
   independently verify every grad/curl/div mapping and both successive-derivative
-  identities below 1e-12, with exact Euler characteristic one; reject element families
-  whose NGSolve order convention has not been established.
+  identities at order-scaled roundoff, with exact Euler characteristic one; load and
+  assert every row of the checked-in measurement table; reject element families and
+  orders whose NGSolve convention has not been established. On an order-3 curved OCC
+  tetrahedral ball, verify the HCurl-to-HDiv mapping and symbolic `div(curl(A_h))` trace
+  below 1e-12.
   <br>Measured: macOS / CPython 3.12.2 / NGSolve 6.2.2606 — the affine tetrahedral
   sequence is `H1(p+1) -> HCurl(p) -> HDiv(max(p-1,0)) -> L2(max(p-2,0))`.
-  Across eight mesh/order rows the maximum individual mapping defect is 3.42e-15,
-  maximum `curl(grad)` defect is 1.03e-13, and maximum `div(curl)` defect is 2.53e-14;
-  every alternating global dimension is exactly one. See
+  Across twelve mesh/order rows the maximum individual mapping defect is 2.42e-14,
+  maximum `curl(grad)` defect is 1.15e-12, and maximum `div(curl)` defect is 2.40e-13;
+  every alternating global dimension is exactly one. On the 107-tetrahedron curved
+  ball, the HCurl-to-HDiv defect is 7.18e-16 and the symbolic divergence trace is
+  exactly zero. See
   `tests/manufactured/de_rham_pairing.csv` and `docs/verification.md`.
   <br>Next: milestone 4.2 should reuse these tetrahedral offsets for its H1 gauge and
   HCurl vector-potential spaces. On curved tetrahedra measure the (M1) magnetic
   invariant with the symbolic trace of `B_h=curl(A_h)`, because `ng.div(ng.curl(A_h))`
   raises on NGSolve 6.2.2606. NGSolve's ordinary scalar L2 is a weak diagnostic/
-  constraint space, not the Piola density-mapped strong image of `div(HDiv)`; ADR 0004
-  is pending on that terminal-space decision.
+  constraint space, not the Piola density-mapped strong image of `div(HDiv)`; approved
+  ADR 0004 keeps magnetic divergence exact and makes curved-current divergence a
+  measured convergence invariant.
 - [ ] **4.2** Gauge-fixed curl–curl — `DESIGN.md` §7.3, §11 · note: §6 (M1)
   <br>Acceptance: manufactured magnetostatics; gauge null-space handled.
   <br>Measured: —
 - [ ] **4.3** Harmonic flux field on an analytic torus — `DESIGN.md` §7.2 · note: §6 (M1)
   <br>Measured: —
-- [ ] **4.4** Divergence-free current projection — `DESIGN.md` §10 · note: (M1)–(M3b), §5.4
-  <br>Acceptance: discrete ∇·B at roundoff; Ampère compatibility; projected current
-  preserves the prescribed (M3b) shell moments I_tor(s)=I₀(s) to the stated tolerance.
+- [ ] **4.4** Constrained current projection — `DESIGN.md` §10 · note: (M1)–(M3b), §5.4
+  <br>Acceptance: discrete ∇·B at roundoff; affine current divergence at roundoff;
+  on curved geometry, checked-in rate tables demonstrate predicted strong-divergence
+  and gauge-multiplier convergence under both h- and geometry-order refinement, with
+  production `L_ref ||div J_h||_L2 / ||J_h||_L2 < 0.03`; Ampère compatibility; projected
+  current preserves the prescribed (M3b) shell moments I_tor(s)=I₀(s) to the stated
+  tolerance. If the curved gauge multiplier stalls at a nonzero value, revisit ADR 0004.
   <br>Measured: —
-  <br>Blocked design input: ADR 0004 must decide the curved-mesh terminal density space
-  or revise the meaning of discrete divergence before this projection is implemented.
+  <br>Design input: ADR 0004 Option 4 approved; ordinary scalar L2 is the weak curved
+  constraint space, while strong current divergence is a measured convergence invariant.
 
 ## Phase 5 — reduced end-to-end solver
 
@@ -475,4 +485,4 @@ that dependency. Phase 7 may run in parallel with Phase 8.
 | ADR | Milestone blocked | Question | Status |
 |---|---|---|---|
 | 0003 | 2.3 | Must the M4b mollifier-width JVP differentiate `epsilon = c h |grad chi|`? | Option 1 accepted |
-| 0004 | 4.1, 4.4 | What terminal space/constraint makes curved HDiv current strongly divergence-free? | Pending human sign-off |
+| 0004 | 4.1, 4.4 | What terminal space/constraint makes curved HDiv current strongly divergence-free? | Option 4 approved |
