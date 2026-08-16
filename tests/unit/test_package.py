@@ -71,7 +71,7 @@ def test_ci_uses_pip_and_covers_the_supported_python_floor() -> None:
     """CI installs project extras with pip on every supported Python version."""
     workflow = (Path(__file__).parents[2] / ".github/workflows/ci.yml").read_text()
 
-    assert 'python: ["3.10", "3.11", "3.12"]' in workflow
+    assert 'python: ["3.10", "3.14"]' in workflow
     assert 'python -m pip install -e ".[dev]"' in workflow
     assert 'python -m pip install -e ".[cutcell]"' in workflow
     assert "if: matrix.os != 'ubuntu-latest' || matrix.python != '3.10'" in workflow
