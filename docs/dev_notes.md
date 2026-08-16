@@ -10,13 +10,16 @@
   the tested 0.65--2.0 range. Revolving an OCC `WorkPlane` circular face around the
   z-axis produced 1,414 tetrahedra on macOS and 1,389 on Linux, and remained stable
   under `mesh.Curve(order)` for orders 1--4. The verification CSV therefore records
-  strict platform-specific reference rows rather than relaxing numerical tolerances.
-  Exact-disk Gauss points near the boundary can
-  lie outside the piecewise-linear order-1 volume mesh, so the analytic poloidal-cut
-  acceptance diagnostic evaluates its supplied normal-component callable directly;
-  it does not pretend that the faceted mesh contains the exact cut. The volume form
-  still evaluates the NGSolve coefficient on the curved torus and separately reports
-  its boundary-normal geometry error.
+  strict `sys.platform`-specific reference rows for NGSolve 6.2.2606 rather than
+  relaxing numerical tolerances; a missing platform row reports the complete measured
+  CSV needed for regeneration. Revolving the same disk through 180 degrees exposes
+  OCC faces in wall/start-cut/end-cut order. Naming those faces and applying
+  `mesh.Curve(6)` gives an explicit cut on which `ng.Integrate(field*normal, BND)`
+  evaluates the actual NGSolve coefficient. The start face has outward normal `-e_y`,
+  so the positive toroidal flux uses the negative boundary integral. For the normalized
+  circular field this measures 0.9999999916288673; negating the field reverses the sign.
+  Use this explicit-cut construction for flux regressions instead of a separate NumPy
+  formula that can become disconnected from the field under test.
 
 - Milestone 4.2 (NGSolve 6.2.2606): the symmetric Coulomb-gauge saddle form on
   `FESpace([HCurl, H1])` is invertible with UMFPACK when both spaces carry the full

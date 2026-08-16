@@ -27,16 +27,23 @@ links the cylindrical axis. Its nontrivial harmonic component for note (M1) is
 C^{-1}=2\pi\left(R-\sqrt{R^2-a^2}\right).
 \]
 
-The normalization follows from an analytic integral only when constructing the field;
-the acceptance diagnostic independently applies 24-by-24 Gauss quadrature to
-\(\mathbf B_h\cdot\mathbf e_y\) on the \(\phi=0\) poloidal disk. It measures
-\(0.9999999999997669\), an absolute unit-flux error of \(2.33\times10^{-13}\). The
+The normalization follows from an analytic integral only when constructing the field.
+The acceptance diagnostic builds a separate half-torus with an explicit
+\(\phi=0\) boundary, curves it to order 6, and asks NGSolve to integrate the actual
+coefficient field against the cut normal. It measures \(0.9999999916288673\), an
+absolute unit-flux error of \(8.37\times10^{-9}\); reversing the field measures \(-1\)
+to the same tolerance, so the test also fixes the flux orientation. The
 weak curl and divergence diagnostics assemble the analytic residual against scalar and
 vector H¹ test spaces and report their mass-Riesz norms relative to \(\|B_h\|_2\).
+Independent divergent and rotational fields produce order-one weak residuals, preventing
+a disabled residual assembly from satisfying the roundoff gate.
 
 The OCC torus is curved at geometry orders 1--4. OCC produces 1,414 tetrahedra on
 macOS and 1,389 on Linux, so `tests/manufactured/harmonic_flux_torus.csv` contains and
-strictly checks a full reference sweep for each platform. The macOS measurements are:
+strictly checks a full reference sweep keyed by `sys.platform` for each platform. These
+rows use NGSolve 6.2.2606; an unsupported platform fails with a complete measured CSV
+in the assertion message, which is the regeneration procedure rather than a reason to
+broaden tolerances. The macOS measurements are:
 
 | geometry order | volume | weak curl residual | weak div residual | boundary-normal / volume norm |
 | ---: | ---: | ---: | ---: | ---: |
@@ -54,13 +61,21 @@ misreported as algebraic roundoff.
 
 A manufactured vector potential
 \(A_z=[a^2-((R_{\rm cyl}-R)^2+z^2)](1+0.2x+0.1z)\) vanishes on the exact boundary.
-Its projection into `HCurl(order=2, dirichlet=".*")`, with constrained DOFs eliminated,
+Its projection into `HCurl(order=2, dirichlet="wall")` on the explicit half-torus,
+with constrained DOFs eliminated,
 has measured tangential-trace norm below \(10^{-14}\). Independent cut quadrature
-measures the toroidal flux of the analytic \(\nabla\times A\) below \(10^{-10}\),
-verifying that the essential zero tangential trace cannot change the harmonic flux
-coefficient. Mutation checks are conspicuous: halving \(C\) changes the measured flux
-to 0.5, and rotating \(B_h\) from toroidal to radial raises the finest boundary-normal
-ratio from \(1.05\times10^{-4}\) to 1.32.
+of the actual NGSolve `curl(discrete_potential)` is below \(10^{-12}\), verifying that
+the essential zero tangential trace cannot change the harmonic flux coefficient. A
+nonzero-trace HCurl control has cut flux above 1.0. Mutation checks are conspicuous:
+negating the actual \(B_h\) changes the measured flux from +1 to -1, replacing the weak
+residual norm with zero fails the nonharmonic controls, and rotating \(B_h\) from
+toroidal to radial raises the finest boundary-normal ratio from
+\(1.05\times10^{-4}\) to 1.32.
+
+This is deliberately the analytic circular-torus baseline. It does not claim that the
+same closed form is tangent to a shaped torus. Before milestone 6.2 admits shaped
+boundaries, it must implement and validate the scalar Neumann correction (or another
+§7.2 harmonic construction) on those geometries.
 
 ## Milestone 4.2 — gauge-fixed curl–curl magnetostatics
 
