@@ -67,6 +67,9 @@ quadrature consistency implied by the divergence constraint; it is not an indepe
 compatibility observable. Feeding that current to the gauge-fixed (M1) solve leaves
 the magnetic divergence below the curved roundoff gate and the magnetic gauge
 multiplier below 1e-10.
+The 0.05456 multiplier ratio belongs specifically to
+\((-y,x,0)+0.15(x,y,z)\); ADR 0005's exploratory 0.175--0.181 limit did not record
+that same raw-current source and is therefore not used as a regression target here.
 
 The wrong-terminal-order controls reproduce ADR 0005 independently of factorization
 behavior. On that ball, paired HDiv(2)--L2(1) has rank 428/428 and minimum singular
@@ -81,7 +84,10 @@ forming a global dense torus matrix.
 The same torus test constrains two verification-only mollified shells to targets
 0.4941443925 and 0.5058566965. Their sum differs from the independent unit-flux
 closed form by 1.09e-6, so the test detects a sign or normalization mutation in the
-weights. Raw shell moments 0.4953887131 and 0.5096516757 become the two targets after
+weights. The per-shell circular-torus fraction 0.4941074930 additionally anchors the
+inner/outer assignment within 1e-3, while a direct pointwise test makes the copied
+NGSolve kernel agree with `compact_moment_matched_heaviside` to roundoff. Raw shell
+moments 0.4953887131 and 0.5096516757 become the two targets after
 projection; cumulative before/after values are also recorded. The projected values
 differ from their targets by 1.22e-15 and 6.66e-16, respectively; these are same-rule
 algebraic residuals, not physical integration-error claims. Integrating the first

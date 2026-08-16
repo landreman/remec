@@ -450,13 +450,16 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   relative divergence falls from 6.998e-1 to 6.367e-16, the nonzero continuity-
   multiplier L² norm is 7.063e-2 (5.456e-2 relative to the projected-current norm),
   and the H¹-dual Ampère quadrature-consistency residual is 1.308e-14.
+  This ratio is for `(-y,x,0)+0.15(x,y,z)`; ADR 0005's exploratory 0.175--0.181
+  limit did not record the same raw-current source and is not a regression target.
   Paired `HDiv(2)-L2(1)` has rank 428/428 with minimum singular ratio 2.016e-2;
   undersized `L2(0)` leaves relative divergence 2.133, while oversized `L2(2)` has
   rank 428/1,070 and first discarded ratio 1.086e-15. On the 1,414-tetrahedron torus,
   divergence falls from 1.826e-1 to 1.107e-15 and undersizing leaves 3.968e-1. Its
   paired/oversized representative element blocks have ranks 4/4 and 4/10. Two compact-
   mollified verification-only (M3b) shell targets, 0.4941443925 and 0.5058566965,
-  sum to the independent unit-flux value within 1.09e-6 and are retained to 1.22e-15
+  match the independent inner/outer circular-torus fractions within 3.69e-5, sum to
+  unit flux within 1.09e-6, and are retained to 1.22e-15
   and 6.66e-16 absolute error. Before projection, the corresponding shell moments are
   0.4953887131 and 0.5096516757; shellwise and cumulative before/after diagnostics are
   reported. For the first projected shell, quadrature orders 8, 16, 24, and 32 give
@@ -465,8 +468,8 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   the same-rule algebraic residual. The affine relative projection correction has
   finest-pair rates 1.9053 (base order 2) and 2.7856 (base order 3), while divergence
   remains at roundoff. See `tests/manufactured/current_projection_rates.csv` and
-  `docs/verification.md`. Final post-review local `make check`: 202 not-slow tests in
-  42.04 s; the torus acceptance test is in PR CI and takes 15.47 s.
+  `docs/verification.md`. Final post-review local `make check`: 203 not-slow tests in
+  43.55 s; the torus acceptance test is in PR CI and takes 17.49 s.
   <br>Next: Phase 5 should pass the independently reconstructed three-component (M2)
   current and the exact milestone-3.6 gradient-scaled mollified shell weights and
   resolution guards into this projection (the fixed-in-s helper here is verification
@@ -558,9 +561,9 @@ milestone re-checks this as item 7 of the definition of done and records the new
 `make test` wall-clock here.
 
 Measured 2026-08-16 on `milestone/4.4-constrained-current-projection`: the curved-torus
-projection is part of the ordinary PR-CI suite and passes in 15.47 s. `make test`
-passes all 202 not-slow tests in 42.04 s ✅; the next-slowest item is the shared
-`test_m3_gradient_comparison` setup at 12.35 s. No individual not-slow item exceeds
+projection is part of the ordinary PR-CI suite and passes in 17.49 s. `make test`
+passes all 203 not-slow tests in 43.55 s ✅; the next-slowest item is the shared
+`test_m3_gradient_comparison` setup at 13.06 s. No individual not-slow item exceeds
 ~20 s.
 
 ## Release gates

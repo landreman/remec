@@ -17,12 +17,14 @@ from ngsolve.meshes import MakeStructured3DMesh
 from remec.fem._current_projection import (
     CurrentMomentConstraint,
     CurrentProjectionSolution,
+    _verification_compact_moment_matched_heaviside,
     analyze_divergence_constraint_rank,
     solve_constrained_current_projection,
     verification_mollified_shell_moment_weights,
 )
 from remec.fem._magnetostatics import solve_gauge_fixed_curl_curl
 from remec.geometry import AnalyticSolidTorus
+from remec.level_set import compact_moment_matched_heaviside
 
 _TABLE_PATH = Path(__file__).with_name("current_projection_rates.csv")
 _AFFINE_SWEEP = ((2, 1), (2, 2), (2, 4), (2, 8), (3, 1), (3, 2), (3, 4))
@@ -227,6 +229,25 @@ def test_curved_ball_wrong_terminal_orders_are_falsifiable(
     assert oversized_rank.first_discarded_singular_value_ratio < 1.0e-10
 
 
+def test_verification_mollifier_matches_the_shared_moment_matched_kernel() -> None:
+    r"""The verification-only ``(M3b)`` copy matches shared ``(mollified_V)`` exactly."""
+    mesh = MakeStructured3DMesh(hexes=False, nx=1, ny=1, nz=1)
+    point = mesh(0.25, 0.25, 0.25)
+    arguments = np.linspace(-1.5, 1.5, 13)
+    actual = np.asarray(
+        [
+            float(
+                _verification_compact_moment_matched_heaviside(
+                    ng.CoefficientFunction(float(argument))
+                )(point)
+            )
+            for argument in arguments
+        ]
+    )
+    expected = compact_moment_matched_heaviside(arguments)
+    assert actual == pytest.approx(expected, abs=4.0 * np.finfo(float).eps)
+
+
 def test_curved_torus_projection_preserves_m3b_shell_moments_and_pairing() -> None:
     r"""The current passed to ``(M1)`` retains independent mollified ``(M3b)`` rows."""
     torus = AnalyticSolidTorus(
@@ -264,9 +285,13 @@ def test_curved_torus_projection_preserves_m3b_shell_moments_and_pairing() -> No
     targets = tuple(
         float(ng.Integrate(ng.InnerProduct(harmonic, weight), mesh, order=14)) for weight in weights
     )
-    # Independent unit-flux anchor: the shell weights partition grad(phi)/(2*pi),
-    # so the normalized harmonic field integrates to one over their union.
-    assert sum(targets) == pytest.approx(1.0, abs=2.0e-6)
+    # Independent circular-torus anchors catch shell exchange and normalization errors.
+    inner_minor_radius = torus.minor_radius * np.sqrt(shell_edges[1])
+    inner_fraction = (
+        torus.major_radius - np.sqrt(torus.major_radius**2 - inner_minor_radius**2)
+    ) / (torus.major_radius - np.sqrt(torus.major_radius**2 - torus.minor_radius**2))
+    assert targets == pytest.approx((inner_fraction, 1.0 - inner_fraction), abs=1.0e-3)
+    assert sum(targets) == pytest.approx(1.0, abs=1.0e-3)
     constraints = tuple(
         CurrentMomentConstraint(weight=weight, target=target, name=f"shell-{index}")
         for index, (weight, target) in enumerate(zip(weights, targets, strict=True))

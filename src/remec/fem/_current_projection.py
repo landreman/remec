@@ -64,6 +64,14 @@ class CurrentProjectionSolution:
     cumulative_moment_relative_residuals: tuple[float, ...]
 
 
+def _verification_compact_moment_matched_heaviside(argument: Any) -> Any:
+    r"""Evaluate the compact ``H_epsilon`` kernel from ``(mollified_V)`` in NGSolve."""
+    import ngsolve as ng  # type: ignore[import-untyped]
+
+    transition = 0.5 * (1.0 + argument + ng.sin(pi * argument) / pi)
+    return ng.IfPos(argument + 1.0, ng.IfPos(1.0 - argument, transition, 1.0), 0.0)
+
+
 def verification_mollified_shell_moment_weights(
     normalized_volume: Any,
     toroidal_angle_gradient: Any,
@@ -101,13 +109,10 @@ def verification_mollified_shell_moment_weights(
     ):
         raise ValueError("shell_edges must be a strictly increasing partition of exactly [0, 1]")
 
-    import ngsolve as ng  # type: ignore[import-untyped]
-
     memberships: list[Any] = [0.0]
     for edge in edges[1:-1]:
         argument = (float(edge) - normalized_volume) / mollifier_width
-        transition = 0.5 * (1.0 + argument + ng.sin(pi * argument) / pi)
-        memberships.append(ng.IfPos(argument + 1.0, ng.IfPos(1.0 - argument, transition, 1.0), 0.0))
+        memberships.append(_verification_compact_moment_matched_heaviside(argument))
     memberships.append(1.0)
     return tuple(
         (memberships[index + 1] - memberships[index]) * toroidal_angle_gradient / (2.0 * pi)
