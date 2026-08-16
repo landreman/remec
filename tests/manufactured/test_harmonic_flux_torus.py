@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import sys
 from dataclasses import dataclass
 from itertools import pairwise
 from pathlib import Path
@@ -60,24 +61,25 @@ def _measured_row(geometry_order: int) -> _HarmonicRow:
     )
 
 
-def _recorded_rows() -> dict[int, dict[str, str]]:
+def _recorded_rows() -> dict[tuple[str, int], dict[str, str]]:
     with _TABLE_PATH.open(newline="", encoding="utf-8") as stream:
         rows = list(csv.DictReader(stream))
-    indexed = {int(row["geometry_order"]): row for row in rows}
-    assert len(indexed) == len(rows), "verification table contains duplicate geometry orders"
+    indexed = {(row["platform"], int(row["geometry_order"])): row for row in rows}
+    assert len(indexed) == len(rows), "verification table contains duplicate platform/order rows"
     return indexed
 
 
 def _actual_csv(rows: dict[int, _HarmonicRow]) -> str:
     """Format all measured rows so a cross-platform mismatch is reproducible."""
     header = (
-        "geometry_order,elements,curved_volume,weak_curl_relative_residual,"
+        "platform,geometry_order,elements,curved_volume,weak_curl_relative_residual,"
         "weak_divergence_relative_residual,boundary_normal_relative_norm,toroidal_flux,"
         "sampled_magnetic_magnitude_minimum,sampled_magnetic_magnitude_maximum"
     )
     body = [
         ",".join(
             (
+                sys.platform,
                 str(row.geometry_order),
                 str(row.elements),
                 f"{row.curved_volume:.16e}",
@@ -197,8 +199,12 @@ def test_harmonic_flux_table_matches_every_geometry_order(
     harmonic_rows: dict[int, _HarmonicRow],
 ) -> None:
     """The machine-readable table covers and reproduces the full curvature sweep."""
-    recorded = _recorded_rows()
-    assert set(recorded) == set(harmonic_rows)
+    recorded = {
+        order: row
+        for (platform, order), row in _recorded_rows().items()
+        if platform == sys.platform
+    }
+    assert set(recorded) == set(harmonic_rows), f"no complete table for {sys.platform}"
     mismatch_report = "measured platform table:\n" + _actual_csv(harmonic_rows)
     for order, row in harmonic_rows.items():
         table_row = recorded[order]

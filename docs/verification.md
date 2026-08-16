@@ -34,9 +34,9 @@ the acceptance diagnostic independently applies 24-by-24 Gauss quadrature to
 weak curl and divergence diagnostics assemble the analytic residual against scalar and
 vector H¹ test spaces and report their mass-Riesz norms relative to \(\|B_h\|_2\).
 
-The OCC torus is curved at geometry orders 1--4 on one deterministic 1,414-tetrahedron
-mesh. The checked-in table `tests/manufactured/harmonic_flux_torus.csv` is reproduced in
-full:
+The OCC torus is curved at geometry orders 1--4. OCC produces 1,414 tetrahedra on
+macOS and 1,389 on Linux, so `tests/manufactured/harmonic_flux_torus.csv` contains and
+strictly checks a full reference sweep for each platform. The macOS measurements are:
 
 | geometry order | volume | weak curl residual | weak div residual | boundary-normal / volume norm |
 | ---: | ---: | ---: | ---: | ---: |

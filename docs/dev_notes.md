@@ -8,8 +8,10 @@
 - Milestone 4.3 (Netgen/NGSolve 6.2.2606): `netgen.csg.Torus` generated 45,205
   tetrahedra for the R=2, a=0.6 verification torus regardless of requested `maxh` in
   the tested 0.65--2.0 range. Revolving an OCC `WorkPlane` circular face around the
-  z-axis produced a deterministic 1,414-tetrahedron mesh and remained stable under
-  `mesh.Curve(order)` for orders 1--4. Exact-disk Gauss points near the boundary can
+  z-axis produced 1,414 tetrahedra on macOS and 1,389 on Linux, and remained stable
+  under `mesh.Curve(order)` for orders 1--4. The verification CSV therefore records
+  strict platform-specific reference rows rather than relaxing numerical tolerances.
+  Exact-disk Gauss points near the boundary can
   lie outside the piecewise-linear order-1 volume mesh, so the analytic poloidal-cut
   acceptance diagnostic evaluates its supplied normal-component callable directly;
   it does not pretend that the faceted mesh contains the exact cut. The volume form
