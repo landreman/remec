@@ -28,6 +28,24 @@ class GaugeFixedCurlCurlSolution:
     boundary_normal_relative_norm: float
     gauge_multiplier_l2_norm: float
     magnetic_energy: float
+    sampled_magnetic_magnitude_minimum: float
+    sampled_magnetic_magnitude_maximum: float
+
+
+def _quadrature_extrema(
+    mesh: Any, coefficient: Any, *, integration_order: int
+) -> tuple[float, float]:
+    """Return deterministic volume-quadrature extrema for an NGSolve coefficient."""
+    import ngsolve as ng  # type: ignore[import-untyped]
+
+    element_types = {element.type for element in mesh.Elements(ng.VOL)}
+    rules = {
+        element_type: ng.IntegrationRule(element_type, integration_order)
+        for element_type in element_types
+    }
+    mapped_points = mesh.MapToAllElements(rules, ng.VOL)
+    values = np.asarray(coefficient(mapped_points), dtype=float).reshape(-1)
+    return float(np.min(values)), float(np.max(values))
 
 
 def solve_gauge_fixed_curl_curl(
@@ -60,7 +78,7 @@ def solve_gauge_fixed_curl_curl(
     if getattr(current_density, "dim", None) != 3:
         raise ValueError("current_density must be a three-component coefficient function")
 
-    import ngsolve as ng  # type: ignore[import-untyped]
+    import ngsolve as ng
 
     sequence = make_tetrahedral_de_rham_sequence(mesh, order=base_order)
     vector_space = ng.HCurl(mesh, order=sequence.hcurl_order, dirichlet=boundary)
@@ -182,6 +200,10 @@ def solve_gauge_fixed_curl_curl(
         ng.sqrt(ng.Integrate(gauge_multiplier**2, mesh, order=integration_order))
     )
     magnetic_energy = 0.5 * magnetic_norm**2 / vacuum_permeability
+    magnetic_magnitude = ng.sqrt(ng.InnerProduct(magnetic_field, magnetic_field))
+    sampled_magnetic_magnitude_minimum, sampled_magnetic_magnitude_maximum = _quadrature_extrema(
+        mesh, magnetic_magnitude, integration_order=integration_order
+    )
 
     return GaugeFixedCurlCurlSolution(
         vector_potential=vector_potential,
@@ -197,4 +219,6 @@ def solve_gauge_fixed_curl_curl(
         boundary_normal_relative_norm=boundary_normal_relative_norm,
         gauge_multiplier_l2_norm=gauge_multiplier_l2_norm,
         magnetic_energy=magnetic_energy,
+        sampled_magnetic_magnitude_minimum=sampled_magnetic_magnitude_minimum,
+        sampled_magnetic_magnitude_maximum=sampled_magnetic_magnitude_maximum,
     )

@@ -400,15 +400,21 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   1/2/3 are 1.8593 / 3.0036 / 4.0559, while magnetic-field L² rates are
   0.9414 / 1.9306 / 2.9749. Across all nine rows, the gauge multiplier is below
   3.65e-14, the free-DOF relative residual below 1.54e-15, the weak gauge residual
-  below 3.66e-17, the independent curl-to-HDiv projection defect below 2.36e-15,
-  relative magnetic divergence below 9.49e-14, and the fixed-boundary normal-field
-  residual below 6.28e-15. A nonzero discrete gradient current is removed entirely
-  by the gauge multiplier to 1e-11; deleting its coupling makes the system singular.
+  below 3.66e-17, the independent curl-to-HDiv projection defect below 2.37e-15,
+  relative magnetic divergence below 9.53e-14, and the fixed-boundary normal-field
+  residual below 6.32e-15. Sampled |B| extrema are reported on every row; the finest
+  magnetic energy differs from π²/4 by 2.02e-5 relative. A nonzero discrete gradient
+  current is removed entirely by the gauge multiplier to 1e-11; deleting its coupling
+  makes the system singular. A μ₀=4πe-7 control preserves the manufactured A and
+  verifies the 1/μ₀ magnetic-energy scaling.
   See `tests/manufactured/gauge_fixed_curl_curl_rates.csv` and
   `docs/verification.md`.
   <br>Next: milestone 4.3 should reuse this exact Coulomb-gauge block on its analytic
   torus, add the harmonic field with its coefficient held fixed, and verify that the
   curl contribution carries zero toroidal flux under the essential tangential trace.
+  Before putting the block inside a Picard loop, separate tetrahedral order validation
+  from `make_tetrahedral_de_rham_sequence` allocation so each solve does not construct
+  four unused validation spaces.
 - [ ] **4.3** Harmonic flux field on an analytic torus — `DESIGN.md` §7.2 · note: §6 (M1)
   <br>Measured: —
 - [ ] **4.4** Constrained current projection — `DESIGN.md` §10 · note: (M1)–(M3b), §5.4
@@ -501,9 +507,9 @@ milestone re-checks this as item 7 of the definition of done and records the new
 `make test` wall-clock here.
 
 Measured 2026-08-16 on `milestone/4.2-gauge-fixed-curl-curl`: `make test` passes
-178 not-slow tests in 31.36 s ✅. The slowest item is the shared
-`test_m3_gradient_comparison` setup at 13.72 s; the new nine-row magnetostatics module
-setup is 5.77 s. No individual not-slow item exceeds ~20 s. The most recent full-suite
+179 not-slow tests in 28.52 s ✅. The slowest item is the shared
+`test_m3_gradient_comparison` setup at 12.24 s; the new magnetostatics module setup is
+4.99 s. No individual not-slow item exceeds ~20 s. The most recent full-suite
 baseline is 182 s ✅; milestone 4.2 adds no slow tests and its complete new module takes
 under 7 s, leaving the <5-minute full-suite budget intact.
 

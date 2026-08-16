@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 from dataclasses import dataclass
+from itertools import pairwise
 from math import log, pi
 from pathlib import Path
 
@@ -31,6 +32,9 @@ class _ManufacturedRow:
     boundary_normal_relative_norm: float
     free_dof_relative_residual: float
     gauge_constraint_relative_residual: float
+    magnetic_energy: float
+    sampled_magnetic_magnitude_minimum: float
+    sampled_magnetic_magnitude_maximum: float
 
 
 def _manufactured_row(base_order: int, subdivisions: int) -> _ManufacturedRow:
@@ -92,6 +96,9 @@ def _manufactured_row(base_order: int, subdivisions: int) -> _ManufacturedRow:
         boundary_normal_relative_norm=solution.boundary_normal_relative_norm,
         free_dof_relative_residual=solution.free_dof_relative_residual,
         gauge_constraint_relative_residual=solution.gauge_constraint_relative_residual,
+        magnetic_energy=solution.magnetic_energy,
+        sampled_magnetic_magnitude_minimum=solution.sampled_magnetic_magnitude_minimum,
+        sampled_magnetic_magnitude_maximum=solution.sampled_magnetic_magnitude_maximum,
     )
 
 
@@ -120,6 +127,11 @@ def test_manufactured_magnetostatics_converges_at_expected_orders(
 ) -> None:
     r"""The mixed (M1) solve converges at HCurl L2 order p+1 and curl order p."""
     rows = [manufactured_rows[(base_order, subdivisions)] for subdivisions in _SUBDIVISIONS]
+    assert all(
+        coarse.vector_potential_l2_error > fine.vector_potential_l2_error
+        and coarse.magnetic_field_l2_error > fine.magnetic_field_l2_error
+        for coarse, fine in pairwise(rows)
+    )
     vector_rate = log(
         rows[-2].vector_potential_l2_error / rows[-1].vector_potential_l2_error
     ) / log(_SUBDIVISIONS[-1] / _SUBDIVISIONS[-2])
@@ -142,6 +154,12 @@ def test_manufactured_magnetostatics_preserves_m1_and_coulomb_gauge(
         assert row.curl_projection_relative_defect < roundoff_gate
         assert row.magnetic_divergence_relative_norm < roundoff_gate
         assert row.boundary_normal_relative_norm < roundoff_gate
+        assert 0.0 <= row.sampled_magnetic_magnitude_minimum
+        assert row.sampled_magnetic_magnitude_minimum < row.sampled_magnetic_magnitude_maximum
+        assert 2.0 < row.sampled_magnetic_magnitude_maximum < 5.0
+
+    finest = manufactured_rows[(3, 4)]
+    assert finest.magnetic_energy == pytest.approx(pi**2 / 4.0, rel=3.0e-5)
 
 
 def test_gauge_fixed_rate_table_matches_every_manufactured_row(
@@ -161,7 +179,9 @@ def test_gauge_fixed_rate_table_matches_every_manufactured_row(
             )
         for column in (
             "gauge_multiplier_l2_norm",
+            "curl_projection_relative_defect",
             "magnetic_divergence_relative_norm",
+            "boundary_normal_relative_norm",
             "free_dof_relative_residual",
             "gauge_constraint_relative_residual",
         ):
@@ -170,6 +190,39 @@ def test_gauge_fixed_rate_table_matches_every_manufactured_row(
                 8.0 * recorded_roundoff,
                 64.0 * np.finfo(float).eps,
             )
+
+
+def test_nonunit_permeability_preserves_the_manufactured_field_and_energy() -> None:
+    r"""The ``1/mu0`` factor in (M1) gives the same A for ``J=curl(curl(A))/mu0``."""
+    mesh = MakeStructured3DMesh(hexes=False, nx=2, ny=2, nz=2)
+    vacuum_permeability = 4.0 * pi * 1.0e-7
+    scalar = ng.sin(pi * ng.x) * ng.sin(pi * ng.y)
+    exact_vector_potential = ng.CoefficientFunction((0.0, 0.0, scalar))
+    current_density = ng.CoefficientFunction((0.0, 0.0, 2.0 * pi**2 * scalar / vacuum_permeability))
+    solution = solve_gauge_fixed_curl_curl(
+        mesh,
+        current_density,
+        base_order=2,
+        vacuum_permeability=vacuum_permeability,
+        bonus_integration_order=10,
+    )
+    vector_error = float(
+        ng.sqrt(
+            ng.Integrate(
+                ng.InnerProduct(
+                    solution.vector_potential - exact_vector_potential,
+                    solution.vector_potential - exact_vector_potential,
+                ),
+                mesh,
+                order=14,
+            )
+        )
+    )
+    assert vector_error < 3.0e-2
+    assert solution.magnetic_energy == pytest.approx(
+        pi**2 / (4.0 * vacuum_permeability),
+        rel=3.0e-2,
+    )
 
 
 def test_pure_gradient_current_is_removed_by_the_gauge_multiplier() -> None:
