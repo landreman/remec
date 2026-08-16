@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import csv
 from dataclasses import dataclass
 from math import log, pi
+from pathlib import Path
 
 import ngsolve as ng
 import numpy as np
@@ -14,6 +16,7 @@ from remec.fem._magnetostatics import solve_gauge_fixed_curl_curl
 
 _BASE_ORDERS = (1, 2, 3)
 _SUBDIVISIONS = (2, 3, 4)
+_TABLE_PATH = Path(__file__).with_name("gauge_fixed_curl_curl_rates.csv")
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,7 +26,9 @@ class _ManufacturedRow:
     vector_potential_l2_error: float
     magnetic_field_l2_error: float
     gauge_multiplier_l2_norm: float
+    curl_projection_relative_defect: float
     magnetic_divergence_relative_norm: float
+    boundary_normal_relative_norm: float
     free_dof_relative_residual: float
     gauge_constraint_relative_residual: float
 
@@ -82,10 +87,20 @@ def _manufactured_row(base_order: int, subdivisions: int) -> _ManufacturedRow:
         vector_potential_l2_error=vector_error,
         magnetic_field_l2_error=magnetic_error,
         gauge_multiplier_l2_norm=solution.gauge_multiplier_l2_norm,
+        curl_projection_relative_defect=solution.curl_projection_relative_defect,
         magnetic_divergence_relative_norm=solution.magnetic_divergence_relative_norm,
+        boundary_normal_relative_norm=solution.boundary_normal_relative_norm,
         free_dof_relative_residual=solution.free_dof_relative_residual,
         gauge_constraint_relative_residual=solution.gauge_constraint_relative_residual,
     )
+
+
+def _recorded_rows() -> dict[tuple[int, int], dict[str, str]]:
+    with _TABLE_PATH.open(newline="", encoding="utf-8") as stream:
+        rows = list(csv.DictReader(stream))
+    indexed = {(int(row["base_order"]), int(row["subdivisions"])): row for row in rows}
+    assert len(indexed) == len(rows), "verification table contains duplicate mesh/order rows"
+    return indexed
 
 
 @pytest.fixture(scope="module")
@@ -108,9 +123,9 @@ def test_manufactured_magnetostatics_converges_at_expected_orders(
     vector_rate = log(
         rows[-2].vector_potential_l2_error / rows[-1].vector_potential_l2_error
     ) / log(_SUBDIVISIONS[-1] / _SUBDIVISIONS[-2])
-    magnetic_rate = log(
-        rows[-2].magnetic_field_l2_error / rows[-1].magnetic_field_l2_error
-    ) / log(_SUBDIVISIONS[-1] / _SUBDIVISIONS[-2])
+    magnetic_rate = log(rows[-2].magnetic_field_l2_error / rows[-1].magnetic_field_l2_error) / log(
+        _SUBDIVISIONS[-1] / _SUBDIVISIONS[-2]
+    )
     assert vector_rate > base_order + 0.75
     assert magnetic_rate > base_order - 0.10
 
@@ -124,7 +139,33 @@ def test_manufactured_magnetostatics_preserves_m1_and_coulomb_gauge(
         assert row.free_dof_relative_residual < 1.0e-11
         assert row.gauge_constraint_relative_residual < 1.0e-11
         assert row.gauge_multiplier_l2_norm < 1.0e-10
+        assert row.curl_projection_relative_defect < roundoff_gate
         assert row.magnetic_divergence_relative_norm < roundoff_gate
+        assert row.boundary_normal_relative_norm < roundoff_gate
+
+
+def test_gauge_fixed_rate_table_matches_every_manufactured_row(
+    manufactured_rows: dict[tuple[int, int], _ManufacturedRow],
+) -> None:
+    """The checked-in (M1) rate table covers and reproduces the full tested sweep."""
+    recorded = _recorded_rows()
+    assert set(recorded) == set(manufactured_rows)
+    for key, row in manufactured_rows.items():
+        table_row = recorded[key]
+        assert int(table_row["elements"]) == 6 * row.subdivisions**3
+        for column in (
+            "vector_potential_l2_error",
+            "magnetic_field_l2_error",
+            "gauge_multiplier_l2_norm",
+            "magnetic_divergence_relative_norm",
+            "free_dof_relative_residual",
+            "gauge_constraint_relative_residual",
+        ):
+            assert getattr(row, column) == pytest.approx(
+                float(table_row[column]),
+                rel=2.0e-9,
+                abs=2.0e-15,
+            )
 
 
 def test_pure_gradient_current_is_removed_by_the_gauge_multiplier() -> None:
