@@ -367,8 +367,21 @@ that dependency. Phase 7 may run in parallel with Phase 8.
 
 ## Phase 4 — compatible magnetic kernel
 
-- [ ] **4.1** de Rham space/order pairing — `DESIGN.md` §7.1 · note: §6 (M1)
-  <br>Measured: —
+- [x] **4.1** de Rham space/order pairing — `DESIGN.md` §7.1 · note: §6 (M1)
+  <br>Acceptance: on 6- and 48-tetrahedron contractible cubes at base orders 0--3,
+  independently verify every grad/curl/div mapping and both successive-derivative
+  identities below 1e-12, with exact Euler characteristic one; reject element families
+  whose NGSolve order convention has not been established.
+  <br>Measured: macOS / CPython 3.12.2 / NGSolve 6.2.2606 — the affine tetrahedral
+  sequence is `H1(p+1) -> HCurl(p) -> HDiv(max(p-1,0)) -> L2(max(p-2,0))`.
+  Across eight mesh/order rows the maximum individual mapping defect is 3.42e-15,
+  maximum `curl(grad)` defect is 1.03e-13, and maximum `div(curl)` defect is 2.53e-14;
+  every alternating global dimension is exactly one. See
+  `tests/manufactured/de_rham_pairing.csv` and `docs/verification.md`.
+  <br>Next: milestone 4.2 should reuse these tetrahedral offsets for its H1 gauge and
+  HCurl vector-potential spaces. On curved tetrahedra measure the (M1) magnetic
+  invariant directly as `div(curl(A_h))`: NGSolve's ordinary scalar L2 is a weak
+  diagnostic/constraint space, not the Piola density-mapped strong image of `div(HDiv)`.
 - [ ] **4.2** Gauge-fixed curl–curl — `DESIGN.md` §7.3, §11 · note: §6 (M1)
   <br>Acceptance: manufactured magnetostatics; gauge null-space handled.
   <br>Measured: —

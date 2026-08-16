@@ -5,6 +5,23 @@
 > descriptions of NGSolve expression behavior, but not of the production current-profile
 > closure. Follow `DESIGN.md` §9.2 and `STATUS.md` milestones 3.5–3.6.
 
+- Milestone 4.1 (NGSolve 6.2.2606): on affine tetrahedra, the exact order pairing is
+  `H1(p+1) -> HCurl(p) -> HDiv(max(p-1, 0)) -> L2(max(p-2, 0))`; equal integer
+  `order` arguments do not give the exact global complex.  The offsets are element-
+  family specific: in particular, a hexahedron uses a different convention, so the
+  tetrahedral factory rejects every non-tetrahedral volume element.  On a third-order
+  curved OCC tetrahedral ball, the Piola-mapped gradient/curl inclusions and both
+  `curl(grad)` and `div(curl)` identities remained below 6.95e-13.  A general
+  `div(HDiv)` field did not lie in ordinary scalar `L2` there (relative projection
+  defects 0.23--0.32), because the divergence carries the contravariant Piola
+  `1/det(J)` density while scalar `L2` uses the ordinary pullback.  Test the curved-
+  mesh (M1) invariant by evaluating `div(curl(A_h))` directly and use `L2` as the weak
+  divergence-constraint/diagnostic space; do not assert strong curved `div(HDiv)`
+  membership in ordinary `L2`.  An exploratory
+  `MakeStructured3DMesh(secondorder=True, mapping=<nonlinear>)` construction segfaulted
+  in this local wheel; `netgen.occ` mesh generation followed by `mesh.Curve(order)` was
+  stable and should be the verification path for curved tetrahedra.
+
 - Milestone 3.6 (NGSolve 6.2.2606): the open linear spline
   `BSpline(2, [s0, *nodes, sN], nodal_values)(s)` gives the piecewise-linear G basis
   required by the bordered M3–M3b system. For a GridFunction-backed level set, do not

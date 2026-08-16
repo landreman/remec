@@ -11,6 +11,56 @@
 > numbers remain valid. Milestone 3.5 migrated the public contract and layer-cake
 > oracle to p₀(s) and the factor V_Ω∫₀¹·ds.
 
+## Milestone 4.1 — tetrahedral de Rham order pairing
+
+The first compatible-magnetics milestone establishes the NGSolve order convention
+needed for note equation (M1).  On tetrahedra the exact affine polynomial complex is
+
+\[
+H^1_{p+1}\xrightarrow{\nabla}H(\mathrm{curl})_p
+\xrightarrow{\nabla\times}H(\mathrm{div})_{\max(p-1,0)}
+\xrightarrow{\nabla\cdot}L^2_{\max(p-2,0)}.
+\]
+
+This is deliberately not four spaces constructed with equal `order` arguments.  The
+factory rejects non-tetrahedral element families rather than silently applying these
+offsets to NGSolve's different tensor-product convention.
+
+For every row below, deterministic random coefficients excite every degree of freedom
+in each source space.  An independently assembled L² mass projection measures whether
+the gradient, curl, or divergence lies in the next space; the projected fields are then
+differentiated again to measure both `curl(grad)` and `div(curl)`.  The alternating
+global dimension is exactly one on the contractible cube in every row, as required for
+the full complex including the constant scalar kernel.
+
+| cells/axis | tetrahedra | base p | H¹/HCurl/HDiv/L² orders | max mapping defect | curl(grad) defect | div(curl) defect |
+| ---: | ---: | ---: | :---: | ---: | ---: | ---: |
+| 1 | 6 | 0 | 1/0/0/0 | 2.65e-16 | 1.52e-15 | 8.34e-16 |
+| 1 | 6 | 1 | 2/1/0/0 | 4.15e-16 | 1.98e-15 | 1.40e-15 |
+| 1 | 6 | 2 | 3/2/1/0 | 1.14e-15 | 1.26e-14 | 1.23e-15 |
+| 1 | 6 | 3 | 4/3/2/1 | 3.42e-15 | 5.57e-14 | 1.15e-14 |
+| 2 | 48 | 0 | 1/0/0/0 | 3.48e-16 | 3.97e-15 | 1.95e-15 |
+| 2 | 48 | 1 | 2/1/0/0 | 4.42e-16 | 4.36e-15 | 2.34e-15 |
+| 2 | 48 | 2 | 3/2/1/0 | 1.13e-15 | 2.31e-14 | 2.70e-15 |
+| 2 | 48 | 3 | 4/3/2/1 | 3.11e-15 | 1.03e-13 | 2.53e-14 |
+
+All defects clear the automated \(10^{-12}\) roundoff gate.  The complete
+machine-readable record, including all four dimensions and the Euler characteristic,
+is `tests/manufactured/de_rham_pairing.csv`.
+
+NGSolve's Piola mappings preserve the magnetic part of the complex on curved geometry:
+an exploratory order-3 OCC ball measured gradient/curl mapping and both successive-
+derivative identities below \(6.95\times10^{-13}\).  Ordinary scalar NGSolve `L2`,
+however, is not the density-mapped terminal space on a curved element, so projecting a
+general `div(HDiv)` field into it is not a roundoff identity (measured relative defects
+0.23--0.32).  Curved-mesh magnetic verification must therefore measure
+`div(curl(A_h))` directly, while divergence constraints use their weak L² pairing; this
+API fact is recorded in `docs/dev_notes.md` for milestones 4.2 and 4.4.
+
+Mutation checks confirmed that replacing the offsets by equal `order` arguments fails
+the order/dimension contract, and deleting the tetrahedral-family guard fails the
+non-tetrahedral rejection test.
+
 ## Milestone 3.7 — constrained gradient-variant comparison
 
 The transverse and full-gradient current-viscosity closures were compared with the
