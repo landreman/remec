@@ -11,6 +11,111 @@
 > numbers remain valid. Milestone 3.5 migrated the public contract and layer-cake
 > oracle to p₀(s) and the factor V_Ω∫₀¹·ds.
 
+## Milestone 4.1 — tetrahedral de Rham order pairing
+
+The first compatible-magnetics milestone establishes the NGSolve order convention
+needed for note equation (M1).  On tetrahedra the exact affine polynomial complex is
+
+\[
+H^1_{p+1}\xrightarrow{\nabla}H(\mathrm{curl})_p
+\xrightarrow{\nabla\times}H(\mathrm{div})_{\max(p-1,0)}
+\xrightarrow{\nabla\cdot}L^2_{\max(p-2,0)}.
+\]
+
+This is deliberately not four spaces constructed with equal `order` arguments.  The
+factory rejects non-tetrahedral element families rather than silently applying these
+offsets to NGSolve's different tensor-product convention. Here `base p` is specifically
+the HCurl factory argument; it is not the independent H¹ order assigned to χ and ũ in
+`DESIGN.md` §7.1. The validated factory range is base order 0--5.
+
+For every row below, deterministic random coefficients excite every degree of freedom
+in each source space.  An independently assembled L² mass projection measures whether
+the gradient, curl, or divergence lies in the next space; the projected fields are then
+differentiated again to measure both `curl(grad)` and `div(curl)`.  The alternating
+global dimension is exactly one on the contractible cube in every row, as required for
+the full complex including the constant scalar kernel.
+
+| cells/axis | tetrahedra | base p | H¹/HCurl/HDiv/L² orders | max mapping defect | curl(grad) defect | div(curl) defect |
+| ---: | ---: | ---: | :---: | ---: | ---: | ---: |
+| 1 | 6 | 0 | 1/0/0/0 | 2.65e-16 | 1.52e-15 | 8.34e-16 |
+| 1 | 6 | 1 | 2/1/0/0 | 4.15e-16 | 1.98e-15 | 1.40e-15 |
+| 1 | 6 | 2 | 3/2/1/0 | 1.14e-15 | 1.26e-14 | 1.23e-15 |
+| 1 | 6 | 3 | 4/3/2/1 | 3.42e-15 | 5.57e-14 | 1.15e-14 |
+| 1 | 6 | 4 | 5/4/3/2 | 1.20e-14 | 2.93e-13 | 5.29e-14 |
+| 1 | 6 | 5 | 6/5/4/3 | 2.42e-14 | 7.82e-13 | 1.28e-13 |
+| 2 | 48 | 0 | 1/0/0/0 | 3.48e-16 | 3.97e-15 | 1.95e-15 |
+| 2 | 48 | 1 | 2/1/0/0 | 4.42e-16 | 4.36e-15 | 2.34e-15 |
+| 2 | 48 | 2 | 3/2/1/0 | 1.13e-15 | 2.31e-14 | 2.70e-15 |
+| 2 | 48 | 3 | 4/3/2/1 | 3.11e-15 | 1.03e-13 | 2.53e-14 |
+| 2 | 48 | 4 | 5/4/3/2 | 7.87e-15 | 3.84e-13 | 7.09e-14 |
+| 2 | 48 | 5 | 6/5/4/3 | 1.76e-14 | 1.15e-12 | 2.40e-13 |
+
+All defects clear the automated order-scaled roundoff gate
+\(32\epsilon_{\rm mach}(p+2)^3\). The test loads the complete machine-readable record,
+asserts every space order, degree-of-freedom count, and Euler characteristic exactly,
+and bounds each recomputed defect against its recorded row. The record is
+`tests/manufactured/de_rham_pairing.csv`.
+
+NGSolve's Piola mappings preserve the magnetic part of the complex on curved geometry.
+The automated regression uses an order-3 curved, 107-tetrahedron OCC ball across every
+validated base order 0--5. Mapped-basis conditioning grows more quickly than in the
+affine sweep, so the independently calibrated roundoff gate is
+\(128\epsilon_{\rm mach}(p+2)^3\):
+
+| base p | HCurl/HDiv orders | curl mapping defect | div(curl) defect | random-HDiv control | curved gate |
+| ---: | :---: | ---: | ---: | ---: | ---: |
+| 0 | 0/0 | 3.69e-16 | 2.53e-15 | 4.33 | 2.27e-13 |
+| 1 | 1/0 | 3.70e-16 | 2.49e-15 | 4.33 | 7.67e-13 |
+| 2 | 2/1 | 7.09e-16 | 7.46e-15 | 3.28 | 1.82e-12 |
+| 3 | 3/2 | 2.10e-15 | 8.03e-14 | 2.84 | 3.55e-12 |
+| 4 | 4/3 | 5.09e-15 | 7.43e-13 | 2.75 | 6.14e-12 |
+| 5 | 5/4 | 1.04e-14 | 2.79e-12 | 2.71 | 9.75e-12 |
+
+The negative controls remain O(1), proving the divergence diagnostic has teeth, while
+the worst curved-gate utilization is 0.287. The test loads and asserts these
+measurements, mesh size, space orders, degree-of-freedom counts, and curved volume from
+all six rows of `tests/manufactured/de_rham_curved.csv`. The volume 4.1894736 is also
+checked within 2e-3 of the unit-sphere value 4.1887902, so changing the geometry order
+to an affine mesh cannot preserve the test.
+
+Ordinary scalar NGSolve `L2` is not the density-mapped terminal space on a curved
+element, so projecting a general `div(HDiv)` field into it is not a roundoff identity
+(measured relative defects 0.23--0.32 on one coarse, quadrature-sensitive mesh). That
+containment fact from ADR 0004 does not weaken the current constraint. ADR 0005 observes
+that the Piola `1/det(J)` in the physical divergence cancels the volume `det(J)` in the
+weak pairing; because the reference divergence spans the paired reference L2 space,
+the constraint forces physical divergence to vanish pointwise. Exploratory §10 mixed
+solves measured relative divergence below 7.0e-16 on curved balls and tori, while an
+undersized terminal space left O(1) divergence. For the oversized `HDiv(2)-L2(2)`
+control, the constraint block has rank 428 across 1070 rows, directly exposing 642
+redundant rows independent of whether a chosen factorization raises. On that
+`HDiv(2)` mesh, the paired block's smallest-to-largest singular-value ratio is 2.02e-2;
+the oversized block's first-discarded-to-largest ratio is 1.05e-15 (its literal
+smallest-to-largest ratio is 3.70e-35). Paired `HDiv(3)` and `HDiv(4)` ratios remain
+4.22e-3 and 1.52e-3, so relative numerical-rank tolerance 1e-10 separates every
+measured case cleanly. Milestone 4.4 must turn those pairing controls into automated
+manufactured tests. Its λ is a continuity
+multiplier with a legitimate nonzero limit, not the magnetic gauge multiplier; alternate
+trace choices that leave a constant kernel require mean-zero normalization before its
+norm is reported.
+
+Curved-mesh magnetic verification must project `ng.curl(A_h)` into HDiv and evaluate
+`ng.div(B_h)` on the resulting GridFunction; the nested call
+`ng.div(ng.curl(A_h))` is not supported in NGSolve 6.2.2606, and
+`GridFunction.Diff(ng.x)` is a vacuous coefficient derivative. These API facts are
+recorded in `docs/dev_notes.md`.
+
+Mutation checks confirmed that replacing the offsets by equal `order` arguments fails
+the order/dimension contract, and deleting the tetrahedral-family guard fails the
+non-tetrahedral rejection test. Replacing the projected curved curl with a random HDiv
+field fails at O(1) divergence, and changing its checked-in negative-control measurement
+from 3.28 to 3.28e-6 fails the row-specific regression assertion. Changing the recorded
+geometry order from 3 to 1 fails the explicit non-affine-order assertion; even without
+that assertion, the measured volume changes from 4.1894736 to 3.7960606 and fails the
+independent curvature check. Extending the curved table from only base order 2 to the
+validated 0--5 sweep makes a fixed 1e-12 divergence ceiling fail at p=5 (2.79e-12),
+while the curved-calibrated order-scaled gate passes with 29% utilization.
+
 ## Milestone 3.7 — constrained gradient-variant comparison
 
 The transverse and full-gradient current-viscosity closures were compared with the

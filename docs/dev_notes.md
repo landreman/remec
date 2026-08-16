@@ -5,6 +5,46 @@
 > descriptions of NGSolve expression behavior, but not of the production current-profile
 > closure. Follow `DESIGN.md` §9.2 and `STATUS.md` milestones 3.5–3.6.
 
+- Milestone 4.1 (NGSolve 6.2.2606): on affine tetrahedra, the exact order pairing is
+  `H1(p+1) -> HCurl(p) -> HDiv(max(p-1, 0)) -> L2(max(p-2, 0))`; equal integer
+  `order` arguments do not give the exact global complex.  The offsets are element-
+  family specific: in particular, a hexahedron uses a different convention, so the
+  tetrahedral factory rejects every non-tetrahedral volume element. On a third-order,
+  107-tetrahedron curved OCC ball, projecting `curl(A_h)` into the paired HDiv space
+  had relative defect 7.12e-16 and applying `ng.div` to that HDiv GridFunction gave
+  relative divergence 7.42e-15; a random-HDiv negative control measured 3.28. A general
+  `div(HDiv)` field did not lie in ordinary scalar `L2` there (relative projection
+  defects 0.23--0.32), because the divergence carries the contravariant Piola
+  `1/det(J)` density while scalar `L2` uses the ordinary pullback. Test the curved-mesh
+  (M1) invariant by independently mass-projecting `ng.curl(A_h)` into HDiv, asserting
+  the projection defect, and evaluating `ng.div(B_h)` on that HDiv GridFunction. A
+  direct `ng.div(ng.curl(A_h))` raises because the intermediate coefficient function
+  has no `derivname`. Do not use `B_h.Diff(ng.x)`: for a GridFunction-backed coefficient
+  function it is coefficient differentiation and returns zero even for a divergent
+  field. ADR 0005 Option 1 supersedes ADR 0004's relaxation: although general curved
+  `div(HDiv)` is not strongly contained in ordinary `L2`, the paired weak constraint is
+  exact because the Piola `1/det(J)` cancels the volume `det(J)` and the reference
+  divergence spans the paired reference L2 space. Actual curved §10 saddle solves gave
+  relative divergence below 7.0e-16; an undersized terminal order left O(1) divergence,
+  while an oversized order produced a constraint block of rank 428 with 1070 rows (642
+  redundant). Test that rank fact rather than a solver-specific singular-factorization
+  exception. On the `Curve(3)` ball with `HDiv(2)`, the paired smallest-to-largest ratio
+  was 2.02e-2 and the oversized first-discarded-to-largest ratio was 1.05e-15; paired
+  `HDiv(3)`/`HDiv(4)` ratios were 4.22e-3/1.52e-3, all cleanly classified by relative
+  rank tolerance 1e-10. Its λ is a continuity multiplier with a legitimate nonzero
+  limit, not the
+  magnetic gauge multiplier; normalize its mean if a non-natural trace leaves constants
+  in the multiplier kernel. Milestone 4.4 must automate those positive and negative
+  controls. An
+  exploratory
+  `MakeStructured3DMesh(secondorder=True, mapping=<nonlinear>)` construction segfaulted
+  in this local wheel; `netgen.occ` mesh generation followed by `mesh.Curve(order)` was
+  stable and should be the verification path for curved tetrahedra.
+  On the same `Curve(3)` ball across base orders 0--5, `div(curl)` grows with mapped-
+  basis conditioning from 2.53e-15 to 2.79e-12 while a random-HDiv control remains
+  2.71--4.33. Use the measured curved gate `128*eps*(p+2)^3`; the affine constant 32 is
+  insufficient at p=5 even though the identity remains exact.
+
 - Milestone 3.6 (NGSolve 6.2.2606): the open linear spline
   `BSpline(2, [s0, *nodes, sN], nodal_values)(s)` gives the piecewise-linear G basis
   required by the bordered M3–M3b system. For a GridFunction-backed level set, do not

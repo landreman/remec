@@ -367,17 +367,51 @@ that dependency. Phase 7 may run in parallel with Phase 8.
 
 ## Phase 4 — compatible magnetic kernel
 
-- [ ] **4.1** de Rham space/order pairing — `DESIGN.md` §7.1 · note: §6 (M1)
-  <br>Measured: —
+- [x] **4.1** de Rham space/order pairing — `DESIGN.md` §7.1 · note: §6 (M1)
+  <br>Acceptance: on 6- and 48-tetrahedron contractible cubes at base orders 0--5,
+  independently verify every grad/curl/div mapping and both successive-derivative
+  identities at order-scaled roundoff, with exact Euler characteristic one; load and
+  assert every row of the checked-in measurement table; reject element families and
+  orders whose NGSolve convention has not been established. On an order-3 curved OCC
+  tetrahedral ball at base orders 0--5, verify the HCurl-to-HDiv mapping and strong
+  divergence of that projected HDiv field below the curved-calibrated order-scaled gate
+  `128 eps (p+2)^3`, while a random-HDiv negative control remains conspicuously nonzero.
+  <br>Measured: macOS / CPython 3.12.2 / NGSolve 6.2.2606 — the affine tetrahedral
+  sequence is `H1(p+1) -> HCurl(p) -> HDiv(max(p-1,0)) -> L2(max(p-2,0))`.
+  Across twelve mesh/order rows the maximum individual mapping defect is 2.42e-14,
+  maximum `curl(grad)` defect is 1.15e-12, and maximum `div(curl)` defect is 2.40e-13;
+  every alternating global dimension is exactly one. Across base orders 0--5 on the
+  107-tetrahedron curved ball, the measured volume is 4.1894736 (unit-sphere reference
+  4.1887902), the maximum HCurl-to-HDiv defect is 1.04e-14, maximum projected-field
+  relative divergence is 2.79e-12, and the smallest random-HDiv control is 2.71. See
+  `tests/manufactured/de_rham_pairing.csv`, `tests/manufactured/de_rham_curved.csv`, and
+  `docs/verification.md`.
+  <br>Next: milestone 4.2 should reuse these tetrahedral offsets for its H1 gauge and
+  HCurl vector-potential spaces. On curved tetrahedra measure the (M1) magnetic
+  invariant by projecting `curl(A_h)` into HDiv and evaluating `ng.div(B_h)`, because
+  `ng.div(ng.curl(A_h))` raises on NGSolve 6.2.2606 and `B_h.Diff(ng.x)` is a vacuous
+  coefficient derivative. A general curved `div(HDiv)` field is not strongly contained
+  in ordinary scalar L2, but ADR 0005 establishes that the paired weak constraint still
+  forces current divergence to zero pointwise through determinant cancellation.
 - [ ] **4.2** Gauge-fixed curl–curl — `DESIGN.md` §7.3, §11 · note: §6 (M1)
   <br>Acceptance: manufactured magnetostatics; gauge null-space handled.
   <br>Measured: —
 - [ ] **4.3** Harmonic flux field on an analytic torus — `DESIGN.md` §7.2 · note: §6 (M1)
   <br>Measured: —
-- [ ] **4.4** Divergence-free current projection — `DESIGN.md` §10 · note: (M1)–(M3b), §5.4
-  <br>Acceptance: discrete ∇·B at roundoff; Ampère compatibility; projected current
-  preserves the prescribed (M3b) shell moments I_tor(s)=I₀(s) to the stated tolerance.
+- [ ] **4.4** Constrained current projection — `DESIGN.md` §10 · note: (M1)–(M3b), §5.4
+  <br>Acceptance: discrete ∇·B and paired projected-current divergence at roundoff on
+  affine and curved geometry; curved ball and torus mixed-projection tests include the
+  paired terminal order as a positive control, an undersized order that leaves visible
+  divergence, and an oversized order whose extra constraint rows are proven redundant
+  at relative singular-value tolerance 1e-10 by a rank test independent of factorization
+  behavior; Ampère compatibility; projected current preserves the prescribed (M3b)
+  shell moments I_tor(s)=I₀(s) to the stated tolerance. Report the continuity-multiplier
+  norm, but do not require it to vanish.
   <br>Measured: —
+  <br>Design input: ADR 0005 Option 1 approved, superseding ADR 0004. General curved
+  `div(HDiv)` is not strongly contained in ordinary scalar L2, but determinant
+  cancellation makes the paired weak constraint pointwise coercive. Its λ is the
+  continuity multiplier and may have a nonzero limit.
 
 ## Phase 5 — reduced end-to-end solver
 
@@ -453,10 +487,10 @@ that dependency. Phase 7 may run in parallel with Phase 8.
 - **0.2** — Phase 6 + first AP solver (7.1–7.3) + Anderson.
 - **0.3** — Phase 8 + Phase 9 results + shaped wall domains + initial sensitivities.
 
-## Open ADRs blocking work
+## ADR decisions and blockers
 
-_(none yet — agents add rows here when they draft one)_
-
-| ADR | Milestone blocked | Question | Status |
+| ADR | Affected milestone | Question | Status |
 |---|---|---|---|
 | 0003 | 2.3 | Must the M4b mollifier-width JVP differentiate `epsilon = c h |grad chi|`? | Option 1 accepted |
+| 0004 | 4.4 | What terminal space/constraint makes curved HDiv current strongly divergence-free? | Option 4 superseded by ADR 0005 |
+| 0005 | 4.4 | Does the paired ordinary-L2 constraint coerce curved HDiv divergence pointwise to zero? | Option 1 approved |
