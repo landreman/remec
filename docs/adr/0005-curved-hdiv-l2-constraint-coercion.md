@@ -64,7 +64,11 @@ Varying only the terminal order on the same curved ball made the pairing decisiv
 | --- | ---: |
 | `L2(0)` (undersized) | 6.03e+0 |
 | `L2(1)` (Milestone-4.1 pairing) | 6.97e-16 |
-| `L2(2)` (oversized) | singular saddle point |
+| `L2(2)` (oversized) | constraint rank 428/1070 (642 redundant rows); direct saddle factorization singular |
+
+The solver-independent oversized negative control is the constraint block's rank
+deficiency and redundant rows, not whether a particular direct factorization reports
+the resulting singular saddle system in a particular way.
 
 The same review also found a separate terminology and acceptance error in ADR 0004.
 The `λ_h` in §10 is the **continuity multiplier**, not the H1 Coulomb-gauge multiplier

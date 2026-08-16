@@ -223,6 +223,7 @@ def test_curved_tetrahedral_magnetic_subcomplex_composes_at_roundoff() -> None:
     geometry = OCCGeometry(Sphere(Pnt(0.0, 0.0, 0.0), 1.0))
     mesh = ng.Mesh(geometry.GenerateMesh(maxh=0.9))
     geometry_order = int(recorded["geometry_order"])
+    assert geometry_order >= 2, "curved regression requires non-affine geometry"
     mesh.Curve(geometry_order)
 
     base_order = int(recorded["base_order"])
@@ -235,6 +236,9 @@ def test_curved_tetrahedral_magnetic_subcomplex_composes_at_roundoff() -> None:
     vector_potential = _random_field(sequence.hcurl, seed=4199)
     magnetic_field = ng.curl(vector_potential)
     integration_order = 2 * max(base_order, geometry_order) + 6
+    curved_volume = float(ng.Integrate(1.0, mesh, order=integration_order))
+    assert curved_volume == pytest.approx(float(recorded["curved_volume"]), abs=1.0e-6)
+    assert abs(curved_volume - 4.0 * np.pi / 3.0) < 2.0e-3
     curl = _mass_project(
         magnetic_field,
         sequence.hdiv,

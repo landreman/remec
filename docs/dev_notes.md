@@ -26,9 +26,12 @@
   exact because the Piola `1/det(J)` cancels the volume `det(J)` and the reference
   divergence spans the paired reference L2 space. Actual curved §10 saddle solves gave
   relative divergence below 7.0e-16; an undersized terminal order left O(1) divergence,
-  while an oversized order made the redundant saddle constraint singular. Its λ is a
-  continuity multiplier with a legitimate nonzero limit, not the magnetic gauge
-  multiplier. Milestone 4.4 must automate those positive and negative controls. An
+  while an oversized order produced a constraint block of rank 428 with 1070 rows (642
+  redundant). Test that rank fact rather than a solver-specific singular-factorization
+  exception. Its λ is a continuity multiplier with a legitimate nonzero limit, not the
+  magnetic gauge multiplier; normalize its mean if a non-natural trace leaves constants
+  in the multiplier kernel. Milestone 4.4 must automate those positive and negative
+  controls. An
   exploratory
   `MakeStructured3DMesh(secondorder=True, mapping=<nonlinear>)` construction segfaulted
   in this local wheel; `netgen.occ` mesh generation followed by `mesh.Curve(order)` was

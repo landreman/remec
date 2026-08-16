@@ -380,8 +380,9 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   Across twelve mesh/order rows the maximum individual mapping defect is 2.42e-14,
   maximum `curl(grad)` defect is 1.15e-12, and maximum `div(curl)` defect is 2.40e-13;
   every alternating global dimension is exactly one. On the 107-tetrahedron curved
-  ball, the HCurl-to-HDiv defect is 7.12e-16 and the projected field's relative
-  divergence is 7.42e-15, while the random-HDiv control is 3.28. See
+  ball, the measured volume is 4.1894736 (unit-sphere reference 4.1887902), the
+  HCurl-to-HDiv defect is 7.12e-16, and the projected field's relative divergence is
+  7.42e-15, while the random-HDiv control is 3.28. See
   `tests/manufactured/de_rham_pairing.csv`, `tests/manufactured/de_rham_curved.csv`, and
   `docs/verification.md`.
   <br>Next: milestone 4.2 should reuse these tetrahedral offsets for its H1 gauge and
@@ -400,8 +401,9 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   <br>Acceptance: discrete ∇·B and paired projected-current divergence at roundoff on
   affine and curved geometry; curved ball and torus mixed-projection tests include the
   paired terminal order as a positive control, an undersized order that leaves visible
-  divergence, and an oversized order whose redundant constraint is detected as
-  singular; Ampère compatibility; projected current preserves the prescribed (M3b)
+  divergence, and an oversized order whose extra constraint rows are proven redundant
+  by a rank test independent of factorization behavior; Ampère compatibility; projected
+  current preserves the prescribed (M3b)
   shell moments I_tor(s)=I₀(s) to the stated tolerance. Report the continuity-multiplier
   norm, but do not require it to vanish.
   <br>Measured: —

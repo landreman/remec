@@ -239,14 +239,17 @@ linearization.
    basis identity. It MUST be measured by first verifying the projection of `curl(A_h)`
    into the paired HDiv space at roundoff and then applying `ng.div` to that HDiv
    GridFunction, with a divergent HDiv negative control; it MUST NOT be inferred from
-   either the terminal ordinary-L2 arrow or `GridFunction.Diff(ng.x)` (ADR 0004).
+   either the terminal ordinary-L2 arrow or `GridFunction.Diff(ng.x)` (ADR 0005; the
+   NGSolve API observations from superseded ADR 0004 remain valid).
 2. **Current continuity (exact):** raw (M2) currents are projected to an H(div) field
    satisfying the paired Sec. 10 scalar-L2 constraint. On affine and curved meshes the
    constraint forces ∇·J_h = 0 pointwise to roundoff: under the contravariant Piola map,
    the `1/det(J)` in the physical divergence cancels the `det(J)` in the volume form,
    and the reference divergence exactly spans the paired reference L2 space (ADR 0005).
    Milestone 4.4 MUST verify this on curved ball and torus meshes and MUST include
-   undersized and oversized terminal-order controls that make the pairing falsifiable.
+   undersized and oversized terminal-order controls that make the pairing falsifiable;
+   the oversized control MUST establish redundant constraint rows by a rank test rather
+   than depend on a particular factorization raising an exception.
    Its λ_h is a continuity multiplier, not a gauge multiplier, and is not expected to
    converge to zero. The relative projection correction
    ‖J_h − J_raw‖/‖J_raw‖ MUST also be recorded and converge to zero — a large or
@@ -587,13 +590,17 @@ the Piola `1/det(J)` cancels the volume `det(J)` in the weak pairing, reducing t
 constraint to the exact reference-space pairing (ADR 0005). Manufactured tests MUST
 exercise the actual mixed projection on curved ball and torus meshes, verify strong
 divergence at roundoff, and include both an undersized terminal space (which leaves
-visible divergence) and an oversized terminal space (whose redundant constraint makes
-the saddle system singular). Here λ_h is the **continuity multiplier**, not the
+visible divergence) and an oversized terminal space whose extra constraint rows are
+proven redundant by rank deficiency of the constraint block. A singular direct
+factorization MAY illustrate that redundancy but MUST NOT be the acceptance observable.
+Here λ_h is the **continuity multiplier**, not the
 Sec. 7.3 magnetic gauge multiplier; it generally has a legitimate nonzero limit.
 Diagnostics MUST include divergence norm before/after, the continuity-multiplier norm,
 relative projection correction, cumulative and shellwise current residuals before/after,
-and the Ampère compatibility residual. The projection is linear ⇒ differentiable ⇒ safe
-inside Newton.
+and the Ampère compatibility residual. The natural normal trace above fixes the intended
+multiplier diagnostic; if another trace choice leaves constants in the multiplier
+kernel, impose a mean-zero normalization before reporting its norm. The projection is
+linear ⇒ differentiable ⇒ safe inside Newton.
 If the correction does not converge rapidly under refinement, replace the sequential
 M3-plus-projection construction with a mixed solve coupling u, **J**, and the
 continuity multiplier (ADR required).

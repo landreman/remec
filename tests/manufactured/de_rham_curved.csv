@@ -1,2 +1,2 @@
-geometry,geometry_order,elements,base_order,hcurl_order,hdiv_order,hcurl_dofs,hdiv_dofs,curl_mapping_defect,div_curl_defect,divergent_control
-occ_ball,3,107,2,2,1,1470,810,7.12e-16,7.42e-15,3.28
+geometry,geometry_order,elements,curved_volume,base_order,hcurl_order,hdiv_order,hcurl_dofs,hdiv_dofs,curl_mapping_defect,div_curl_defect,divergent_control
+occ_ball,3,107,4.189473583339879,2,2,1,1470,810,7.12e-16,7.42e-15,3.28
