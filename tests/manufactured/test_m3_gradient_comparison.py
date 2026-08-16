@@ -340,6 +340,7 @@ def resonant_scan() -> dict[float, dict[str, tuple[ConstrainedCurrentContinuityS
     }
 
 
+@pytest.mark.slow
 def test_constrained_comparison_reports_cost_and_invariant_diagnostics(
     resonant_scan: dict[float, dict[str, tuple[ConstrainedCurrentContinuitySolver, Any]]],
 ) -> None:
@@ -397,6 +398,7 @@ def test_constrained_comparison_reports_cost_and_invariant_diagnostics(
     assert active_floor_result.diagnostics["floor_activity_l2"] > 0.25
 
 
+@pytest.mark.slow
 def test_fixed_state_variants_are_o_epsilon_j_but_target_is_not_admissible(
     resonant_scan: dict[float, dict[str, tuple[ConstrainedCurrentContinuitySolver, Any]]],
 ) -> None:
@@ -517,6 +519,7 @@ def test_resonant_layer_records_smearing_oscillation_and_parallel_noise(
         assert noise == pytest.approx(expected["parallel_noise_transfer"], rel=5.0e-3)
 
 
+@pytest.mark.slow
 def test_field_misalignment_sensitivity_has_an_aligned_control() -> None:
     r"""A 22.5-degree field/mesh mismatch is compared with a zero-degree control."""
     recorded = _recorded_misalignment_rows()

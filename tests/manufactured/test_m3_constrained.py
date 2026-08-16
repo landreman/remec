@@ -318,6 +318,7 @@ def coupled_solve_cache() -> Any:
     return solve
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("variant", ["perpendicular", "full"])
 def test_two_distinct_i0_profiles_realize_independent_m2_currents(
     variant: str,
@@ -391,6 +392,7 @@ def test_two_distinct_i0_profiles_realize_independent_m2_currents(
     assert digests[0] != digests[1]
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("variant", ["perpendicular", "full"])
 def test_fixed_i0_du_scan_has_a_regular_multiplier_limit(variant: str) -> None:
     r"""At fixed ``I_0``, ``D_u G' grad_r(s)`` vanishes without moving (M3b)."""
@@ -473,6 +475,7 @@ def test_fixed_i0_du_scan_has_a_regular_multiplier_limit(variant: str) -> None:
         )
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("variant", ["perpendicular", "full"])
 def test_constrained_manufactured_h_p_and_shell_scans_match_rate_table(
     variant: str,
