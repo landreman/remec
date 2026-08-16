@@ -406,6 +406,9 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   <br>Measured: —
   <br>Design input: ADR 0004 Option 4 approved; ordinary scalar L2 is the weak curved
   constraint space, while strong current divergence is a measured convergence invariant.
+  ADR 0005 is now pending because direct §10 mixed-projection measurements contradict
+  that inference and recover pointwise divergence freedom at roundoff with the paired
+  terminal order. Do not implement 4.4 until the supersession question is signed off.
 
 ## Phase 5 — reduced end-to-end solver
 
@@ -486,4 +489,5 @@ that dependency. Phase 7 may run in parallel with Phase 8.
 | ADR | Affected milestone | Question | Status |
 |---|---|---|---|
 | 0003 | 2.3 | Must the M4b mollifier-width JVP differentiate `epsilon = c h |grad chi|`? | Option 1 accepted |
-| 0004 | 4.4 | What terminal space/constraint makes curved HDiv current strongly divergence-free? | Option 4 approved |
+| 0004 | 4.4 | What terminal space/constraint makes curved HDiv current strongly divergence-free? | Option 4 approved; challenged by ADR 0005 |
+| 0005 | 4.4 | Does the paired ordinary-L2 constraint coerce curved HDiv divergence pointwise to zero? | Pending human sign-off |
