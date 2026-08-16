@@ -480,9 +480,9 @@ that dependency. Phase 7 may run in parallel with Phase 8.
 - **0.2** — Phase 6 + first AP solver (7.1–7.3) + Anderson.
 - **0.3** — Phase 8 + Phase 9 results + shaped wall domains + initial sensitivities.
 
-## Open ADRs blocking work
+## ADR decisions and blockers
 
-| ADR | Milestone blocked | Question | Status |
+| ADR | Affected milestone | Question | Status |
 |---|---|---|---|
 | 0003 | 2.3 | Must the M4b mollifier-width JVP differentiate `epsilon = c h |grad chi|`? | Option 1 accepted |
-| 0004 | 4.1, 4.4 | What terminal space/constraint makes curved HDiv current strongly divergence-free? | Option 4 approved |
+| 0004 | 4.4 | What terminal space/constraint makes curved HDiv current strongly divergence-free? | Option 4 approved |

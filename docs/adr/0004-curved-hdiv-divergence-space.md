@@ -46,6 +46,24 @@ roundoff.  On an order-3 curved OCC tetrahedral ball with NGSolve 6.2.2606:
 - `dual_mapping`, `piola`, and `covariant` keyword flags are not documented scalar-L²
   flags and do not change that result in this wheel.
 
+The adversarial Milestone-4.1 review then tested whether mesh refinement or simply
+raising the ordinary scalar-L² order repairs the mismatch. For a random `HDiv(1)`
+field on the same `Curve(3)` ball it measured:
+
+| `maxh` | relative defect in `L2(0)` | relative defect in `L2(4)` |
+| ---: | ---: | ---: |
+| 0.50 | 3.14e-1 | 1.14e-1 |
+| 0.35 | 2.85e-2 | 6.24e-6 |
+| 0.25 | 2.47e-2 | 1.67e-6 |
+
+The paired terminal order for `HDiv(1)` is `L2(0)`, whose defect stalls at about
+2.5e-2 over the two finer meshes rather than becoming a roundoff identity. Raising the
+ordinary-L² order approximates the non-polynomial `1/det(J)` factor increasingly well,
+but does not restore strong inclusion or a finite exact sequence. The coarse result is
+also quadrature-sensitive (2.93e-1 at integration order 6 and 3.59e-1 at order 26), so
+the ADR relies on the refinement stall and mapping argument, not the original coarse
+0.23--0.32 magnitude.
+
 This behavior follows the mappings: an HDiv field uses the contravariant Piola map,
 so its divergence carries `1/det(J)`, whereas ordinary scalar NGSolve L² uses the
 ordinary pullback.  Therefore `div(HDiv)` is not strongly contained in the selected
@@ -119,6 +137,12 @@ for B.
    disturbs it.  This is the smallest implementation change, but it gives up the exact
    integrability rationale quoted from the note for the current, and splits DESIGN §5
    invariant 2 into an exact half and a convergence half.
+5. **Raise the ordinary scalar-L² order and/or refine the mesh.** This reduces the
+   projection defect, as the table above demonstrates for `L2(4)`, but it does not
+   change the scalar pullback or make `div(HDiv)` a strong member of that space on a
+   curved element. It is therefore useful for approximation diagnostics but cannot
+   restore the exact terminal arrow or justify calling the constrained current strongly
+   divergence-free.
 
 ## Tradeoffs
 
@@ -133,7 +157,9 @@ projection is meant to remove.  Option 4 uses only current NGSolve primitives an
 concedes exactness only for the current, where the exactness is least load-bearing for
 users, but it does weaken half of an exact mathematical invariant into a convergence
 claim and therefore needs explicit physics/design approval plus a revised
-Ampère-compatibility criterion.
+Ampère-compatibility criterion. Option 5 can lower a measured defect but cannot repair
+the incompatible mapping, so it is not a substitute for choosing the invariant's
+meaning.
 
 ## Recommendation
 
