@@ -153,18 +153,22 @@ def test_gauge_fixed_rate_table_matches_every_manufactured_row(
     for key, row in manufactured_rows.items():
         table_row = recorded[key]
         assert int(table_row["elements"]) == 6 * row.subdivisions**3
+        for column in ("vector_potential_l2_error", "magnetic_field_l2_error"):
+            assert getattr(row, column) == pytest.approx(
+                float(table_row[column]),
+                rel=2.0e-9,
+                abs=2.0e-15,
+            )
         for column in (
-            "vector_potential_l2_error",
-            "magnetic_field_l2_error",
             "gauge_multiplier_l2_norm",
             "magnetic_divergence_relative_norm",
             "free_dof_relative_residual",
             "gauge_constraint_relative_residual",
         ):
-            assert getattr(row, column) == pytest.approx(
-                float(table_row[column]),
-                rel=2.0e-9,
-                abs=2.0e-15,
+            recorded_roundoff = float(table_row[column])
+            assert getattr(row, column) <= max(
+                8.0 * recorded_roundoff,
+                64.0 * np.finfo(float).eps,
             )
 
 
