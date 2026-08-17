@@ -13,6 +13,13 @@ from remec.solvers.anisotropic_diffusion import (
     PollutionSafetyDiagnostic,
     SpatialAnisotropicConductivity,
 )
+from remec.solvers.axisymmetric import (
+    AxisymmetricGradShafranovCoefficients,
+    AxisymmetricGradShafranovResult,
+    AxisymmetricGradShafranovSolver,
+    AxisymmetricProfileClosure,
+    AxisymmetricProfileClosureEvaluation,
+)
 from remec.solvers.current_continuity import (
     ConstrainedCurrentContinuityResult,
     ConstrainedCurrentContinuitySolver,
@@ -31,6 +38,11 @@ __all__ = [
     "AnisotropicDiffusionSolver",
     "AnisotropyPollutionError",
     "AnisotropyPollutionWarning",
+    "AxisymmetricGradShafranovCoefficients",
+    "AxisymmetricGradShafranovResult",
+    "AxisymmetricGradShafranovSolver",
+    "AxisymmetricProfileClosure",
+    "AxisymmetricProfileClosureEvaluation",
     "ConstrainedCurrentContinuityResult",
     "ConstrainedCurrentContinuitySolver",
     "CurrentContinuityFormulation",
