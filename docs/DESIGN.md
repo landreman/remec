@@ -863,7 +863,13 @@ A genuine reduced formulation of the note's Sec. 11 equations — NOT a one-cell
 wedge. Metric factors MUST be visible in the weak forms and covered by manufactured
 solutions. This is the critical end-to-end verification environment (Grad–Shafranov +
 1D transport). Where feasible, also cross-check the reduced solver against a 3D run on
-an axisymmetric configuration (independent verification of the reduction itself).
+an axisymmetric configuration (independent verification of the reduction
+itself).
+Analytic solutions to the Grad-Shafranov equation can be found in the papers
+`docs/Zheng_1996_PoP_Analytic_Grad_Shafranov_solutions.md` (up-down symmetric
+smooth boundaries) and `docs/CerfonFreidberg_2010_PoP_v17_p032502.md` (a more
+sophisticated model that allows up-down asymmetry and x-points).
+These analytic solutions can be used for benchmarking the axisymmetric remec solutions.
 
 ### 16.4 Smooth solid torus (adjudicated strategy)
 
