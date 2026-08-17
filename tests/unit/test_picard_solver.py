@@ -17,6 +17,8 @@ import pytest
         ("current_profile_tolerance", float("inf"), "current_profile_tolerance"),
         ("invariant_tolerance", 0.0, "invariant_tolerance"),
         ("magnetic_scale", -1.0, "magnetic_scale"),
+        ("floor_sensitivity_tolerance", 0.0, "floor_sensitivity_tolerance"),
+        ("minimum_layer_cells", 0.0, "minimum_layer_cells"),
         ("anderson_depth", 1, "milestone 5.3"),
     ],
 )
@@ -28,8 +30,9 @@ def test_picard_options_reject_invalid_or_unimplemented_controls(
     """Invalid damping/tolerances and premature Anderson use fail at configuration time."""
     from remec.solvers.picard import PicardOptions
 
+    arguments = {"magnetic_scale": 1.0, keyword: value}
     with pytest.raises(ValueError, match=message):
-        PicardOptions(**{keyword: value})
+        PicardOptions(**arguments)
 
 
 def test_picard_options_are_public_and_deterministically_serializable() -> None:
@@ -38,8 +41,12 @@ def test_picard_options_are_public_and_deterministically_serializable() -> None:
     from remec.common.serialization import canonical_json
     from remec.solvers import DampedPicardSolver
 
-    options = PicardOptions(damping=0.25, max_iterations=17)
+    options = PicardOptions(magnetic_scale=2.0, damping=0.25, max_iterations=17)
 
     assert DampedPicardSolver.__name__ == "DampedPicardSolver"
     assert '"damping":0.25' in canonical_json(options)
     assert '"max_iterations":17' in canonical_json(options)
+    assert '"magnetic_scale":2.0' in canonical_json(options)
+
+    with pytest.raises(TypeError, match="magnetic_scale"):
+        PicardOptions()  # type: ignore[call-arg]

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from math import isfinite, pi
+from typing import Any
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
@@ -131,6 +132,7 @@ class AxisymmetricGradShafranovSolver:
             raise ValueError("polynomial_order must be at least one")
         self.polynomial_order = polynomial_order
         self.runtime = runtime
+        self._internal_solution: Any = None
 
     def solve(
         self,
@@ -144,6 +146,7 @@ class AxisymmetricGradShafranovSolver:
             coefficients=coefficients,
             runtime=self.runtime,
         )
+        self._internal_solution = internal
         return AxisymmetricGradShafranovResult(
             polynomial_order=internal.polynomial_order,
             elements=internal.elements,
@@ -151,3 +154,10 @@ class AxisymmetricGradShafranovSolver:
             free_dof_relative_residual_norm=internal.free_dof_relative_residual_norm,
             weighted_magnetic_energy=internal.weighted_magnetic_energy,
         )
+
+    def flux_at(self, radius: float, vertical_coordinate: float) -> float:
+        """Evaluate the latest reduced note-``(M1)`` flux at one R-Z point."""
+        if self._internal_solution is None:
+            raise RuntimeError("solve must be called before evaluating the magnetic flux")
+        internal = self._internal_solution
+        return float(internal._flux(internal._mesh(radius, vertical_coordinate)))

@@ -512,18 +512,24 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   segregated driver executes M4a → one shared s → p₀(s) → bordered M3–M3b →
   moment-preserving M2 projection → M1, then damps only the free magnetic state. On
   the analytic unstable map A_candidate=2−2A, damping α=0.2 / 0.3 / 0.4 converges
-  in 30 / 13 / 18 cycles with measured contraction factors 0.399991 / 0.100008 /
-  0.200000, agreeing with |1−3α|. Final M1 residuals are 5.765e-12 / 2.000e-12 /
-  2.621e-12; M3/M3b/M4a residuals are at most 4.0e-14, divergence at most
+  in 30 / 13 / 18 cycles with measured contraction factors 0.399960 / 0.100009 /
+  0.199990, agreeing with |1−3α|. Final fixed-point norms are 5.764e-12 /
+  2.000e-12 / 2.621e-12; the separate M1 residual is 6.0e-14 and M3/M3b/M4a
+  residuals are at most 4.0e-14. Divergence is at most
   7.0e-14, and the flux error is 8.0e-14. Independently measured pressure,
   current, and projected-current profile errors are zero (required below 1e-10).
-  Removing damping leaves the map divergent; bypassing the projected-current gate
-  or injecting a 1e-4 error into either profile makes the acceptance test fail. See
+  A coarse adapter test executes the real milestone-5.1 normalized profile closure and
+  NGSolve Grad–Shafranov block on every cycle. Removing damping, substituting s for
+  p₀(s), bypassing the nonidentity current projection or its profile gate, injecting a
+  1e-4 profile error, activating a material floor, or under-resolving either layer makes
+  the acceptance tests fail. See
   `tests/manufactured/picard_damping_convergence.csv` and `docs/verification.md`.
   <br>Next: milestone 5.3 should accelerate the same free magnetic vector and reuse
   these independent gates/history records. Keep fixed harmonic-flux coefficients and
   essential traces in the backend adapter, outside Anderson history; restart on an
   ill-conditioned least-squares system and fall back to this verified damped step.
+  Fixed scalar damping has no rejected trial steps; 5.3 must log rejected acceleration
+  attempts. The concrete 5.4 run driver owns configured checkpoint cadence.
 - [ ] **5.3** Anderson with fallback — `DESIGN.md` §13.3
   <br>Measured: —
 - [ ] **5.4** Staged continuation — `DESIGN.md` §14.4 · note: §9, §11.2
@@ -607,10 +613,10 @@ gradient-comparison setup at 12.45 s. The combined manufactured and public-contr
 axisymmetric tests pass serially in 0.97 s. No individual not-slow item exceeds ~20 s,
 and no existing `slow` test touches the new module.
 
-Measured 2026-08-17 on `milestone/5.2-damped-picard`: `make test` passes all 231
-not-slow tests in 38.68 s ✅. The slowest item is the curved-torus current projection
-at 15.05 s; the next-slowest is the M3 gradient-comparison setup at 11.63 s. The 15
-new Picard public-contract and manufactured tests pass serially in 0.12 s. No
+Measured 2026-08-17 on `milestone/5.2-damped-picard`: post-review `make test` passes
+all 235 not-slow tests in 37.00 s ✅. The slowest item is the curved-torus current
+projection at 14.50 s; the next-slowest is the M3 gradient-comparison setup at 11.25 s.
+The 19 Picard public-contract and manufactured tests pass serially in 0.70 s. No
 individual not-slow item exceeds ~20 s, and no existing `slow` test touches the new
 backend-independent driver.
 

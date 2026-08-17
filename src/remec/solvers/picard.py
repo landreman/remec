@@ -10,6 +10,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from remec.common.logging import JsonEventLogger
+from remec.common.norms import block_l2_norms
 from remec.common.serialization import configuration_digest
 from remec.profiles import PressureProfile, ToroidalCurrentProfile
 
@@ -20,6 +21,7 @@ FloatArray = NDArray[np.float64]
 class PicardOptions:
     """Scalar under-relaxation and independent DESIGN §13.2 convergence gates."""
 
+    magnetic_scale: float
     damping: float = 0.2
     max_iterations: int = 200
     residual_tolerance: float = 1.0e-8
@@ -27,7 +29,8 @@ class PicardOptions:
     pressure_profile_tolerance: float = 1.0e-10
     current_profile_tolerance: float = 1.0e-10
     invariant_tolerance: float = 1.0e-10
-    magnetic_scale: float = 1.0
+    floor_sensitivity_tolerance: float = 0.01
+    minimum_layer_cells: float = 6.0
     anderson_depth: int = 0
 
     def __post_init__(self) -> None:
@@ -42,6 +45,8 @@ class PicardOptions:
             "current_profile_tolerance",
             "invariant_tolerance",
             "magnetic_scale",
+            "floor_sensitivity_tolerance",
+            "minimum_layer_cells",
         ):
             value = getattr(self, name)
             if not isfinite(value) or value <= 0.0:
@@ -60,7 +65,12 @@ class ReferencePotentialStep:
 
 @dataclass(frozen=True, slots=True)
 class ConstrainedCurrentStep:
-    r"""Bordered ``(M3)``--``(M3b)`` result with independent ``(M2)`` moments."""
+    r"""Bordered ``(M3)``--``(M3b)`` result with independent ``(M2)`` moments.
+
+    ``independent_cumulative_current`` must be reconstructed from the physical (M2)
+    field with the mollified shell-moment evaluator. It must never reuse the bordered
+    solve's constraint rows or matrices.
+    """
 
     utilde: FloatArray
     g_coefficients: FloatArray
@@ -73,7 +83,11 @@ class ConstrainedCurrentStep:
 
 @dataclass(frozen=True, slots=True)
 class CurrentProjectionStep:
-    r"""Paired-divergence projection result preserving every ``(M3b)`` moment."""
+    r"""Paired-divergence projection result preserving every ``(M3b)`` moment.
+
+    ``independent_cumulative_current`` is a post-projection physical shell integral,
+    not the projection saddle's algebraic constraint vector.
+    """
 
     projected_current: FloatArray
     independent_cumulative_current: FloatArray
@@ -89,6 +103,18 @@ class MagneticStep:
     m1_linear_relative_residual: float
     magnetic_divergence_relative_residual: float
     toroidal_flux_relative_error: float
+
+
+@dataclass(frozen=True, slots=True)
+class PicardSafetyStep:
+    """Independent DESIGN §5.5--§5.6 floor, bounds, and layer diagnostics."""
+
+    pressure_minimum: float
+    pressure_maximum: float
+    minimum_magnetic_magnitude: float
+    maximum_floor_sensitivity: float
+    minimum_current_layer_cells: float
+    minimum_pressure_layer_cells: float
 
 
 class PicardCycleOperators(Protocol):
@@ -130,6 +156,18 @@ class PicardCycleOperators(Protocol):
 
     def solve_magnetics(self, projected_current: FloatArray) -> MagneticStep: ...
 
+    def assess_safety(
+        self,
+        magnetic_state: FloatArray,
+        reference_potential: FloatArray,
+        normalized_volume: FloatArray,
+        pressure: FloatArray,
+        current_step: ConstrainedCurrentStep,
+        projection_step: CurrentProjectionStep,
+    ) -> PicardSafetyStep:
+        """Independently monitor pressure bounds, floors, and both resolved layers."""
+        ...
+
 
 @dataclass(frozen=True, slots=True)
 class PicardIteration:
@@ -138,7 +176,7 @@ class PicardIteration:
     iteration: int
     damping: float
     m1_relative_residual: float
-    m1_linear_relative_residual: float
+    fixed_point_residual_norm: float
     m3_relative_residual: float
     m3b_relative_residual: float
     m4a_relative_residual: float
@@ -150,6 +188,11 @@ class PicardIteration:
     magnetic_divergence_relative_residual: float
     toroidal_flux_relative_error: float
     projection_correction_relative_norm: float
+    pressure_bounds_error: float
+    minimum_magnetic_magnitude: float
+    maximum_floor_sensitivity: float
+    minimum_current_layer_cells: float
+    minimum_pressure_layer_cells: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -225,16 +268,18 @@ class DampedPicardSolver:
         *,
         pressure_profile: PressureProfile,
         toroidal_current_profile: ToroidalCurrentProfile,
-        options: PicardOptions | None = None,
+        options: PicardOptions,
         logger: JsonEventLogger | None = None,
     ) -> None:
         self.operators = operators
         self.pressure_profile = pressure_profile
         self.toroidal_current_profile = toroidal_current_profile
-        self.options = PicardOptions() if options is None else options
+        self.options = options
         self.logger = logger
         self.pressure_profile.validate()
         self.toroidal_current_profile.validate()
+        self._minimum_profile_pressure = float(self.pressure_profile.value(1.0))
+        self._maximum_profile_pressure = float(self.pressure_profile.value(0.0))
         self.configuration_digest = configuration_digest(
             {
                 "nonlinear": self.options,
@@ -247,6 +292,11 @@ class DampedPicardSolver:
         options = self.options
         gates = (
             ("M1 residual", row.m1_relative_residual, options.residual_tolerance),
+            (
+                "fixed-point residual",
+                row.fixed_point_residual_norm,
+                options.state_update_tolerance,
+            ),
             ("M3 residual", row.m3_relative_residual, options.residual_tolerance),
             ("M3b residual", row.m3b_relative_residual, options.residual_tolerance),
             ("M4a residual", row.m4a_relative_residual, options.residual_tolerance),
@@ -273,8 +323,30 @@ class DampedPicardSolver:
                 options.invariant_tolerance,
             ),
             ("toroidal flux", row.toroidal_flux_relative_error, options.invariant_tolerance),
+            (
+                "pressure bounds",
+                row.pressure_bounds_error,
+                options.pressure_profile_tolerance,
+            ),
+            (
+                "floor sensitivity",
+                row.maximum_floor_sensitivity,
+                options.floor_sensitivity_tolerance,
+            ),
         )
-        return tuple(name for name, value, tolerance in gates if value > tolerance)
+        failed = [name for name, value, tolerance in gates if value > tolerance]
+        if row.minimum_current_layer_cells < options.minimum_layer_cells:
+            failed.append("current layer resolution")
+        if row.minimum_pressure_layer_cells < options.minimum_layer_cells:
+            failed.append("pressure layer resolution")
+        return tuple(failed)
+
+    def _magnetic_norm(self, values: FloatArray) -> float:
+        """Return the physically scaled §13.2 norm of one free magnetic block."""
+        return block_l2_norms(
+            {"magnetic": values.reshape(-1)},
+            scales={"magnetic": self.options.magnetic_scale},
+        ).scaled_blocks["magnetic"]
 
     def solve(self, initial_magnetic_state: FloatArray) -> PicardResult:
         """Run accepted damped cycles until every DESIGN §13.2 gate passes."""
@@ -299,7 +371,8 @@ class DampedPicardSolver:
             | None
         ) = None
         for iteration in range(1, self.options.max_iterations + 1):
-            reference_step = self.operators.solve_reference_potential(magnetic.copy())
+            verified_magnetic = magnetic.copy()
+            reference_step = self.operators.solve_reference_potential(verified_magnetic.copy())
             reference = _array(reference_step.reference_potential, "reference_potential")
             normalized_volume = np.asarray(
                 self.operators.build_normalized_volume(reference), dtype=float
@@ -325,7 +398,7 @@ class DampedPicardSolver:
             )
 
             current_step = self.operators.solve_constrained_current(
-                magnetic.copy(),
+                verified_magnetic.copy(),
                 pressure,
                 normalized_volume,
                 self.toroidal_current_profile,
@@ -367,31 +440,42 @@ class DampedPicardSolver:
                 target_current,
                 "projected_independent_cumulative_current",
             )
+            safety_step = self.operators.assess_safety(
+                verified_magnetic.copy(),
+                reference,
+                normalized_volume,
+                pressure,
+                current_step,
+                projection_step,
+            )
             magnetic_step = self.operators.solve_magnetics(projected_current)
             candidate = _array(
                 magnetic_step.candidate_magnetic_state,
                 "candidate_magnetic_state",
-                shape=magnetic.shape,
+                shape=verified_magnetic.shape,
             )
-            fixed_point_residual = float(
-                np.linalg.norm(candidate - magnetic) / self.options.magnetic_scale
+            fixed_point_residual = self._magnetic_norm(candidate - verified_magnetic)
+            accepted = verified_magnetic + self.options.damping * (candidate - verified_magnetic)
+            state_update = self._magnetic_norm(accepted - verified_magnetic)
+            pressure_minimum = float(safety_step.pressure_minimum)
+            pressure_maximum = float(safety_step.pressure_maximum)
+            if not isfinite(pressure_minimum) or not isfinite(pressure_maximum):
+                raise ValueError("measured pressure bounds must be finite")
+            if pressure_minimum > pressure_maximum:
+                raise ValueError("measured pressure minimum must not exceed its maximum")
+            pressure_bounds_error = max(
+                0.0,
+                self._minimum_profile_pressure - pressure_minimum,
+                pressure_maximum - self._maximum_profile_pressure,
             )
-            accepted = magnetic + self.options.damping * (candidate - magnetic)
-            state_update = float(np.linalg.norm(accepted - magnetic) / self.options.magnetic_scale)
             row = PicardIteration(
                 iteration=iteration,
                 damping=self.options.damping,
-                m1_relative_residual=max(
-                    fixed_point_residual,
-                    _nonnegative(
-                        magnetic_step.m1_linear_relative_residual,
-                        "m1_linear_relative_residual",
-                    ),
-                ),
-                m1_linear_relative_residual=_nonnegative(
+                m1_relative_residual=_nonnegative(
                     magnetic_step.m1_linear_relative_residual,
                     "m1_linear_relative_residual",
                 ),
+                fixed_point_residual_norm=fixed_point_residual,
                 m3_relative_residual=_nonnegative(
                     current_step.m3_relative_residual,
                     "m3_relative_residual",
@@ -424,6 +508,23 @@ class DampedPicardSolver:
                     projection_step.projection_correction_relative_norm,
                     "projection_correction_relative_norm",
                 ),
+                pressure_bounds_error=pressure_bounds_error,
+                minimum_magnetic_magnitude=_nonnegative(
+                    safety_step.minimum_magnetic_magnitude,
+                    "minimum_magnetic_magnitude",
+                ),
+                maximum_floor_sensitivity=_nonnegative(
+                    safety_step.maximum_floor_sensitivity,
+                    "maximum_floor_sensitivity",
+                ),
+                minimum_current_layer_cells=_nonnegative(
+                    safety_step.minimum_current_layer_cells,
+                    "minimum_current_layer_cells",
+                ),
+                minimum_pressure_layer_cells=_nonnegative(
+                    safety_step.minimum_pressure_layer_cells,
+                    "minimum_pressure_layer_cells",
+                ),
             )
             history.append(row)
             magnetic = accepted
@@ -445,6 +546,7 @@ class DampedPicardSolver:
                     converged=not failed_gates,
                     failed_gates=list(failed_gates),
                     m1_relative_residual=row.m1_relative_residual,
+                    fixed_point_residual_norm=row.fixed_point_residual_norm,
                     m3_relative_residual=row.m3_relative_residual,
                     m3b_relative_residual=row.m3b_relative_residual,
                     m4a_relative_residual=row.m4a_relative_residual,
@@ -460,7 +562,7 @@ class DampedPicardSolver:
                     converged=True,
                     iterations=iteration,
                     configuration_digest=self.configuration_digest,
-                    magnetic_state=tuple(float(value) for value in magnetic.reshape(-1)),
+                    magnetic_state=tuple(float(value) for value in verified_magnetic.reshape(-1)),
                     reference_potential=tuple(
                         float(value) for value in final_reference.reshape(-1)
                     ),
