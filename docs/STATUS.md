@@ -505,10 +505,25 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   single shared s field, turn its p′ and II′ arrays into frozen GS coefficients, and
   carry both p₀/I₀ realization residuals through damping. The current implementation
   deliberately stops at that frozen-block boundary; 5.2 owns the nonlinear connection.
-- [ ] **5.2** Damped Picard — `DESIGN.md` §13.1, §13.3 · note: §9
+- [x] **5.2** Damped Picard — `DESIGN.md` §13.1, §13.3 · note: §9
   <br>Acceptance: cycle uses one s field, p=p₀(s), bordered M3–M3b, and a
   shell-moment-preserving projection; convergence includes both profile residuals.
-  <br>Measured: —
+  <br>Measured: macOS / CPython 3.12.2 / NumPy 2.4.6 — the backend-independent
+  segregated driver executes M4a → one shared s → p₀(s) → bordered M3–M3b →
+  moment-preserving M2 projection → M1, then damps only the free magnetic state. On
+  the analytic unstable map A_candidate=2−2A, damping α=0.2 / 0.3 / 0.4 converges
+  in 30 / 13 / 18 cycles with measured contraction factors 0.399991 / 0.100008 /
+  0.200000, agreeing with |1−3α|. Final M1 residuals are 5.765e-12 / 2.000e-12 /
+  2.621e-12; M3/M3b/M4a residuals are at most 4.0e-14, divergence at most
+  7.0e-14, and the flux error is 8.0e-14. Independently measured pressure,
+  current, and projected-current profile errors are zero (required below 1e-10).
+  Removing damping leaves the map divergent; bypassing the projected-current gate
+  or injecting a 1e-4 error into either profile makes the acceptance test fail. See
+  `tests/manufactured/picard_damping_convergence.csv` and `docs/verification.md`.
+  <br>Next: milestone 5.3 should accelerate the same free magnetic vector and reuse
+  these independent gates/history records. Keep fixed harmonic-flux coefficients and
+  essential traces in the backend adapter, outside Anderson history; restart on an
+  ill-conditioned least-squares system and fall back to this verified damped step.
 - [ ] **5.3** Anderson with fallback — `DESIGN.md` §13.3
   <br>Measured: —
 - [ ] **5.4** Staged continuation — `DESIGN.md` §14.4 · note: §9, §11.2
@@ -591,6 +606,13 @@ curved-torus current projection at 15.57 s; the next-slowest is the M3
 gradient-comparison setup at 12.45 s. The combined manufactured and public-contract
 axisymmetric tests pass serially in 0.97 s. No individual not-slow item exceeds ~20 s,
 and no existing `slow` test touches the new module.
+
+Measured 2026-08-17 on `milestone/5.2-damped-picard`: `make test` passes all 231
+not-slow tests in 38.68 s ✅. The slowest item is the curved-torus current projection
+at 15.05 s; the next-slowest is the M3 gradient-comparison setup at 11.63 s. The 15
+new Picard public-contract and manufactured tests pass serially in 0.12 s. No
+individual not-slow item exceeds ~20 s, and no existing `slow` test touches the new
+backend-independent driver.
 
 ## Release gates
 

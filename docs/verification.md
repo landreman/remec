@@ -11,6 +11,65 @@
 > numbers remain valid. Milestone 3.5 migrated the public contract and layer-cake
 > oracle to p₀(s) and the factor V_Ω∫₀¹·ds.
 
+## Milestone 5.2 — damped Picard orchestration
+
+The nonlinear driver implements the note §9 and `DESIGN.md` §13.1 segregated order
+
+\[
+(\mathrm{M4a})\longrightarrow s=V_\chi(\chi)/V_\Omega
+\longrightarrow p_0(s)\longrightarrow (\mathrm{M3})\text{--}(\mathrm{M3b})
+\longrightarrow \mathrm{M2}\text{ current projection}
+\longrightarrow (\mathrm{M1}).
+\]
+
+It constructs the normalized-volume array once per cycle and passes that same object to
+the independent pressure-realization diagnostic, bordered current block, and
+shell-moment-preserving projection. Pressure is eliminated by the exact composition
+\(p=p_0(s)\); the current block and the projection must each return independently evaluated
+cumulative currents on the block's shell grid. Only after all blocks finish is the free
+magnetic state accepted with scalar under-relaxation
+
+\[
+A^{k+1}=A^k+\alpha(A_{\rm candidate}^k-A^k),\qquad 0<\alpha\le1.
+\]
+
+The backend-independent driver deliberately does not expose NGSolve objects. Its magnetic
+vector contains only free coefficients; fixed harmonic-flux coefficients and essential traces
+remain in the backend adapter and cannot be changed by damping. The adapter protocol retains
+the existing FEM boundaries: (M4a), bordered (M3)--(M3b), the paired divergence/moment
+projection, and (M1) remain separately testable operators. Milestone 5.4
+owns the spatial Grad--Shafranov end-to-end comparison; this milestone verifies the nonlinear
+connection and its acceptance logic with an analytic reduced coupled map.
+
+That manufactured map is
+\(A_{\rm candidate}=2-2A\), with fixed point \(A^*=2/3\). It is unstable without
+damping. Under the accepted update its error obeys
+\(e^{k+1}=(1-3\alpha)e^k\), so the predicted contraction factor is
+\(|1-3\alpha|\). The checked-in
+`tests/manufactured/picard_damping_convergence.csv` is recomputed by
+`test_damped_picard_converges_at_the_manufactured_linear_rate`:
+
+| damping \(\alpha\) | iterations | predicted factor | observed factor | final M1 residual | final update norm |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 0.2 | 30 | 0.4 | 0.399991 | 5.7645e-12 | 1.1529e-12 |
+| 0.3 | 13 | 0.1 | 0.100008 | 2.0002e-12 | 6.0008e-13 |
+| 0.4 | 18 | 0.2 | 0.200000 | 2.6215e-12 | 1.0486e-12 |
+
+Every converged row has M3/M3b/M4a relative residuals at or below
+\(4\times10^{-14}\), current and magnetic divergence below \(7\times10^{-14}\),
+toroidal-flux error \(8\times10^{-14}\), and zero measured pressure, current, and
+projected-current profile error (gate \(10^{-10}\)). Convergence is the conjunction of
+all equation, state-update, profile, divergence, and flux tests; the driver does not form a
+raw concatenated coefficient norm.
+
+The mutation test makes the acceptance claim falsifiable in four ways. Setting
+\(\alpha=1\) leaves the map unstable and exhausts the iteration limit. Injecting a fixed
+\(10^{-4}\) error into the independent pressure measurement, the reconstructed (M2)
+cumulative current, or the projected cumulative current leaves the corresponding named gate
+open after the magnetic state has converged. Thus damping cannot hide loss of either
+\(p_0(s)\) or \(I_0(s)\), and a projection that erases (M3b) moments cannot certify the
+cycle.
+
 ## Milestone 5.1 — axisymmetric reduced Grad–Shafranov model
 
 The reduced magnetic kernel implements note (M1) through `GS_recovered` on a true
