@@ -11,6 +11,67 @@
 > numbers remain valid. Milestone 3.5 migrated the public contract and layer-cake
 > oracle to p₀(s) and the factor V_Ω∫₀¹·ds.
 
+## Milestone 5.1 — axisymmetric reduced Grad–Shafranov model
+
+The reduced magnetic kernel implements note (M1) through `GS_recovered` on a true
+two-dimensional (R)–(Z) mesh, with no one-cell toroidal wedge. Dividing
+
+\[
+\Delta^*\psi=-\mu_0R^2p'(\psi)-I(\psi)I'(\psi)
+\]
+
+by (R^2), using the axisymmetric volume measure, and cancelling the common
+(2\pi) gives the assembled weak form
+
+\[
+\int_{\Omega_{RZ}}\frac{1}{R}\nabla\psi_h\cdot\nabla v_h\,dR\,dZ
+=\int_{\Omega_{RZ}}
+\left(\mu_0R p'(\psi)+\frac{II'(\psi)}{R}\right)v_h\,dR\,dZ .
+\]
+
+Both metric factors are literal coefficients in the NGSolve form. The manufactured
+solution
+(\psi=\sin[\pi(R-1)]\sin(\pi Z)) on
+(1<R<2,\ 0<Z<1) has
+(-\Delta^*\psi=2\pi^2\psi+\pi\cos[\pi(R-1)]\sin(\pi Z)/R); its explicit
+(1/R) term distinguishes this operator from Cartesian Poisson. The checked-in table
+`tests/manufactured/axisymmetric_grad_shafranov_rates.csv` contains all nine solves:
+
+| Degree (p) | Elements (coarse → fine) | L² rate | (R^{-1})-energy rate |
+| --- | ---: | ---: | ---: |
+| 1 | 288 → 1,152 | 1.9885 | 0.9950 |
+| 2 | 288 → 1,152 | 2.9977 | 1.9942 |
+| 3 | 288 → 1,152 | 4.0258 | 3.0048 |
+
+Every row is recomputed within 5%, the rate gates are (p+0.8) and (p-0.2), and
+the maximum free-DOF relative residual is (8.82\times10^{-15}).
+
+The normalized profile closure uses the same (s=V(\psi)/V_\Omega\) coordinate for
+note (M4b) pressure and (M3b) cumulative current. It evaluates the note's `I_ODE`
+relation as
+
+\[
+p'(\psi)=p_0'(s)\frac{ds}{d\psi},\qquad
+II'=\frac{\mu_0}{\langle R^{-2}\rangle}
+\left[\frac{2\pi}{V_\Omega}I_0'(s)-p'(\psi)\right].
+\]
+
+An independent Gauss quadrature reconstructs
+(J_\phi=Rp'(\psi)+II'/(\mu_0R)) over circular poloidal disks with
+(R_0=2), (a=0.6), and
+(\langle R^{-2}\rangle=[R_0\sqrt{R_0^2-a^2s}]^{-1}). It measures five
+cumulative shells for (I_0=0.7s) and
+(I_0=0.4s(2-s)), including both edge totals. Maximum absolute discrepancies are
+(8.22\times10^{-15}) and (9.33\times10^{-15}), respectively, below the
+(10^{-8}) acceptance gate; the machine-readable rows are in
+`tests/manufactured/axisymmetric_enclosed_current.csv`.
+
+Mutation checks make both claims falsifiable. Replacing the (R^{-1})-weighted
+stiffness by Cartesian Poisson raises the degree-2 coarse L² error from
+(1.29\times10^{-3}) to (1.57\times10^{-1}). Deleting the pressure-cancellation
+term from `I_ODE` makes both independently integrated current profiles miss by
+(4.52), despite their target arrays remaining well formed.
+
 ## Milestone 4.4 — constrained compatible current projection
 
 The current passed from note (M2)--(M3b) to Ampère's law (M1) is projected with

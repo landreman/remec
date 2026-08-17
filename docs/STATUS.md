@@ -485,10 +485,24 @@ that dependency. Phase 7 may run in parallel with Phase 8.
 
 ## Phase 5 — reduced end-to-end solver
 
-- [ ] **5.1** Axisymmetric reduced model — `DESIGN.md` §16.3 · note: §11, especially §11.2
+- [x] **5.1** Axisymmetric reduced model — `DESIGN.md` §16.3 · note: §11, especially §11.2
   <br>Acceptance: reduced equations include both p₀(s) and I₀(s), and recover the note's
   Grad–Shafranov enclosed-current relation for at least two current profiles.
-  <br>Measured: —
+  <br>Measured: macOS / CPython 3.12.2 / NGSolve 6.2.2606 — the true 2D R–Z
+  weak form retains the cylindrical `1/R` metric in both stiffness and source. On
+  288 → 1,152 elements, finest-pair degree 1/2/3 L² rates are 1.9885 / 2.9977 /
+  4.0258 and weighted-energy rates are 0.9950 / 1.9942 / 3.0048. Maximum free-DOF
+  relative residual is 8.82e-15. The shared normalized p₀(s)/I₀(s) closure implements
+  the note's enclosed-current relation; independent circular-poloidal quadrature
+  recovers I₀=0.7s and I₀=0.4s(2−s) on five cumulative shells with maximum absolute
+  errors 8.22e-15 and 9.33e-15, including their edge totals. See
+  `tests/manufactured/axisymmetric_grad_shafranov_rates.csv`,
+  `tests/manufactured/axisymmetric_enclosed_current.csv`, and `docs/verification.md`.
+  Final local `make check`: 208 not-slow tests in 46.42 s; slowest 17.25 s.
+  <br>Next: milestone 5.2 should evaluate the profile closure on the Picard iterate's
+  single shared s field, turn its p′ and II′ arrays into frozen GS coefficients, and
+  carry both p₀/I₀ realization residuals through damping. The current implementation
+  deliberately stops at that frozen-block boundary; 5.2 owns the nonlinear connection.
 - [ ] **5.2** Damped Picard — `DESIGN.md` §13.1, §13.3 · note: §9
   <br>Acceptance: cycle uses one s field, p=p₀(s), bordered M3–M3b, and a
   shell-moment-preserving projection; convergence includes both profile residuals.
@@ -565,6 +579,12 @@ projection is part of the ordinary PR-CI suite and passes in 17.49 s. `make test
 passes all 203 not-slow tests in 43.55 s ✅; the next-slowest item is the shared
 `test_m3_gradient_comparison` setup at 13.06 s. No individual not-slow item exceeds
 ~20 s.
+
+Measured 2026-08-17 on `milestone/5.1-axisymmetric-reduced-model`: `make test` passes
+all 208 not-slow tests in 46.42 s ✅. The slowest item is the curved-torus current
+projection at 17.25 s; the next-slowest is the M3 gradient-comparison setup at 14.20 s.
+The new five-test axisymmetric module passes serially in 0.99 s. No individual
+not-slow item exceeds ~20 s, and no existing `slow` test touches the new module.
 
 ## Release gates
 
