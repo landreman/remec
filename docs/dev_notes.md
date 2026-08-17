@@ -5,6 +5,26 @@
 > descriptions of NGSolve expression behavior, but not of the production current-profile
 > closure. Follow `DESIGN.md` §9.2 and `STATUS.md` milestones 3.5–3.6.
 
+- Milestone 4.4 (NGSolve 6.2.2606): the Section-10 current saddle uses one scalar
+  `NumberSpace(mesh)` per shell moment; `NumberSpace(mesh, dim=N)` has one vector-valued
+  DOF and cannot be compounded with the scalar HDiv/L2 spaces in this wheel. A constant
+  NumberSpace test function integrates to the domain volume, so a scalar moment target
+  on its RHS must be divided by that same-volume quadrature. For compact mollified
+  shell weights on curved tetrahedra, use an explicit `dx(intrules={ET.TET: rule})`
+  for both moment couplings and their RHS normalization; an unrelated diagnostic rule
+  otherwise measures cut-layer quadrature mismatch instead of the algebraic constraint.
+  The fixed-in-normalized-volume-width weight constructor introduced for the analytic
+  torus is deliberately verification-only. Production callers must construct weights
+  with milestone 3.6's shared gradient-scaled volume map and resolution guards, then
+  pass those general vector weights through `CurrentMomentConstraint`.
+  Compound bilinear forms assemble as one monolithic sparse matrix rather than exposing
+  `.blocks`; the HDiv-to-L2 constraint block is recoverable from `mat.COO()` using the
+  component DOF offsets. Restricting the discontinuous L2 rows to one curved element
+  gives a cheap numerical-rank proof of oversized-row redundancy on the large torus.
+  A generic analytic vector `CoefficientFunction` has no `derivname`, so `ng.div(raw)`
+  is unavailable even when its components are differentiable; accept an independently
+  transcribed raw divergence for the mandatory before/after diagnostic.
+
 - Milestone 4.3 (Netgen/NGSolve 6.2.2606): `netgen.csg.Torus` generated 45,205
   tetrahedra for the R=2, a=0.6 verification torus regardless of requested `maxh` in
   the tested 0.65--2.0 range. Revolving an OCC `WorkPlane` circular face around the
