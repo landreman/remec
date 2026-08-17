@@ -1,0 +1,45 @@
+"""Public contracts for the damped note-(M1)--(M4b) Picard driver."""
+
+from __future__ import annotations
+
+import pytest
+
+
+@pytest.mark.parametrize(
+    ("keyword", "value", "message"),
+    [
+        ("damping", 0.0, "damping"),
+        ("damping", 1.01, "damping"),
+        ("max_iterations", 0, "max_iterations"),
+        ("residual_tolerance", 0.0, "residual_tolerance"),
+        ("state_update_tolerance", float("nan"), "state_update_tolerance"),
+        ("pressure_profile_tolerance", -1.0, "pressure_profile_tolerance"),
+        ("current_profile_tolerance", float("inf"), "current_profile_tolerance"),
+        ("invariant_tolerance", 0.0, "invariant_tolerance"),
+        ("magnetic_scale", -1.0, "magnetic_scale"),
+        ("anderson_depth", 1, "milestone 5.3"),
+    ],
+)
+def test_picard_options_reject_invalid_or_unimplemented_controls(
+    keyword: str,
+    value: float,
+    message: str,
+) -> None:
+    """Invalid damping/tolerances and premature Anderson use fail at configuration time."""
+    from remec.solvers.picard import PicardOptions
+
+    with pytest.raises(ValueError, match=message):
+        PicardOptions(**{keyword: value})
+
+
+def test_picard_options_are_public_and_deterministically_serializable() -> None:
+    """The nonlinear controls can enter configuration digests and public problem APIs."""
+    from remec import PicardOptions
+    from remec.common.serialization import canonical_json
+    from remec.solvers import DampedPicardSolver
+
+    options = PicardOptions(damping=0.25, max_iterations=17)
+
+    assert DampedPicardSolver.__name__ == "DampedPicardSolver"
+    assert '"damping":0.25' in canonical_json(options)
+    assert '"max_iterations":17' in canonical_json(options)

@@ -32,6 +32,7 @@ from remec.solvers.current_continuity import (
     UnresolvedCurrentLayerError,
     UnresolvedCurrentLayerWarning,
 )
+from remec.solvers.picard import DampedPicardSolver, PicardOptions
 
 __all__ = [
     "AnisotropicDiffusionResult",
@@ -50,12 +51,14 @@ __all__ = [
     "CurrentContinuitySolver",
     "CurrentContinuityStabilization",
     "CurrentLayerResolutionDiagnostic",
+    "DampedPicardSolver",
     "EnergyDiagnostics",
     "FloorSensitivityDiagnostic",
     "FloorSensitivityError",
     "FloorSensitivityWarning",
     "FrozenCurrentConstraintGeometry",
     "FrozenCurrentContinuityCoefficients",
+    "PicardOptions",
     "PollutionSafetyDiagnostic",
     "SpatialAnisotropicConductivity",
     "UnresolvedCurrentLayerError",
