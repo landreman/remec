@@ -20,6 +20,8 @@ from remec.profiles import AnalyticPressureProfile, AnalyticToroidalCurrentProfi
 from remec.solvers.axisymmetric import AxisymmetricProfileClosure
 
 _MESH_SIZES = (1.0 / 6.0, 1.0 / 12.0, 1.0 / 24.0)
+_MU0 = 2.3
+_PRESSURE_FLUX_DERIVATIVE = -0.4
 _RATE_TABLE = Path(__file__).with_name("axisymmetric_grad_shafranov_rates.csv")
 _CURRENT_TABLE = Path(__file__).with_name("axisymmetric_enclosed_current.csv")
 
@@ -53,8 +55,9 @@ def test_axisymmetric_grad_shafranov_manufactured_convergence(
 
     On ``1 < R < 2, 0 < Z < 1``, the exact flux is
     ``psi=sin(pi(R-1)) sin(pi Z)`` and
-    ``-Delta*psi=2 pi^2 psi + pi cos(pi(R-1)) sin(pi Z)/R``.  The explicit
-    ``1/R`` term makes this test reject a Cartesian Poisson weak form.
+    ``-Delta*psi=2 pi^2 psi + pi cos(pi(R-1)) sin(pi Z)/R``.  The source is
+    split between nonzero ``p'(psi)`` at ``mu0 != 1`` and ``I I'``. The explicit
+    ``1/R`` term and split make this reject a Cartesian form or either omitted drive.
     """
     exact = ng.sin(pi * (ng.x - 1.0)) * ng.sin(pi * ng.y)
     exact_gradient = ng.CoefficientFunction(
@@ -75,8 +78,10 @@ def test_axisymmetric_grad_shafranov_manufactured_convergence(
             domain,
             polynomial_order=polynomial_order,
             coefficients=AxisymmetricGradShafranovCoefficients(
-                pressure_flux_derivative=0.0,
-                toroidal_field_drive=negative_delta_star,
+                pressure_flux_derivative=_PRESSURE_FLUX_DERIVATIVE,
+                toroidal_field_drive=negative_delta_star
+                - _MU0 * ng.x**2 * _PRESSURE_FLUX_DERIVATIVE,
+                mu0=_MU0,
             ),
         )
         assert domain.metadata()["toroidal_discretization"] is None
@@ -120,10 +125,11 @@ def _integrated_toroidal_current(
     radius_grid = radius[:, None]
     cylindrical_radius = major_radius + radius_grid * np.cos(angle[None, :])
     s = np.broadcast_to((radius_grid / minor_radius) ** 2, cylindrical_radius.shape)
+    ds_dflux = 0.6 + 0.5 * s
     mean_inverse_radius_squared = 1.0 / (major_radius * np.sqrt(major_radius**2 - radius_grid**2))
     closure_values = closure.evaluate(
         s,
-        d_normalized_volume_d_flux=np.ones_like(s),
+        d_normalized_volume_d_flux=ds_dflux,
         mean_inverse_radius_squared=np.broadcast_to(
             mean_inverse_radius_squared, cylindrical_radius.shape
         ),
@@ -167,20 +173,21 @@ def test_enclosed_current_relation_recovers_two_normalized_profiles(
         pressure_profile,
         current_profile,
         total_volume,
+        mu0=_MU0,
     )
     pressure_profile.validate(edge_value=0.1)
     current_profile.validate()
     shells = np.asarray((0.1, 0.3, 0.55, 0.8, 1.0))
     shell_radii = minor_radius * np.sqrt(shells)
+    ds_dflux = 0.6 + 0.5 * shells
     closure_rows = closure.evaluate(
         shells,
-        d_normalized_volume_d_flux=np.ones_like(shells),
+        d_normalized_volume_d_flux=ds_dflux,
         mean_inverse_radius_squared=1.0
         / (major_radius * np.sqrt(major_radius**2 - shell_radii**2)),
     )
-    assert closure_rows.pressure == pytest.approx(pressure_profile.value(shells))
-    assert closure_rows.target_enclosed_current == pytest.approx(
-        current_profile.enclosed_current(shells)
+    assert closure_rows.pressure_flux_derivative == pytest.approx(
+        np.asarray(pressure_profile.derivative(shells)) * ds_dflux
     )
     measured = np.asarray(
         [

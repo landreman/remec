@@ -495,10 +495,12 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   relative residual is 8.82e-15. The shared normalized p₀(s)/I₀(s) closure implements
   the note's enclosed-current relation; independent circular-poloidal quadrature
   recovers I₀=0.7s and I₀=0.4s(2−s) on five cumulative shells with maximum absolute
-  errors 8.22e-15 and 9.33e-15, including their edge totals. See
+  errors 7.11e-15 and 8.66e-15 at μ₀=2.3 and nonconstant ds/dψ, including their
+  edge totals. See
   `tests/manufactured/axisymmetric_grad_shafranov_rates.csv`,
   `tests/manufactured/axisymmetric_enclosed_current.csv`, and `docs/verification.md`.
-  Final local `make check`: 208 not-slow tests in 46.42 s; slowest 17.25 s.
+  Final post-review local `make check`: 216 not-slow tests in 40.56 s; slowest
+  15.57 s.
   <br>Next: milestone 5.2 should evaluate the profile closure on the Picard iterate's
   single shared s field, turn its p′ and II′ arrays into frozen GS coefficients, and
   carry both p₀/I₀ realization residuals through damping. The current implementation
@@ -513,6 +515,9 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   <br>**Phase gate.** Acceptance: axisymmetric benchmark vs. Grad–Shafranov with
   p=p₀(s(ψ)) and I_tor=I₀(s(ψ)) within tolerance for at least two I₀ targets.
   <br>Measured: —
+  <br>Planned verification: include a shaped analytic Zheng or Cerfon–Freidberg
+  Grad–Shafranov solution from the §16.3 references, not only the rectangular
+  manufactured operator test supplied by 5.1.
 
 ## Phase 6 — 3D fixed boundary
 
@@ -580,11 +585,12 @@ passes all 203 not-slow tests in 43.55 s ✅; the next-slowest item is the share
 `test_m3_gradient_comparison` setup at 13.06 s. No individual not-slow item exceeds
 ~20 s.
 
-Measured 2026-08-17 on `milestone/5.1-axisymmetric-reduced-model`: `make test` passes
-all 208 not-slow tests in 46.42 s ✅. The slowest item is the curved-torus current
-projection at 17.25 s; the next-slowest is the M3 gradient-comparison setup at 14.20 s.
-The new five-test axisymmetric module passes serially in 0.99 s. No individual
-not-slow item exceeds ~20 s, and no existing `slow` test touches the new module.
+Measured 2026-08-17 on `milestone/5.1-axisymmetric-reduced-model`: post-review
+`make test` passes all 216 not-slow tests in 40.56 s ✅. The slowest item is the
+curved-torus current projection at 15.57 s; the next-slowest is the M3
+gradient-comparison setup at 12.45 s. The combined manufactured and public-contract
+axisymmetric tests pass serially in 0.97 s. No individual not-slow item exceeds ~20 s,
+and no existing `slow` test touches the new module.
 
 ## Release gates
 
