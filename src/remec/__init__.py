@@ -20,6 +20,7 @@ from remec.profiles import (
     ToroidalCurrentProfile,
     TransplantedProfile,
 )
+from remec.solvers.picard import PicardOptions
 
 __version__: Final = version("remec")
 
@@ -29,6 +30,7 @@ __all__ = [
     "InvalidProfileError",
     "M2ToroidalCurrentSamples",
     "Normalization",
+    "PicardOptions",
     "PressureProfile",
     "RuntimeOptions",
     "ShellCurrentMoments",

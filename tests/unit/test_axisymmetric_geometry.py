@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import pickle
+from dataclasses import FrozenInstanceError
+
 import ngsolve as ng
 import numpy as np
 import pytest
 
+from remec import solvers
+from remec.common.serialization import canonical_json
 from remec.geometry import AxisymmetricRZDomain
 from remec.profiles import AnalyticPressureProfile, AnalyticToroidalCurrentProfile
 from remec.solvers import (
@@ -13,6 +18,11 @@ from remec.solvers import (
     AxisymmetricGradShafranovSolver,
     AxisymmetricProfileClosure,
 )
+
+
+def test_point_solution_with_private_evaluator_is_not_a_package_export() -> None:
+    """The M1 point-evaluation adapter stays behind the public solver boundary."""
+    assert "AxisymmetricGradShafranovPointSolution" not in solvers.__all__
 
 
 def _profiles() -> tuple[AnalyticPressureProfile, AnalyticToroidalCurrentProfile]:
@@ -63,18 +73,35 @@ def test_axisymmetric_domain_rejects_invalid_bounds(
 def test_public_axisymmetric_solver_reports_the_weighted_energy() -> None:
     """The public (M1) wrapper exercises and exposes its nontrivial energy diagnostic."""
     solver = AxisymmetricGradShafranovSolver(polynomial_order=2)
-    result = solver.solve(
-        AxisymmetricRZDomain((1.0, 2.0), (0.0, 1.0), maxh=0.5),
-        AxisymmetricGradShafranovCoefficients(
-            pressure_flux_derivative=-0.4,
-            toroidal_field_drive=3.0,
-            mu0=2.3,
-        ),
+    domain = AxisymmetricRZDomain((1.0, 2.0), (0.0, 1.0), maxh=0.5)
+    coefficients = AxisymmetricGradShafranovCoefficients(
+        pressure_flux_derivative=-0.4,
+        toroidal_field_drive=3.0,
+        mu0=2.3,
     )
+    first_solution = solver.solve_with_flux(domain, coefficients)
+    result = first_solution.result
 
     assert result.elements == 8
     assert result.free_dof_relative_residual_norm < 1.0e-12
     assert result.weighted_magnetic_energy > 0.0
+    first_flux = first_solution.flux_at(1.5, 0.5)
+    second_solution = solver.solve_with_flux(
+        AxisymmetricRZDomain((1.0, 2.0), (0.0, 1.0), maxh=0.5),
+        AxisymmetricGradShafranovCoefficients(
+            pressure_flux_derivative=0.0,
+            toroidal_field_drive=0.0,
+            mu0=2.3,
+        ),
+    )
+    assert first_flux != pytest.approx(0.0)
+    assert second_solution.flux_at(1.5, 0.5) == pytest.approx(0.0, abs=1.0e-15)
+    assert first_solution.flux_at(1.5, 0.5) == pytest.approx(first_flux)
+    assert canonical_json(result)
+    assert pickle.loads(pickle.dumps(result)) == result
+    assert solver.solve(domain, coefficients) == result
+    with pytest.raises(FrozenInstanceError):
+        first_solution.result = second_solution.result
 
     with pytest.raises(ValueError, match="polynomial_order"):
         AxisymmetricGradShafranovSolver(polynomial_order=0)

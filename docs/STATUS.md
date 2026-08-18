@@ -505,10 +505,42 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   single shared s field, turn its p′ and II′ arrays into frozen GS coefficients, and
   carry both p₀/I₀ realization residuals through damping. The current implementation
   deliberately stops at that frozen-block boundary; 5.2 owns the nonlinear connection.
-- [ ] **5.2** Damped Picard — `DESIGN.md` §13.1, §13.3 · note: §9
+- [x] **5.2** Damped Picard — `DESIGN.md` §13.1, §13.3 · note: §9
   <br>Acceptance: cycle uses one s field, p=p₀(s), bordered M3–M3b, and a
   shell-moment-preserving projection; convergence includes both profile residuals.
-  <br>Measured: —
+  <br>Measured: macOS / CPython 3.12.2 / NumPy 2.4.6 — the backend-independent
+  segregated driver executes M4a → one shared s → p₀(s) → bordered M3–M3b →
+  moment-preserving M2 projection → M1, then damps only the free magnetic state. On
+  the analytic unstable map A_candidate=2−2A, damping α=0.2 / 0.3 / 0.4 converges
+  in 30 / 13 / 18 cycles with measured contraction factors 0.399960 / 0.100009 /
+  0.199990, agreeing with |1−3α|. Final fixed-point norms are 5.764e-12 /
+  2.000e-12 / 2.621e-12; the separate M1 residual is 6.0e-14 and M3/M3b/M4a
+  residuals are at most 4.0e-14. Divergence is at most
+  7.0e-14, and the flux error is 8.0e-14. Independently measured pressure,
+  current, and projected-current profile errors are zero (required below 1e-10).
+  A coarse open-loop adapter test passes the real milestone-5.1 closure's p′ and II′
+  outputs at representative mean s=1/2 into frozen coefficients for the real NGSolve
+  Grad–Shafranov block on every cycle. This is a real-block wiring/type check, while the
+  manufactured map certifies the complete closed loop. Its plain GS result is serializable;
+  a separate frozen point-solution owns the evaluator. The full returned Picard bundle is
+  pinned exactly to one verified pre-update iterate. The manufactured shared-s field
+  depends on the current M4a result through a mean-preserving antisymmetric perturbation.
+  Zeroing either the M4a input or χ→s hand-off, removing damping, substituting s for
+  p₀(s), bypassing the nonidentity current projection or its profile gate, injecting a
+  1e-4 profile error, activating a material floor, or under-resolving either layer makes
+  the acceptance tests fail. Structured JSON provenance records the start, all accepted
+  damping iterations, and completion under a recomputed 64-hex configuration digest;
+  the history also pins the measured projection correction (6e-4) and magnetic minimum.
+  See
+  `tests/manufactured/picard_damping_convergence.csv` and `docs/verification.md`.
+  <br>Next: milestone 5.3 should accelerate the same free magnetic vector and reuse
+  these independent gates/history records. Keep fixed harmonic-flux coefficients and
+  essential traces in the backend adapter, outside Anderson history; restart on an
+  ill-conditioned least-squares system and fall back to this verified damped step.
+  Fixed scalar damping has no rejected trial steps; 5.3 must log rejected acceleration
+  attempts. The concrete 5.4 run driver owns configured checkpoint cadence, the
+  across-iterate gate that the recorded projection correction converges to zero, and the
+  non-strict warning path for under-resolved layers (5.2 uses strict failure).
 - [ ] **5.3** Anderson with fallback — `DESIGN.md` §13.3
   <br>Measured: —
 - [ ] **5.4** Staged continuation — `DESIGN.md` §14.4 · note: §9, §11.2
@@ -591,6 +623,13 @@ curved-torus current projection at 15.57 s; the next-slowest is the M3
 gradient-comparison setup at 12.45 s. The combined manufactured and public-contract
 axisymmetric tests pass serially in 0.97 s. No individual not-slow item exceeds ~20 s,
 and no existing `slow` test touches the new module.
+
+Measured 2026-08-17 on `milestone/5.2-damped-picard`: final post-review `make test`
+passes all 235 not-slow tests in 38.20 s ✅. The slowest item is the curved-torus current
+projection at 13.96 s; the next-slowest is the M3 gradient-comparison setup at 12.14 s.
+The 19 Picard public-contract and manufactured tests pass serially in 0.70 s. No
+individual not-slow item exceeds ~20 s, and no existing `slow` test touches the new
+backend-independent driver.
 
 ## Release gates
 

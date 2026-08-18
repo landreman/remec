@@ -10,6 +10,7 @@ from numpy.typing import ArrayLike, NDArray
 
 from remec.fem._axisymmetric import (
     AxisymmetricGradShafranovCoefficients,
+    _AxisymmetricGradShafranovSolution,
     solve_axisymmetric_grad_shafranov,
 )
 from remec.geometry.axisymmetric import AxisymmetricRZDomain
@@ -20,6 +21,7 @@ ScalarOrArray = float | NDArray[np.float64]
 
 __all__ = [
     "AxisymmetricGradShafranovCoefficients",
+    "AxisymmetricGradShafranovPointSolution",
     "AxisymmetricGradShafranovResult",
     "AxisymmetricGradShafranovSolver",
     "AxisymmetricProfileClosure",
@@ -118,6 +120,31 @@ class AxisymmetricGradShafranovResult:
     weighted_magnetic_energy: float
 
 
+class _AxisymmetricFluxEvaluator:
+    """Typed point evaluator retaining one internal note-``(M1)`` solution."""
+
+    __slots__ = ("_solution",)
+
+    def __init__(self, solution: _AxisymmetricGradShafranovSolution) -> None:
+        self._solution = solution
+
+    def flux_at(self, radius: float, vertical_coordinate: float) -> float:
+        """Evaluate the retained reduced flux at one cylindrical point."""
+        return float(self._solution._flux(self._solution._mesh(radius, vertical_coordinate)))
+
+
+@dataclass(frozen=True, slots=True)
+class AxisymmetricGradShafranovPointSolution:
+    """One serializable result plus its separately owned point-flux evaluator."""
+
+    result: AxisymmetricGradShafranovResult
+    _evaluator: _AxisymmetricFluxEvaluator
+
+    def flux_at(self, radius: float, vertical_coordinate: float) -> float:
+        """Evaluate this solve's reduced note-``(M1)`` flux."""
+        return self._evaluator.flux_at(radius, vertical_coordinate)
+
+
 class AxisymmetricGradShafranovSolver:
     """Sparse-direct verification solver for note ``(M1)`` in true R-Z form."""
 
@@ -138,16 +165,29 @@ class AxisymmetricGradShafranovSolver:
         coefficients: AxisymmetricGradShafranovCoefficients,
     ) -> AxisymmetricGradShafranovResult:
         """Solve ``GS_recovered`` with frozen profile-derived source coefficients."""
+        return self.solve_with_flux(domain, coefficients).result
+
+    def solve_with_flux(
+        self,
+        domain: AxisymmetricRZDomain,
+        coefficients: AxisymmetricGradShafranovCoefficients,
+    ) -> AxisymmetricGradShafranovPointSolution:
+        """Solve ``GS_recovered`` and retain a typed point-flux evaluator."""
         internal = solve_axisymmetric_grad_shafranov(
             domain,
             polynomial_order=self.polynomial_order,
             coefficients=coefficients,
             runtime=self.runtime,
         )
-        return AxisymmetricGradShafranovResult(
+
+        result = AxisymmetricGradShafranovResult(
             polynomial_order=internal.polynomial_order,
             elements=internal.elements,
             free_dof_residual_norm=internal.free_dof_residual_norm,
             free_dof_relative_residual_norm=internal.free_dof_relative_residual_norm,
             weighted_magnetic_energy=internal.weighted_magnetic_energy,
+        )
+        return AxisymmetricGradShafranovPointSolution(
+            result,
+            _AxisymmetricFluxEvaluator(internal),
         )

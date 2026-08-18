@@ -11,6 +11,102 @@
 > numbers remain valid. Milestone 3.5 migrated the public contract and layer-cake
 > oracle to p₀(s) and the factor V_Ω∫₀¹·ds.
 
+## Milestone 5.2 — damped Picard orchestration
+
+The nonlinear driver implements the note §9 and `DESIGN.md` §13.1 segregated order
+
+\[
+(\mathrm{M4a})\longrightarrow s=V_\chi(\chi)/V_\Omega
+\longrightarrow p_0(s)\longrightarrow (\mathrm{M3})\text{--}(\mathrm{M3b})
+\longrightarrow \mathrm{M2}\text{ current projection}
+\longrightarrow (\mathrm{M1}).
+\]
+
+It constructs the normalized-volume array once per cycle and passes that same object to
+the independent pressure-realization diagnostic, bordered current block, and
+shell-moment-preserving projection. Pressure is eliminated by the exact composition
+\(p=p_0(s)\); the current block and the projection must each return independently evaluated
+cumulative currents on the block's shell grid. Only after all blocks finish is the free
+magnetic state accepted with scalar under-relaxation
+
+\[
+A^{k+1}=A^k+\alpha(A_{\rm candidate}^k-A^k),\qquad 0<\alpha\le1.
+\]
+
+The backend-independent driver deliberately does not expose NGSolve objects. Its magnetic
+vector contains only free coefficients; fixed harmonic-flux coefficients and essential traces
+remain in the backend adapter and cannot be changed by damping. The adapter protocol retains
+the existing FEM boundaries: (M4a), bordered (M3)--(M3b), the paired divergence/moment
+projection, and (M1) remain separately testable operators. A coarse open-loop adapter smoke test
+executes the real milestone-5.1 `AxisymmetricProfileClosure` three times per cycle and the real
+NGSolve `AxisymmetricGradShafranovSolver` once per cycle. In particular, the closure's scalar
+\(p'(\psi)\) and \(II'(\psi)\) evaluations at the representative mean \(s=1/2\) are passed
+directly into the frozen Grad--Shafranov coefficients; the test checks those values independently
+against the analytic profiles. This is a type-satisfiability and closure-to-M1 wiring check, not a
+closed nonlinear real-block solve: the manufactured operators below certify the complete
+M4a-to-M1 loop and every arrow in it. The plain GS result remains serializable, while a separate
+typed point-solution object owns its evaluator, so two solves through one solver cannot alias each
+other's state. Milestone 5.4 still owns the spatial Grad--Shafranov benchmark.
+
+That manufactured map is
+\(A_{\rm candidate}=2-2A\), with fixed point \(A^*=2/3\). It is unstable without
+damping. Under the accepted update its error obeys
+\(e^{k+1}=(1-3\alpha)e^k\), so the predicted contraction factor is
+\(|1-3\alpha|\). The checked-in
+`tests/manufactured/picard_damping_convergence.csv` is read and verified by
+`test_damped_picard_converges_at_the_manufactured_linear_rate`:
+
+| damping \(\alpha\) | iterations | predicted factor | observed factor | final fixed-point norm | final update norm |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 0.2 | 30 | 0.4 | 0.399960 | 5.7641e-12 | 1.1529e-12 |
+| 0.3 | 13 | 0.1 | 0.100009 | 2.0002e-12 | 6.0008e-13 |
+| 0.4 | 18 | 0.2 | 0.199990 | 2.6213e-12 | 1.0485e-12 |
+
+The Ampère/M1 linear residual is reported and gated separately at \(6\times10^{-14}\);
+the fixed-point norm and damped update use the §13.2 block-norm utility with an explicit
+physical magnetic scale. Every converged row has M3/M3b/M4a relative residuals at or below
+\(4\times10^{-14}\), current and magnetic divergence below \(7\times10^{-14}\),
+toroidal-flux error \(8\times10^{-14}\), and zero measured pressure, current, and
+projected-current profile error (gate \(10^{-10}\)). Convergence is the conjunction of
+all equation, fixed-point, state-update, profile, divergence, flux, pressure-bounds,
+floor-sensitivity, and pressure/current-layer-resolution tests. The safety adapter reports
+minimum/maximum pressure, minimum magnetic magnitude, maximum floor sensitivity, and the
+minimum element widths across both modeled layers. The verified magnetic state and all returned
+derived fields now belong to the same pre-update iterate. Exact manufactured assertions pin the
+returned reference potential, shared normalized-volume field, pressure, utilde, bordered
+coefficients, and projected current to independently reconstructed values from that iterate.
+The §13.3 JSON stream is also tested end-to-end: it emits start, one accepted record per
+iteration, and completion with one recomputed 64-hex configuration digest. Its iteration and
+damping fields must agree with the returned history; the manufactured final row pins the
+relative projection correction to (6\times10^{-4}) and the magnetic minimum to its
+independent safety measurement.
+
+The manufactured \(s\) field depends on the current cycle's M4a output through a bounded
+perturbation that is antisymmetric about \(s=1/2\). Its mean therefore stays exactly \(1/2\),
+preserving the analytic linear map above while making both the \(A\to\chi\) and
+\(\chi\to s\) arrows observable. Tests compare every normalized-volume builder input with its
+corresponding M4a result and require the resulting \(s\) fields to change across the iteration.
+Replacing either M4a input or the \(s\)-builder input by zero fails all three damping rows. The
+returned magnetic state is also compared exactly with the last pre-update magnetic state observed
+by the M4a adapter, pinning the result bundle to one verified iterate.
+
+The remaining mutation tests make the acceptance claim falsifiable. Setting
+\(\alpha=1\) leaves the map unstable and exhausts the iteration limit. Injecting a fixed
+\(10^{-4}\) error into the independent pressure measurement, the reconstructed (M2)
+cumulative current, or the projected cumulative current leaves the corresponding named gate
+open after the magnetic state has converged. Thus damping cannot hide loss of either
+\(p_0(s)\) or \(I_0(s)\), and a projection that erases (M3b) moments cannot certify the
+cycle. The manufactured raw current depends explicitly on the pressure array and the projection
+is nonidentity: passing `s` in place of \(p_0(s)\), or passing raw rather than projected current
+to Ampère, moves the fixed point and fails all three damping rows. Separate negative controls
+hold floor sensitivity above 1%, either layer below six cells, or pressure outside the profile
+range; every case keeps its named gate open.
+
+The driver records the relative current-projection correction on every row. Milestone 5.4's
+concrete continuation driver owns the across-iterate trend gate required to establish that this
+correction converges to zero, as well as the non-strict warning path for under-resolved layers;
+milestone 5.2 keeps the strict failure used by verification runs.
+
 ## Milestone 5.1 — axisymmetric reduced Grad–Shafranov model
 
 The reduced magnetic kernel implements note (M1) through `GS_recovered` on a true
