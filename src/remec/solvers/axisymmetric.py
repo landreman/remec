@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from math import isfinite, pi
-from typing import Any
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
@@ -117,6 +117,11 @@ class AxisymmetricGradShafranovResult:
     free_dof_residual_norm: float
     free_dof_relative_residual_norm: float
     weighted_magnetic_energy: float
+    _flux_evaluator: Callable[[float, float], float] = field(repr=False, compare=False)
+
+    def flux_at(self, radius: float, vertical_coordinate: float) -> float:
+        """Evaluate this immutable solve's reduced note-``(M1)`` flux."""
+        return self._flux_evaluator(radius, vertical_coordinate)
 
 
 class AxisymmetricGradShafranovSolver:
@@ -132,7 +137,6 @@ class AxisymmetricGradShafranovSolver:
             raise ValueError("polynomial_order must be at least one")
         self.polynomial_order = polynomial_order
         self.runtime = runtime
-        self._internal_solution: Any = None
 
     def solve(
         self,
@@ -146,18 +150,15 @@ class AxisymmetricGradShafranovSolver:
             coefficients=coefficients,
             runtime=self.runtime,
         )
-        self._internal_solution = internal
+
+        def flux_at(radius: float, vertical_coordinate: float) -> float:
+            return float(internal._flux(internal._mesh(radius, vertical_coordinate)))
+
         return AxisymmetricGradShafranovResult(
             polynomial_order=internal.polynomial_order,
             elements=internal.elements,
             free_dof_residual_norm=internal.free_dof_residual_norm,
             free_dof_relative_residual_norm=internal.free_dof_relative_residual_norm,
             weighted_magnetic_energy=internal.weighted_magnetic_energy,
+            _flux_evaluator=flux_at,
         )
-
-    def flux_at(self, radius: float, vertical_coordinate: float) -> float:
-        """Evaluate the latest reduced note-``(M1)`` flux at one R-Z point."""
-        if self._internal_solution is None:
-            raise RuntimeError("solve must be called before evaluating the magnetic flux")
-        internal = self._internal_solution
-        return float(internal._flux(internal._mesh(radius, vertical_coordinate)))

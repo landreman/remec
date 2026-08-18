@@ -38,10 +38,15 @@ vector contains only free coefficients; fixed harmonic-flux coefficients and ess
 remain in the backend adapter and cannot be changed by damping. The adapter protocol retains
 the existing FEM boundaries: (M4a), bordered (M3)--(M3b), the paired divergence/moment
 projection, and (M1) remain separately testable operators. A coarse adapter smoke test executes
-the real milestone-5.1 `AxisymmetricProfileClosure` twice per cycle and the real NGSolve
-`AxisymmetricGradShafranovSolver` once per cycle, demonstrating that the protocol is satisfiable
-by the verified reduced blocks. Milestone 5.4 still owns the spatial Grad--Shafranov benchmark;
-this milestone verifies the nonlinear connection and its acceptance logic.
+the real milestone-5.1 `AxisymmetricProfileClosure` three times per cycle and the real NGSolve
+`AxisymmetricGradShafranovSolver` once per cycle. In particular, the closure's scalar
+\(p'(\psi)\) and \(II'(\psi)\) evaluations at the current iterate's representative shared-\(s\)
+value are passed directly into the frozen Grad--Shafranov coefficients; the test checks those
+values independently against the analytic profiles. The immutable GS result owns its point-flux
+evaluator, so two solves through one solver cannot alias each other's state. This demonstrates
+that the protocol is satisfiable by the verified reduced blocks. Milestone 5.4 still owns the
+spatial Grad--Shafranov benchmark; this milestone verifies the nonlinear connection and its
+acceptance logic.
 
 That manufactured map is
 \(A_{\rm candidate}=2-2A\), with fixed point \(A^*=2/3\). It is unstable without
@@ -69,7 +74,15 @@ minimum/maximum pressure, minimum magnetic magnitude, maximum floor sensitivity,
 minimum element widths across both modeled layers. The verified magnetic state and all returned
 derived fields now belong to the same pre-update iterate.
 
-The mutation tests make the acceptance claim falsifiable. Setting
+The manufactured \(s\) field depends on the current cycle's M4a output through a bounded
+perturbation that is antisymmetric about \(s=1/2\). Its mean therefore stays exactly \(1/2\),
+preserving the analytic linear map above while making both the \(A\to\chi\) and
+\(\chi\to s\) arrows observable. Tests pair every magnetic input with its M4a result and every
+M4a result with the builder input, and require the resulting \(s\) fields to change across the
+iteration. Replacing either M4a input or the \(s\)-builder input by zero fails all three damping
+rows.
+
+The remaining mutation tests make the acceptance claim falsifiable. Setting
 \(\alpha=1\) leaves the map unstable and exhausts the iteration limit. Injecting a fixed
 \(10^{-4}\) error into the independent pressure measurement, the reconstructed (M2)
 cumulative current, or the projected cumulative current leaves the corresponding named gate
@@ -80,6 +93,11 @@ is nonidentity: passing `s` in place of \(p_0(s)\), or passing raw rather than p
 to Ampère, moves the fixed point and fails all three damping rows. Separate negative controls
 hold floor sensitivity above 1%, either layer below six cells, or pressure outside the profile
 range; every case keeps its named gate open.
+
+The driver records the relative current-projection correction on every row. Milestone 5.4's
+concrete continuation driver owns the across-iterate trend gate required to establish that this
+correction converges to zero, as well as the non-strict warning path for under-resolved layers;
+milestone 5.2 keeps the strict failure used by verification runs.
 
 ## Milestone 5.1 — axisymmetric reduced Grad–Shafranov model
 

@@ -518,8 +518,11 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   residuals are at most 4.0e-14. Divergence is at most
   7.0e-14, and the flux error is 8.0e-14. Independently measured pressure,
   current, and projected-current profile errors are zero (required below 1e-10).
-  A coarse adapter test executes the real milestone-5.1 normalized profile closure and
-  NGSolve Grad–Shafranov block on every cycle. Removing damping, substituting s for
+  A coarse adapter test passes the real milestone-5.1 closure's p′ and II′ outputs into
+  frozen coefficients for the real NGSolve Grad–Shafranov block on every cycle; the
+  immutable solve result owns its point-flux evaluator. The manufactured shared-s field
+  depends on the current M4a result through a mean-preserving antisymmetric perturbation.
+  Zeroing either the M4a input or χ→s hand-off, removing damping, substituting s for
   p₀(s), bypassing the nonidentity current projection or its profile gate, injecting a
   1e-4 profile error, activating a material floor, or under-resolving either layer makes
   the acceptance tests fail. See
@@ -529,7 +532,9 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   essential traces in the backend adapter, outside Anderson history; restart on an
   ill-conditioned least-squares system and fall back to this verified damped step.
   Fixed scalar damping has no rejected trial steps; 5.3 must log rejected acceleration
-  attempts. The concrete 5.4 run driver owns configured checkpoint cadence.
+  attempts. The concrete 5.4 run driver owns configured checkpoint cadence, the
+  across-iterate gate that the recorded projection correction converges to zero, and the
+  non-strict warning path for under-resolved layers (5.2 uses strict failure).
 - [ ] **5.3** Anderson with fallback — `DESIGN.md` §13.3
   <br>Measured: —
 - [ ] **5.4** Staged continuation — `DESIGN.md` §14.4 · note: §9, §11.2
@@ -613,9 +618,9 @@ gradient-comparison setup at 12.45 s. The combined manufactured and public-contr
 axisymmetric tests pass serially in 0.97 s. No individual not-slow item exceeds ~20 s,
 and no existing `slow` test touches the new module.
 
-Measured 2026-08-17 on `milestone/5.2-damped-picard`: post-review `make test` passes
-all 235 not-slow tests in 37.00 s ✅. The slowest item is the curved-torus current
-projection at 14.50 s; the next-slowest is the M3 gradient-comparison setup at 11.25 s.
+Measured 2026-08-17 on `milestone/5.2-damped-picard`: final post-review `make test`
+passes all 235 not-slow tests in 37.72 s ✅. The slowest item is the curved-torus current
+projection at 14.13 s; the next-slowest is the M3 gradient-comparison setup at 11.58 s.
 The 19 Picard public-contract and manufactured tests pass serially in 0.70 s. No
 individual not-slow item exceeds ~20 s, and no existing `slow` test touches the new
 backend-independent driver.

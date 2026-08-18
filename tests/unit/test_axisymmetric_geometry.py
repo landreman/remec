@@ -75,6 +75,18 @@ def test_public_axisymmetric_solver_reports_the_weighted_energy() -> None:
     assert result.elements == 8
     assert result.free_dof_relative_residual_norm < 1.0e-12
     assert result.weighted_magnetic_energy > 0.0
+    first_flux = result.flux_at(1.5, 0.5)
+    second_result = solver.solve(
+        AxisymmetricRZDomain((1.0, 2.0), (0.0, 1.0), maxh=0.5),
+        AxisymmetricGradShafranovCoefficients(
+            pressure_flux_derivative=0.0,
+            toroidal_field_drive=0.0,
+            mu0=2.3,
+        ),
+    )
+    assert first_flux != pytest.approx(0.0)
+    assert second_result.flux_at(1.5, 0.5) == pytest.approx(0.0, abs=1.0e-15)
+    assert result.flux_at(1.5, 0.5) == pytest.approx(first_flux)
 
     with pytest.raises(ValueError, match="polynomial_order"):
         AxisymmetricGradShafranovSolver(polynomial_order=0)

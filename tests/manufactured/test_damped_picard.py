@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 from dataclasses import dataclass, field
+from math import pi
 from pathlib import Path
 
 import numpy as np
@@ -56,21 +57,31 @@ class _ManufacturedAxisymmetricCycle:
     safety_pressure_bias: float = 0.0
     shared_s_ids: list[tuple[str, int]] = field(default_factory=list)
     shared_s_fields: list[NDArray[np.float64]] = field(default_factory=list)
+    magnetic_inputs: list[NDArray[np.float64]] = field(default_factory=list)
+    reference_solutions: list[NDArray[np.float64]] = field(default_factory=list)
+    normalized_volume_inputs: list[NDArray[np.float64]] = field(default_factory=list)
 
     def solve_reference_potential(
         self, magnetic_state: NDArray[np.float64]
     ) -> ReferencePotentialStep:
+        self.magnetic_inputs.append(magnetic_state.copy())
+        reference_potential = np.asarray((float(magnetic_state[0]),), dtype=float)
+        self.reference_solutions.append(reference_potential.copy())
         return ReferencePotentialStep(
-            reference_potential=np.asarray((float(magnetic_state[0]),), dtype=float),
+            reference_potential=reference_potential,
             m4a_relative_residual=2.0e-14,
         )
 
     def build_normalized_volume(
         self, reference_potential: NDArray[np.float64]
     ) -> NDArray[np.float64]:
+        self.normalized_volume_inputs.append(reference_potential.copy())
         base = np.linspace(0.0, 1.0, 9)
-        del reference_potential
-        normalized_volume = np.asarray(base, dtype=float)
+        antisymmetric_shape = base * (1.0 - base) * (base - 0.5)
+        normalized_volume = np.asarray(
+            base + 0.08 * np.tanh(float(reference_potential[0])) * antisymmetric_shape,
+            dtype=float,
+        )
         self.shared_s_fields.append(normalized_volume)
         return normalized_volume
 
@@ -241,6 +252,27 @@ def test_damped_picard_converges_at_the_manufactured_linear_rate(damping: float)
         grouped_ids.setdefault(object_id, set()).add(name)
     assert all(names == {"pressure", "current", "projection"} for names in grouped_ids.values())
     assert len(grouped_ids) == result.iterations
+    assert len(operators.magnetic_inputs) == result.iterations
+    assert all(
+        np.array_equal(reference, magnetic)
+        for reference, magnetic in zip(
+            operators.reference_solutions,
+            operators.magnetic_inputs,
+            strict=True,
+        )
+    )
+    assert all(
+        np.array_equal(volume_input, reference)
+        for volume_input, reference in zip(
+            operators.normalized_volume_inputs,
+            operators.reference_solutions,
+            strict=True,
+        )
+    )
+    assert any(
+        not np.array_equal(field, operators.shared_s_fields[0])
+        for field in operators.shared_s_fields[1:]
+    )
 
 
 def test_undamped_cycle_and_profile_mutations_cannot_report_convergence() -> None:
@@ -290,6 +322,8 @@ class _Milestone51ReducedAdapter:
     magnetic_solver: AxisymmetricGradShafranovSolver
     closure_evaluations: int = 0
     magnetic_solves: int = 0
+    coefficient_history: list[tuple[float, float]] = field(default_factory=list)
+    frozen_coefficients: AxisymmetricGradShafranovCoefficients | None = None
 
     def solve_reference_potential(
         self, magnetic_state: NDArray[np.float64]
@@ -299,8 +333,12 @@ class _Milestone51ReducedAdapter:
     def build_normalized_volume(
         self, reference_potential: NDArray[np.float64]
     ) -> NDArray[np.float64]:
-        del reference_potential
-        return np.linspace(0.0, 1.0, 9)
+        base = np.linspace(0.0, 1.0, 9)
+        antisymmetric_shape = base * (1.0 - base) * (base - 0.5)
+        return np.asarray(
+            base + 0.08 * np.tanh(float(reference_potential[0])) * antisymmetric_shape,
+            dtype=float,
+        )
 
     def pressure_profile_realization_error(
         self,
@@ -322,7 +360,7 @@ class _Milestone51ReducedAdapter:
         normalized_volume: NDArray[np.float64],
         current_profile: ToroidalCurrentProfile,
     ) -> ConstrainedCurrentStep:
-        del normalized_volume, current_profile
+        del current_profile
         shell_edges = np.linspace(0.0, 1.0, 5)
         evaluation = self.closure.evaluate(
             shell_edges,
@@ -330,6 +368,16 @@ class _Milestone51ReducedAdapter:
             mean_inverse_radius_squared=np.ones_like(shell_edges),
         )
         self.closure_evaluations += 1
+        frozen_sources = self.closure.evaluate(
+            float(np.mean(normalized_volume)),
+            d_normalized_volume_d_flux=1.0,
+            mean_inverse_radius_squared=1.0,
+        )
+        self.closure_evaluations += 1
+        self.frozen_coefficients = AxisymmetricGradShafranovCoefficients(
+            pressure_flux_derivative=float(frozen_sources.pressure_flux_derivative),
+            toroidal_field_drive=float(frozen_sources.toroidal_field_drive),
+        )
         pressure_mean = float(np.mean(pressure))
         drive_mean = float(np.mean(np.asarray(evaluation.toroidal_field_drive)))
         return ConstrainedCurrentStep(
@@ -364,18 +412,22 @@ class _Milestone51ReducedAdapter:
         )
 
     def solve_magnetics(self, projected_current: NDArray[np.float64]) -> MagneticStep:
+        del projected_current
+        if self.frozen_coefficients is None:
+            raise RuntimeError("profile closure must be evaluated before the magnetic solve")
         result = self.magnetic_solver.solve(
             self.domain,
-            AxisymmetricGradShafranovCoefficients(
-                pressure_flux_derivative=-0.02,
-                toroidal_field_drive=0.2 + 0.05 * float(projected_current[0]),
-            ),
+            self.frozen_coefficients,
+        )
+        self.coefficient_history.append(
+            (
+                float(self.frozen_coefficients.pressure_flux_derivative),
+                float(self.frozen_coefficients.toroidal_field_drive),
+            )
         )
         self.magnetic_solves += 1
         return MagneticStep(
-            candidate_magnetic_state=np.asarray(
-                (self.magnetic_solver.flux_at(1.5, 0.5),), dtype=float
-            ),
+            candidate_magnetic_state=np.asarray((result.flux_at(1.5, 0.5),), dtype=float),
             m1_linear_relative_residual=result.free_dof_relative_residual_norm,
             magnetic_divergence_relative_residual=0.0,
             toroidal_flux_relative_error=0.0,
@@ -432,7 +484,10 @@ def test_picard_protocol_executes_milestone_51_closure_and_grad_shafranov_block(
 
     assert result.converged
     assert adapter.magnetic_solves == result.iterations
-    assert adapter.closure_evaluations == 2 * result.iterations
+    assert adapter.closure_evaluations == 3 * result.iterations
+    assert adapter.coefficient_history == pytest.approx(
+        [(-0.2, 0.2 + 0.2 * pi)] * result.iterations
+    )
     assert result.history[-1].m1_relative_residual < 1.0e-10
     assert result.history[-1].pressure_profile_error < 1.0e-10
     assert result.history[-1].current_profile_error < 1.0e-10
