@@ -57,12 +57,14 @@ class _ManufacturedAxisymmetricCycle:
     safety_pressure_bias: float = 0.0
     shared_s_ids: list[tuple[str, int]] = field(default_factory=list)
     shared_s_fields: list[NDArray[np.float64]] = field(default_factory=list)
+    verified_magnetic_inputs: list[NDArray[np.float64]] = field(default_factory=list)
     reference_solutions: list[NDArray[np.float64]] = field(default_factory=list)
     normalized_volume_inputs: list[NDArray[np.float64]] = field(default_factory=list)
 
     def solve_reference_potential(
         self, magnetic_state: NDArray[np.float64]
     ) -> ReferencePotentialStep:
+        self.verified_magnetic_inputs.append(magnetic_state.copy())
         reference_potential = np.asarray((float(magnetic_state[0]),), dtype=float)
         self.reference_solutions.append(reference_potential.copy())
         return ReferencePotentialStep(
@@ -261,6 +263,10 @@ def test_damped_picard_converges_at_the_manufactured_linear_rate(damping: float)
     assert any(
         not np.array_equal(field, operators.shared_s_fields[0])
         for field in operators.shared_s_fields[1:]
+    )
+    assert np.array_equal(
+        np.asarray(result.magnetic_state),
+        operators.verified_magnetic_inputs[-1],
     )
 
 

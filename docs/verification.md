@@ -77,10 +77,11 @@ derived fields now belong to the same pre-update iterate.
 The manufactured \(s\) field depends on the current cycle's M4a output through a bounded
 perturbation that is antisymmetric about \(s=1/2\). Its mean therefore stays exactly \(1/2\),
 preserving the analytic linear map above while making both the \(A\to\chi\) and
-\(\chi\to s\) arrows observable. Tests pair every magnetic input with its M4a result and every
-M4a result with the builder input, and require the resulting \(s\) fields to change across the
-iteration. Replacing either M4a input or the \(s\)-builder input by zero fails all three damping
-rows.
+\(\chi\to s\) arrows observable. Tests compare every normalized-volume builder input with its
+corresponding M4a result and require the resulting \(s\) fields to change across the iteration.
+Replacing either M4a input or the \(s\)-builder input by zero fails all three damping rows. The
+returned magnetic state is also compared exactly with the last pre-update magnetic state observed
+by the M4a adapter, pinning the result bundle to one verified iterate.
 
 The remaining mutation tests make the acceptance claim falsifiable. Setting
 \(\alpha=1\) leaves the map unstable and exhausts the iteration limit. Injecting a fixed

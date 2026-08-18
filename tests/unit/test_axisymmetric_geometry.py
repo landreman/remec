@@ -66,14 +66,13 @@ def test_axisymmetric_domain_rejects_invalid_bounds(
 def test_public_axisymmetric_solver_reports_the_weighted_energy() -> None:
     """The public (M1) wrapper exercises and exposes its nontrivial energy diagnostic."""
     solver = AxisymmetricGradShafranovSolver(polynomial_order=2)
-    first_solution = solver.solve_with_flux(
-        AxisymmetricRZDomain((1.0, 2.0), (0.0, 1.0), maxh=0.5),
-        AxisymmetricGradShafranovCoefficients(
-            pressure_flux_derivative=-0.4,
-            toroidal_field_drive=3.0,
-            mu0=2.3,
-        ),
+    domain = AxisymmetricRZDomain((1.0, 2.0), (0.0, 1.0), maxh=0.5)
+    coefficients = AxisymmetricGradShafranovCoefficients(
+        pressure_flux_derivative=-0.4,
+        toroidal_field_drive=3.0,
+        mu0=2.3,
     )
+    first_solution = solver.solve_with_flux(domain, coefficients)
     result = first_solution.result
 
     assert result.elements == 8
@@ -93,6 +92,7 @@ def test_public_axisymmetric_solver_reports_the_weighted_energy() -> None:
     assert first_solution.flux_at(1.5, 0.5) == pytest.approx(first_flux)
     assert canonical_json(result)
     assert pickle.loads(pickle.dumps(result)) == result
+    assert solver.solve(domain, coefficients) == result
 
     with pytest.raises(ValueError, match="polynomial_order"):
         AxisymmetricGradShafranovSolver(polynomial_order=0)

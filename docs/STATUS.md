@@ -621,8 +621,8 @@ axisymmetric tests pass serially in 0.97 s. No individual not-slow item exceeds 
 and no existing `slow` test touches the new module.
 
 Measured 2026-08-17 on `milestone/5.2-damped-picard`: final post-review `make test`
-passes all 235 not-slow tests in 38.60 s ✅. The slowest item is the curved-torus current
-projection at 14.58 s; the next-slowest is the M3 gradient-comparison setup at 11.43 s.
+passes all 235 not-slow tests in 38.23 s ✅. The slowest item is the curved-torus current
+projection at 14.48 s; the next-slowest is the M3 gradient-comparison setup at 11.56 s.
 The 19 Picard public-contract and manufactured tests pass serially in 0.70 s. No
 individual not-slow item exceeds ~20 s, and no existing `slow` test touches the new
 backend-independent driver.
