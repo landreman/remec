@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pickle
+from dataclasses import FrozenInstanceError
 
 import ngsolve as ng
 import numpy as np
@@ -93,6 +94,8 @@ def test_public_axisymmetric_solver_reports_the_weighted_energy() -> None:
     assert canonical_json(result)
     assert pickle.loads(pickle.dumps(result)) == result
     assert solver.solve(domain, coefficients) == result
+    with pytest.raises(FrozenInstanceError):
+        first_solution.result = second_solution.result
 
     with pytest.raises(ValueError, match="polynomial_order"):
         AxisymmetricGradShafranovSolver(polynomial_order=0)

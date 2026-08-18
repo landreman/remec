@@ -133,18 +133,12 @@ class _AxisymmetricFluxEvaluator:
         return float(self._solution._flux(self._solution._mesh(radius, vertical_coordinate)))
 
 
+@dataclass(frozen=True, slots=True)
 class AxisymmetricGradShafranovPointSolution:
     """One serializable result plus its separately owned point-flux evaluator."""
 
-    __slots__ = ("_evaluator", "result")
-
-    def __init__(
-        self,
-        result: AxisymmetricGradShafranovResult,
-        evaluator: _AxisymmetricFluxEvaluator,
-    ) -> None:
-        self.result = result
-        self._evaluator = evaluator
+    result: AxisymmetricGradShafranovResult
+    _evaluator: _AxisymmetricFluxEvaluator
 
     def flux_at(self, radius: float, vertical_coordinate: float) -> float:
         """Evaluate this solve's reduced note-``(M1)`` flux."""

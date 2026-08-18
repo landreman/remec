@@ -268,6 +268,28 @@ def test_damped_picard_converges_at_the_manufactured_linear_rate(damping: float)
         np.asarray(result.magnetic_state),
         operators.verified_magnetic_inputs[-1],
     )
+    final_magnetic = operators.verified_magnetic_inputs[-1]
+    final_reference = operators.reference_solutions[-1]
+    final_s = operators.shared_s_fields[-1]
+    final_pressure = 2.0 - final_s
+    final_pressure_mean = float(np.mean(final_pressure))
+    expected_utilde = np.asarray((0.1 * final_magnetic[0] + 0.01 * final_pressure_mean,))
+    expected_g = np.asarray((0.2, 0.4, 0.6, 0.8, 1.0))
+    expected_projected_current = np.asarray(
+        (
+            final_magnetic[0] + 0.1 * final_pressure_mean + 0.25,
+            final_pressure_mean,
+        )
+    )
+    assert np.array_equal(np.asarray(result.reference_potential), final_reference)
+    assert np.array_equal(np.asarray(result.normalized_volume), final_s)
+    assert np.array_equal(np.asarray(result.pressure), final_pressure)
+    assert np.array_equal(np.asarray(result.utilde), expected_utilde)
+    assert np.array_equal(np.asarray(result.g_coefficients), expected_g)
+    assert np.array_equal(
+        np.asarray(result.projected_current),
+        expected_projected_current,
+    )
 
 
 def test_undamped_cycle_and_profile_mutations_cannot_report_convergence() -> None:

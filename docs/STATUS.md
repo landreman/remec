@@ -522,7 +522,8 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   outputs at representative mean s=1/2 into frozen coefficients for the real NGSolve
   Grad–Shafranov block on every cycle. This is a real-block wiring/type check, while the
   manufactured map certifies the complete closed loop. Its plain GS result is serializable;
-  a separate typed point-solution owns the evaluator. The manufactured shared-s field
+  a separate frozen point-solution owns the evaluator. The full returned Picard bundle is
+  pinned exactly to one verified pre-update iterate. The manufactured shared-s field
   depends on the current M4a result through a mean-preserving antisymmetric perturbation.
   Zeroing either the M4a input or χ→s hand-off, removing damping, substituting s for
   p₀(s), bypassing the nonidentity current projection or its profile gate, injecting a
@@ -621,8 +622,8 @@ axisymmetric tests pass serially in 0.97 s. No individual not-slow item exceeds 
 and no existing `slow` test touches the new module.
 
 Measured 2026-08-17 on `milestone/5.2-damped-picard`: final post-review `make test`
-passes all 235 not-slow tests in 38.23 s ✅. The slowest item is the curved-torus current
-projection at 14.48 s; the next-slowest is the M3 gradient-comparison setup at 11.56 s.
+passes all 235 not-slow tests in 38.20 s ✅. The slowest item is the curved-torus current
+projection at 13.96 s; the next-slowest is the M3 gradient-comparison setup at 12.14 s.
 The 19 Picard public-contract and manufactured tests pass serially in 0.70 s. No
 individual not-slow item exceeds ~20 s, and no existing `slow` test touches the new
 backend-independent driver.
