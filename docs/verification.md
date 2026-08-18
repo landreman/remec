@@ -37,16 +37,16 @@ The backend-independent driver deliberately does not expose NGSolve objects. Its
 vector contains only free coefficients; fixed harmonic-flux coefficients and essential traces
 remain in the backend adapter and cannot be changed by damping. The adapter protocol retains
 the existing FEM boundaries: (M4a), bordered (M3)--(M3b), the paired divergence/moment
-projection, and (M1) remain separately testable operators. A coarse adapter smoke test executes
-the real milestone-5.1 `AxisymmetricProfileClosure` three times per cycle and the real NGSolve
-`AxisymmetricGradShafranovSolver` once per cycle. In particular, the closure's scalar
-\(p'(\psi)\) and \(II'(\psi)\) evaluations at the current iterate's representative shared-\(s\)
-value are passed directly into the frozen Grad--Shafranov coefficients; the test checks those
-values independently against the analytic profiles. The immutable GS result owns its point-flux
-evaluator, so two solves through one solver cannot alias each other's state. This demonstrates
-that the protocol is satisfiable by the verified reduced blocks. Milestone 5.4 still owns the
-spatial Grad--Shafranov benchmark; this milestone verifies the nonlinear connection and its
-acceptance logic.
+projection, and (M1) remain separately testable operators. A coarse open-loop adapter smoke test
+executes the real milestone-5.1 `AxisymmetricProfileClosure` three times per cycle and the real
+NGSolve `AxisymmetricGradShafranovSolver` once per cycle. In particular, the closure's scalar
+\(p'(\psi)\) and \(II'(\psi)\) evaluations at the representative mean \(s=1/2\) are passed
+directly into the frozen Grad--Shafranov coefficients; the test checks those values independently
+against the analytic profiles. This is a type-satisfiability and closure-to-M1 wiring check, not a
+closed nonlinear real-block solve: the manufactured operators below certify the complete
+M4a-to-M1 loop and every arrow in it. The plain GS result remains serializable, while a separate
+typed point-solution object owns its evaluator, so two solves through one solver cannot alias each
+other's state. Milestone 5.4 still owns the spatial Grad--Shafranov benchmark.
 
 That manufactured map is
 \(A_{\rm candidate}=2-2A\), with fixed point \(A^*=2/3\). It is unstable without

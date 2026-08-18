@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import pickle
+
 import ngsolve as ng
 import numpy as np
 import pytest
 
+from remec.common.serialization import canonical_json
 from remec.geometry import AxisymmetricRZDomain
 from remec.profiles import AnalyticPressureProfile, AnalyticToroidalCurrentProfile
 from remec.solvers import (
@@ -63,7 +66,7 @@ def test_axisymmetric_domain_rejects_invalid_bounds(
 def test_public_axisymmetric_solver_reports_the_weighted_energy() -> None:
     """The public (M1) wrapper exercises and exposes its nontrivial energy diagnostic."""
     solver = AxisymmetricGradShafranovSolver(polynomial_order=2)
-    result = solver.solve(
+    first_solution = solver.solve_with_flux(
         AxisymmetricRZDomain((1.0, 2.0), (0.0, 1.0), maxh=0.5),
         AxisymmetricGradShafranovCoefficients(
             pressure_flux_derivative=-0.4,
@@ -71,12 +74,13 @@ def test_public_axisymmetric_solver_reports_the_weighted_energy() -> None:
             mu0=2.3,
         ),
     )
+    result = first_solution.result
 
     assert result.elements == 8
     assert result.free_dof_relative_residual_norm < 1.0e-12
     assert result.weighted_magnetic_energy > 0.0
-    first_flux = result.flux_at(1.5, 0.5)
-    second_result = solver.solve(
+    first_flux = first_solution.flux_at(1.5, 0.5)
+    second_solution = solver.solve_with_flux(
         AxisymmetricRZDomain((1.0, 2.0), (0.0, 1.0), maxh=0.5),
         AxisymmetricGradShafranovCoefficients(
             pressure_flux_derivative=0.0,
@@ -85,8 +89,10 @@ def test_public_axisymmetric_solver_reports_the_weighted_energy() -> None:
         ),
     )
     assert first_flux != pytest.approx(0.0)
-    assert second_result.flux_at(1.5, 0.5) == pytest.approx(0.0, abs=1.0e-15)
-    assert result.flux_at(1.5, 0.5) == pytest.approx(first_flux)
+    assert second_solution.flux_at(1.5, 0.5) == pytest.approx(0.0, abs=1.0e-15)
+    assert first_solution.flux_at(1.5, 0.5) == pytest.approx(first_flux)
+    assert canonical_json(result)
+    assert pickle.loads(pickle.dumps(result)) == result
 
     with pytest.raises(ValueError, match="polynomial_order"):
         AxisymmetricGradShafranovSolver(polynomial_order=0)

@@ -518,9 +518,11 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   residuals are at most 4.0e-14. Divergence is at most
   7.0e-14, and the flux error is 8.0e-14. Independently measured pressure,
   current, and projected-current profile errors are zero (required below 1e-10).
-  A coarse adapter test passes the real milestone-5.1 closure's p′ and II′ outputs into
-  frozen coefficients for the real NGSolve Grad–Shafranov block on every cycle; the
-  immutable solve result owns its point-flux evaluator. The manufactured shared-s field
+  A coarse open-loop adapter test passes the real milestone-5.1 closure's p′ and II′
+  outputs at representative mean s=1/2 into frozen coefficients for the real NGSolve
+  Grad–Shafranov block on every cycle. This is a real-block wiring/type check, while the
+  manufactured map certifies the complete closed loop. Its plain GS result is serializable;
+  a separate typed point-solution owns the evaluator. The manufactured shared-s field
   depends on the current M4a result through a mean-preserving antisymmetric perturbation.
   Zeroing either the M4a input or χ→s hand-off, removing damping, substituting s for
   p₀(s), bypassing the nonidentity current projection or its profile gate, injecting a
@@ -619,8 +621,8 @@ axisymmetric tests pass serially in 0.97 s. No individual not-slow item exceeds 
 and no existing `slow` test touches the new module.
 
 Measured 2026-08-17 on `milestone/5.2-damped-picard`: final post-review `make test`
-passes all 235 not-slow tests in 37.72 s ✅. The slowest item is the curved-torus current
-projection at 14.13 s; the next-slowest is the M3 gradient-comparison setup at 11.58 s.
+passes all 235 not-slow tests in 38.60 s ✅. The slowest item is the curved-torus current
+projection at 14.58 s; the next-slowest is the M3 gradient-comparison setup at 11.43 s.
 The 19 Picard public-contract and manufactured tests pass serially in 0.70 s. No
 individual not-slow item exceeds ~20 s, and no existing `slow` test touches the new
 backend-independent driver.

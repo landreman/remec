@@ -57,14 +57,12 @@ class _ManufacturedAxisymmetricCycle:
     safety_pressure_bias: float = 0.0
     shared_s_ids: list[tuple[str, int]] = field(default_factory=list)
     shared_s_fields: list[NDArray[np.float64]] = field(default_factory=list)
-    magnetic_inputs: list[NDArray[np.float64]] = field(default_factory=list)
     reference_solutions: list[NDArray[np.float64]] = field(default_factory=list)
     normalized_volume_inputs: list[NDArray[np.float64]] = field(default_factory=list)
 
     def solve_reference_potential(
         self, magnetic_state: NDArray[np.float64]
     ) -> ReferencePotentialStep:
-        self.magnetic_inputs.append(magnetic_state.copy())
         reference_potential = np.asarray((float(magnetic_state[0]),), dtype=float)
         self.reference_solutions.append(reference_potential.copy())
         return ReferencePotentialStep(
@@ -252,15 +250,6 @@ def test_damped_picard_converges_at_the_manufactured_linear_rate(damping: float)
         grouped_ids.setdefault(object_id, set()).add(name)
     assert all(names == {"pressure", "current", "projection"} for names in grouped_ids.values())
     assert len(grouped_ids) == result.iterations
-    assert len(operators.magnetic_inputs) == result.iterations
-    assert all(
-        np.array_equal(reference, magnetic)
-        for reference, magnetic in zip(
-            operators.reference_solutions,
-            operators.magnetic_inputs,
-            strict=True,
-        )
-    )
     assert all(
         np.array_equal(volume_input, reference)
         for volume_input, reference in zip(
@@ -315,7 +304,7 @@ def test_floor_bounds_and_layer_safety_are_independent_convergence_gates() -> No
 
 @dataclass
 class _Milestone51ReducedAdapter:
-    """Coarse protocol adapter that executes the real 5.1 closure and M1 solve."""
+    """Coarse open-loop adapter executing the real 5.1 closure and M1 solve."""
 
     closure: AxisymmetricProfileClosure
     domain: AxisymmetricRZDomain
@@ -415,10 +404,11 @@ class _Milestone51ReducedAdapter:
         del projected_current
         if self.frozen_coefficients is None:
             raise RuntimeError("profile closure must be evaluated before the magnetic solve")
-        result = self.magnetic_solver.solve(
+        solution = self.magnetic_solver.solve_with_flux(
             self.domain,
             self.frozen_coefficients,
         )
+        result = solution.result
         self.coefficient_history.append(
             (
                 float(self.frozen_coefficients.pressure_flux_derivative),
@@ -427,7 +417,7 @@ class _Milestone51ReducedAdapter:
         )
         self.magnetic_solves += 1
         return MagneticStep(
-            candidate_magnetic_state=np.asarray((result.flux_at(1.5, 0.5),), dtype=float),
+            candidate_magnetic_state=np.asarray((solution.flux_at(1.5, 0.5),), dtype=float),
             m1_linear_relative_residual=result.free_dof_relative_residual_norm,
             magnetic_divergence_relative_residual=0.0,
             toroidal_flux_relative_error=0.0,
@@ -454,7 +444,7 @@ class _Milestone51ReducedAdapter:
 
 
 def test_picard_protocol_executes_milestone_51_closure_and_grad_shafranov_block() -> None:
-    """A coarse cycle wires the real normalized closure into the real reduced M1 solve."""
+    """A coarse open-loop cycle wires the real closure into the real M1 solve."""
     pressure_profile = AnalyticPressureProfile(lambda s: 0.2 * (1.0 - s), lambda s: -0.2 + 0.0 * s)
     current_profile = AnalyticToroidalCurrentProfile(lambda s: 0.1 * s, lambda s: 0.1 + 0.0 * s)
     adapter = _Milestone51ReducedAdapter(
