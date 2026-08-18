@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import csv
+import io
+import json
 from dataclasses import dataclass, field
 from math import pi
 from pathlib import Path
@@ -11,6 +13,7 @@ import numpy as np
 import pytest
 from numpy.typing import NDArray
 
+from remec.common import JsonEventLogger, configuration_digest
 from remec.geometry.axisymmetric import AxisymmetricRZDomain
 from remec.profiles import (
     AnalyticPressureProfile,
@@ -177,6 +180,7 @@ def _solver(
     *,
     damping: float,
     max_iterations: int = 80,
+    logger: JsonEventLogger | None = None,
 ) -> DampedPicardSolver:
     return DampedPicardSolver(
         operators,
@@ -198,6 +202,7 @@ def _solver(
             current_profile_tolerance=1.0e-10,
             invariant_tolerance=1.0e-10,
         ),
+        logger=logger,
     )
 
 
@@ -243,6 +248,8 @@ def test_damped_picard_converges_at_the_manufactured_linear_rate(damping: float)
     assert final.current_divergence_relative_residual < 1.0e-10
     assert final.magnetic_divergence_relative_residual < 1.0e-10
     assert final.toroidal_flux_relative_error < 1.0e-10
+    assert final.projection_correction_relative_norm == pytest.approx(6.0e-4)
+    assert final.minimum_magnetic_magnitude == pytest.approx(1.0 + abs(result.magnetic_state[0]))
     assert final.maximum_floor_sensitivity == 0.0
     assert final.minimum_current_layer_cells >= 6.0
     assert final.minimum_pressure_layer_cells >= 6.0
@@ -290,6 +297,44 @@ def test_damped_picard_converges_at_the_manufactured_linear_rate(damping: float)
         np.asarray(result.projected_current),
         expected_projected_current,
     )
+
+
+def test_picard_log_provenance_and_accepted_history_are_live() -> None:
+    """§13.3 records every accepted damping decision with reproducible provenance."""
+    stream = io.StringIO()
+    solver = _solver(
+        _ManufacturedAxisymmetricCycle(),
+        damping=0.3,
+        logger=JsonEventLogger(stream),
+    )
+    result = solver.solve(np.asarray((0.0,), dtype=float))
+    records = [json.loads(line) for line in stream.getvalue().splitlines()]
+
+    assert result.configuration_digest == configuration_digest(
+        {
+            "nonlinear": solver.options,
+            "pressure_profile_type": type(solver.pressure_profile).__name__,
+            "toroidal_current_profile_type": type(solver.toroidal_current_profile).__name__,
+        }
+    )
+    assert len(result.configuration_digest) == 64
+    assert all(character in "0123456789abcdef" for character in result.configuration_digest)
+    assert [record["event"] for record in records] == [
+        "picard_solve_started",
+        *["picard_iteration"] * result.iterations,
+        "picard_solve_completed",
+    ]
+    assert all(record["configuration_digest"] == result.configuration_digest for record in records)
+    assert records[0]["damping"] == pytest.approx(0.3)
+    assert [record["iteration"] for record in records[1:-1]] == list(
+        range(1, result.iterations + 1)
+    )
+    assert all(record["damping"] == pytest.approx(0.3) for record in records[1:-1])
+    assert all(record["accepted"] is True for record in records[1:-1])
+    assert [row.iteration for row in result.history] == list(range(1, result.iterations + 1))
+    assert all(row.damping == pytest.approx(0.3) for row in result.history)
+    assert records[-1]["iterations"] == result.iterations
+    assert records[-1]["converged"] is True
 
 
 def test_undamped_cycle_and_profile_mutations_cannot_report_convergence() -> None:

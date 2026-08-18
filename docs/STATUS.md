@@ -528,7 +528,10 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   Zeroing either the M4a input or χ→s hand-off, removing damping, substituting s for
   p₀(s), bypassing the nonidentity current projection or its profile gate, injecting a
   1e-4 profile error, activating a material floor, or under-resolving either layer makes
-  the acceptance tests fail. See
+  the acceptance tests fail. Structured JSON provenance records the start, all accepted
+  damping iterations, and completion under a recomputed 64-hex configuration digest;
+  the history also pins the measured projection correction (6e-4) and magnetic minimum.
+  See
   `tests/manufactured/picard_damping_convergence.csv` and `docs/verification.md`.
   <br>Next: milestone 5.3 should accelerate the same free magnetic vector and reuse
   these independent gates/history records. Keep fixed harmonic-flux coefficients and

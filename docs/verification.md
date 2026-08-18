@@ -75,6 +75,11 @@ minimum element widths across both modeled layers. The verified magnetic state a
 derived fields now belong to the same pre-update iterate. Exact manufactured assertions pin the
 returned reference potential, shared normalized-volume field, pressure, utilde, bordered
 coefficients, and projected current to independently reconstructed values from that iterate.
+The §13.3 JSON stream is also tested end-to-end: it emits start, one accepted record per
+iteration, and completion with one recomputed 64-hex configuration digest. Its iteration and
+damping fields must agree with the returned history; the manufactured final row pins the
+relative projection correction to (6\times10^{-4}) and the magnetic minimum to its
+independent safety measurement.
 
 The manufactured \(s\) field depends on the current cycle's M4a output through a bounded
 perturbation that is antisymmetric about \(s=1/2\). Its mean therefore stays exactly \(1/2\),

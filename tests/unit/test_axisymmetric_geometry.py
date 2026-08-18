@@ -9,6 +9,7 @@ import ngsolve as ng
 import numpy as np
 import pytest
 
+from remec import solvers
 from remec.common.serialization import canonical_json
 from remec.geometry import AxisymmetricRZDomain
 from remec.profiles import AnalyticPressureProfile, AnalyticToroidalCurrentProfile
@@ -17,6 +18,11 @@ from remec.solvers import (
     AxisymmetricGradShafranovSolver,
     AxisymmetricProfileClosure,
 )
+
+
+def test_point_solution_with_private_evaluator_is_not_a_package_export() -> None:
+    """The M1 point-evaluation adapter stays behind the public solver boundary."""
+    assert "AxisymmetricGradShafranovPointSolution" not in solvers.__all__
 
 
 def _profiles() -> tuple[AnalyticPressureProfile, AnalyticToroidalCurrentProfile]:

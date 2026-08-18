@@ -15,7 +15,6 @@ from remec.solvers.anisotropic_diffusion import (
 )
 from remec.solvers.axisymmetric import (
     AxisymmetricGradShafranovCoefficients,
-    AxisymmetricGradShafranovPointSolution,
     AxisymmetricGradShafranovResult,
     AxisymmetricGradShafranovSolver,
     AxisymmetricProfileClosure,
@@ -41,7 +40,6 @@ __all__ = [
     "AnisotropyPollutionError",
     "AnisotropyPollutionWarning",
     "AxisymmetricGradShafranovCoefficients",
-    "AxisymmetricGradShafranovPointSolution",
     "AxisymmetricGradShafranovResult",
     "AxisymmetricGradShafranovSolver",
     "AxisymmetricProfileClosure",
