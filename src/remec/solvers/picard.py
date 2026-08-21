@@ -13,6 +13,7 @@ from remec.common.logging import JsonEventLogger
 from remec.common.norms import block_l2_norms
 from remec.common.serialization import configuration_digest
 from remec.profiles import PressureProfile, ToroidalCurrentProfile
+from remec.solvers._anderson import AndersonAccelerator
 
 FloatArray = NDArray[np.float64]
 
@@ -32,6 +33,8 @@ class PicardOptions:
     floor_sensitivity_tolerance: float = 0.01
     minimum_layer_cells: float = 6.0
     anderson_depth: int = 0
+    anderson_regularization: float = 1.0e-12
+    anderson_condition_limit: float = 1.0e12
 
     def __post_init__(self) -> None:
         if not isfinite(self.damping) or not 0.0 < self.damping <= 1.0:
@@ -47,12 +50,20 @@ class PicardOptions:
             "magnetic_scale",
             "floor_sensitivity_tolerance",
             "minimum_layer_cells",
+            "anderson_regularization",
+            "anderson_condition_limit",
         ):
             value = getattr(self, name)
             if not isfinite(value) or value <= 0.0:
                 raise ValueError(f"{name} must be finite and positive")
-        if isinstance(self.anderson_depth, bool) or self.anderson_depth != 0:
-            raise ValueError("anderson_depth is reserved for milestone 5.3")
+        if (
+            isinstance(self.anderson_depth, bool)
+            or not isinstance(self.anderson_depth, int)
+            or self.anderson_depth < 0
+        ):
+            raise ValueError("anderson_depth must be a non-negative integer")
+        if self.anderson_condition_limit <= 1.0:
+            raise ValueError("anderson_condition_limit must exceed one")
 
 
 @dataclass(frozen=True, slots=True)
@@ -175,6 +186,11 @@ class PicardIteration:
 
     iteration: int
     damping: float
+    update_method: str
+    anderson_history_size: int
+    anderson_condition_number: float | None
+    anderson_history_restarted: bool
+    anderson_rejection_reason: str | None
     m1_relative_residual: float
     fixed_point_residual_norm: float
     m3_relative_residual: float
@@ -223,7 +239,7 @@ class PicardConvergenceError(RuntimeError):
         self.failed_gates = failed_gates
         self.history = history
         joined = ", ".join(failed_gates)
-        super().__init__(f"damped Picard failed to converge; open gates: {joined}")
+        super().__init__(f"Picard failed to converge; open gates: {joined}")
 
 
 def _array(value: FloatArray, name: str, *, shape: tuple[int, ...] | None = None) -> FloatArray:
@@ -349,14 +365,25 @@ class DampedPicardSolver:
         ).scaled_blocks["magnetic"]
 
     def solve(self, initial_magnetic_state: FloatArray) -> PicardResult:
-        """Run accepted damped cycles until every DESIGN §13.2 gate passes."""
+        """Run accepted damped/Anderson cycles until every DESIGN §13.2 gate passes."""
         magnetic = _array(initial_magnetic_state, "initial_magnetic_state")
+        accelerator = (
+            AndersonAccelerator(
+                depth=self.options.anderson_depth,
+                damping=self.options.damping,
+                regularization=self.options.anderson_regularization,
+                condition_limit=self.options.anderson_condition_limit,
+            )
+            if self.options.anderson_depth
+            else None
+        )
         history: list[PicardIteration] = []
         if self.logger is not None:
             self.logger.info(
                 "picard_solve_started",
                 configuration_digest=self.configuration_digest,
                 damping=self.options.damping,
+                anderson_depth=self.options.anderson_depth,
                 max_iterations=self.options.max_iterations,
             )
 
@@ -455,7 +482,33 @@ class DampedPicardSolver:
                 shape=verified_magnetic.shape,
             )
             fixed_point_residual = self._magnetic_norm(candidate - verified_magnetic)
-            accepted = verified_magnetic + self.options.damping * (candidate - verified_magnetic)
+            if accelerator is None:
+                accepted = verified_magnetic + self.options.damping * (
+                    candidate - verified_magnetic
+                )
+                update_method = "damped"
+                anderson_history_size = 0
+                anderson_condition_number = None
+                anderson_history_restarted = False
+                anderson_rejection_reason = None
+            else:
+                acceleration = accelerator.update(verified_magnetic, candidate)
+                accepted = acceleration.state
+                update_method = acceleration.method
+                anderson_history_size = acceleration.history_size
+                anderson_condition_number = acceleration.condition_number
+                anderson_history_restarted = acceleration.restarted
+                anderson_rejection_reason = acceleration.rejection_reason
+                if acceleration.rejection_reason is not None and self.logger is not None:
+                    self.logger.info(
+                        "anderson_step_rejected",
+                        configuration_digest=self.configuration_digest,
+                        iteration=iteration,
+                        reason=acceleration.rejection_reason,
+                        history_size=acceleration.history_size,
+                        condition_number=acceleration.condition_number,
+                        fallback="damped_picard",
+                    )
             state_update = self._magnetic_norm(accepted - verified_magnetic)
             pressure_minimum = float(safety_step.pressure_minimum)
             pressure_maximum = float(safety_step.pressure_maximum)
@@ -471,6 +524,11 @@ class DampedPicardSolver:
             row = PicardIteration(
                 iteration=iteration,
                 damping=self.options.damping,
+                update_method=update_method,
+                anderson_history_size=anderson_history_size,
+                anderson_condition_number=anderson_condition_number,
+                anderson_history_restarted=anderson_history_restarted,
+                anderson_rejection_reason=anderson_rejection_reason,
                 m1_relative_residual=_nonnegative(
                     magnetic_step.m1_linear_relative_residual,
                     "m1_linear_relative_residual",
@@ -542,6 +600,11 @@ class DampedPicardSolver:
                     configuration_digest=self.configuration_digest,
                     iteration=iteration,
                     damping=self.options.damping,
+                    update_method=row.update_method,
+                    anderson_history_size=row.anderson_history_size,
+                    anderson_condition_number=row.anderson_condition_number,
+                    anderson_history_restarted=row.anderson_history_restarted,
+                    anderson_rejection_reason=row.anderson_rejection_reason,
                     accepted=True,
                     converged=not failed_gates,
                     failed_gates=list(failed_gates),
