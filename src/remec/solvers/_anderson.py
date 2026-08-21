@@ -54,6 +54,8 @@ class AndersonAccelerator:
             raise ValueError("regularization must be finite and positive")
         if not isfinite(condition_limit) or condition_limit <= 1.0:
             raise ValueError("condition_limit must be finite and exceed one")
+        if regularization * condition_limit * condition_limit > 1.0e-2 * (1.0 + 1.0e-12):
+            raise ValueError("regularization * condition_limit**2 must not exceed 0.01")
         self.depth = depth
         self.damping = damping
         self.regularization = regularization

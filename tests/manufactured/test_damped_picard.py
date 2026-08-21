@@ -188,7 +188,7 @@ def _solver(
     damping: float,
     max_iterations: int = 80,
     anderson_depth: int = 0,
-    anderson_condition_limit: float = 1.0e12,
+    anderson_condition_limit: float = 1.0e5,
     logger: JsonEventLogger | None = None,
 ) -> DampedPicardSolver:
     return DampedPicardSolver(
@@ -343,8 +343,12 @@ def test_anderson_accelerates_the_complete_picard_cycle_without_bypassing_gates(
     )
     assert recorded["final_fixed_point_residual_norm"] < 1.0e-11
     assert recorded["final_state_update_norm"] < 1.0e-11
-    assert result.history[-1].fixed_point_residual_norm < 1.0e-11
-    assert result.history[-1].state_update_norm < 1.0e-11
+    assert result.history[-1].fixed_point_residual_norm == pytest.approx(
+        recorded["final_fixed_point_residual_norm"], rel=1.0e-3, abs=1.0e-16
+    )
+    assert result.history[-1].state_update_norm == pytest.approx(
+        recorded["final_state_update_norm"], rel=1.0e-3, abs=1.0e-16
+    )
     assert result.history[-1].pressure_profile_error < 1.0e-10
     assert result.history[-1].current_profile_error < 1.0e-10
     assert result.history[-1].projected_current_profile_error < 1.0e-10
@@ -364,7 +368,7 @@ def test_anderson_rejects_ill_conditioned_history_and_logs_damped_fallback() -> 
         _ManufacturedAxisymmetricCycle(),
         damping=0.3,
         anderson_depth=5,
-        anderson_condition_limit=1.0e6,
+        anderson_condition_limit=1.0e5,
         logger=JsonEventLogger(stream),
     )
     result = solver.solve(np.asarray((0.0,), dtype=float))

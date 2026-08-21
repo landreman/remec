@@ -64,6 +64,15 @@ class PicardOptions:
             raise ValueError("anderson_depth must be a non-negative integer")
         if self.anderson_condition_limit <= 1.0:
             raise ValueError("anderson_condition_limit must exceed one")
+        if (
+            self.anderson_regularization
+            * self.anderson_condition_limit
+            * self.anderson_condition_limit
+            > 1.0e-2 * (1.0 + 1.0e-12)
+        ):
+            raise ValueError(
+                "anderson_regularization * anderson_condition_limit**2 must not exceed 0.01"
+            )
 
 
 @dataclass(frozen=True, slots=True)

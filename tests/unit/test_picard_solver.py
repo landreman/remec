@@ -61,3 +61,15 @@ def test_picard_options_are_public_and_deterministically_serializable() -> None:
 
     with pytest.raises(TypeError, match="magnetic_scale"):
         PicardOptions()  # type: ignore[call-arg]
+
+
+def test_picard_options_reject_an_inaccurate_anderson_filter_pair() -> None:
+    """The public controls enforce the documented one-percent singular filter bound."""
+    from remec.solvers.picard import PicardOptions
+
+    with pytest.raises(ValueError, match=r"anderson_regularization \* anderson_condition"):
+        PicardOptions(
+            magnetic_scale=1.0,
+            anderson_regularization=1.0e-10,
+            anderson_condition_limit=1.0e5,
+        )

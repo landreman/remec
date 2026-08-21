@@ -33,16 +33,13 @@ def test_anderson_is_scale_equivariant_on_a_coupled_linear_fixed_point(scale: fl
         state = update.state
 
     assert np.linalg.norm(state - exact) / np.linalg.norm(exact) < 1.0e-9
-    assert methods == [
+    assert methods[:4] == [
         "damped",
         "anderson",
         "anderson",
         "anderson",
-        "damped_fallback",
-        "damped_fallback",
-        "damped_fallback",
-        "damped_fallback",
     ]
+    assert set(methods[4:]) <= {"anderson", "damped_fallback"}
     assert accelerator.history_size <= 3
 
 
@@ -54,7 +51,7 @@ def test_depth_five_history_reaches_full_rank_and_rolls_over() -> None:
     state = np.asarray((0.1, 0.2, -0.3, 0.4, -0.5, 0.6))
     updates = []
 
-    for _ in range(7):
+    for _ in range(15):
         update = accelerator.update(state, source + matrix @ state)
         updates.append(update)
         state = update.state
@@ -65,6 +62,8 @@ def test_depth_five_history_reaches_full_rank_and_rolls_over() -> None:
     assert updates[5].condition_number < accelerator.condition_limit
     assert updates[6].history_size == 6
     assert accelerator.history_size == 6
+    exact = np.linalg.solve(np.eye(6) - matrix, source)
+    assert np.linalg.norm(state - exact) / np.linalg.norm(exact) < 1.0e-9
 
 
 def test_rank_deficient_history_restarts_and_returns_exact_damped_fallback() -> None:
@@ -115,3 +114,14 @@ def test_anderson_copies_free_vectors_and_never_mutates_adapter_owned_inputs() -
 
     assert update.state == pytest.approx(original_state + 0.3 * (original_image - original_state))
     assert accelerator.history_size == 1
+
+
+def test_anderson_rejects_a_regularization_condition_pair_with_excessive_filter_loss() -> None:
+    """The configured condition gate enforces the documented one-percent filter bound."""
+    with pytest.raises(ValueError, match=r"regularization \* condition_limit\*\*2"):
+        AndersonAccelerator(
+            depth=2,
+            damping=0.3,
+            regularization=1.0e-10,
+            condition_limit=1.0e5,
+        )

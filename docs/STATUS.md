@@ -646,8 +646,8 @@ individual not-slow item exceeds ~20 s, and no existing `slow` test touches the 
 backend-independent driver.
 
 Measured 2026-08-21 on `milestone/5.3-anderson-fallback`: post-review `make check` passes
-all 253 not-slow tests in 36.49 s ✅. The slowest item is the curved-torus current projection
-at 13.67 s; the next-slowest is the M3 gradient-comparison setup at 11.33 s. No individual
+all 255 not-slow tests in 37.50 s ✅. The slowest item is the curved-torus current projection
+at 13.79 s; the next-slowest is the M3 gradient-comparison setup at 11.43 s. No individual
 not-slow item exceeds ~20 s, and no existing `slow` test touches the new
 backend-independent Anderson module.
 
