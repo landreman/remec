@@ -25,15 +25,20 @@ where \(\gamma_k\) solves the regularized least-squares problem
 
 \[
 \min_\gamma\;\|f_k-\Delta F_k\gamma\|_2^2
-+\lambda\max(1,\|\Delta F_k\|_F^2)\|\gamma\|_2^2.
++\lambda\sigma_{\max}(\Delta F_k)^2\|\gamma\|_2^2.
 \]
 
 The configured depth bounds the stored difference columns; the default depth remains zero,
-which reproduces milestone 5.2 scalar damping exactly. Before the regularized solve, an SVD
-checks numerical rank and condition number. A deficient or overly conditioned history is
-cleared, the current pair is retained as the new history origin, and that cycle accepts exactly
-\(x_k+\beta f_k\). Rejected attempts emit a structured `anderson_step_rejected` event with the
-reason, history size, condition estimate when finite, and `fallback="damped_picard"`.
+which reproduces milestone 5.2 scalar damping exactly. The \(\sigma_{\max}^2\) scale makes the
+filter equivariant under a uniform change of state units. The SVD both checks numerical rank and
+condition number and applies the regularized inverse directly, avoiding squared conditioning from
+normal equations. With default \(\lambda=10^{-12}\) and
+\(\kappa(\Delta F)\le10^5\), the weakest admitted singular direction retains a filter factor of
+at least \(1/(1+10^{-2})\). A deficient or overly conditioned history is cleared, the current
+pair is retained as the new history origin, and that cycle accepts exactly \(x_k+\beta f_k\).
+Rejected attempts distinguish `rank_deficient_history` from `ill_conditioned_history` and emit a
+structured `anderson_step_rejected` event with the reason, history size, condition estimate when
+finite, and `fallback="damped_picard"`.
 
 The accelerator sees only the adapter's flattened free magnetic coefficients. Fixed
 harmonic-flux coefficients and essential trace values stay outside the history and are
@@ -54,10 +59,13 @@ thirteen:
 | 5 | 3 | 1 | 1 | 1.9873e-14 | 5.9952e-15 |
 
 The scalar depth-2/5 histories become rank-deficient after the successful secant update, so
-their one restart is deliberate coverage of the required fallback. A separate coupled two-vector
-fixed-point test exercises full-rank depth-2 least squares and bounds retained history. The
-machine-readable values are in `tests/manufactured/picard_anderson_convergence.csv` and are loaded
-by `test_anderson_accelerates_the_complete_picard_cycle_without_bypassing_gates`.
+their one restart is deliberate coverage of the required fallback. Separate tests use a coupled
+two-vector map at scales \(10^{-6},1,10^6\), requiring identical update decisions and relative
+convergence, and a six-vector map whose five secant columns reach full rank before the bounded
+history rolls over. The machine-readable values are in
+`tests/manufactured/picard_anderson_convergence.csv` and are loaded by
+`test_anderson_accelerates_the_complete_picard_cycle_without_bypassing_gates`; iteration/restart
+counts are pinned exactly while the floating residuals use cross-BLAS-safe upper bounds.
 
 Mutation checks are conspicuous: replacing every Anderson decision by damping restores 13 cycles
 and fails the recorded acceleration rows; disabling the rank-deficiency restart reaches a singular
