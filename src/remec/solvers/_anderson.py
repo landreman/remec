@@ -30,8 +30,9 @@ class AndersonAccelerator:
 
     ``x[k+1] = x[k] + beta f[k] - (Delta X + beta Delta F) gamma``,
 
-    where ``gamma`` minimizes ``||f[k]-Delta F gamma||² + lambda max(1,
-    ||Delta F||_F²) ||gamma||²``.  Only the
+    where ``gamma`` minimizes ``||f[k]-Delta F gamma||² + lambda sigma_max²
+    ||gamma||²``.  The solve uses the singular vectors of ``Delta F`` directly;
+    ``sigma_max`` makes its filter invariant to a uniform change of state units.  Only the
     backend adapter's free vector enters this history; fixed harmonic-flux coefficients
     and essential traces remain outside it.  Rank-deficient or overly conditioned
     histories are cleared and return the scalar damped Picard update.
@@ -78,11 +79,12 @@ class AndersonAccelerator:
         history_size: int,
         condition_number: float | None,
         reason: str,
+        original_shape: tuple[int, ...],
     ) -> AndersonUpdate:
         """Restart and return ``x + beta (g-x)`` after a rejected attempt."""
         self._restart_with(state, residual)
         return AndersonUpdate(
-            state=state + self.damping * residual,
+            state=(state + self.damping * residual).reshape(original_shape),
             method="damped_fallback",
             history_size=history_size,
             condition_number=condition_number,
@@ -125,92 +127,63 @@ class AndersonAccelerator:
         delta_residuals = np.column_stack(
             [right - left for left, right in zip(self._residuals[:-1], self._residuals[1:])]
         )
-        singular_values = np.linalg.svd(delta_residuals, compute_uv=False)
+        try:
+            left_vectors, singular_values, right_vectors_transpose = np.linalg.svd(
+                delta_residuals,
+                full_matrices=False,
+            )
+        except np.linalg.LinAlgError:
+            return self._fallback(
+                current,
+                residual,
+                history_size=history_size,
+                condition_number=None,
+                reason="svd_failure",
+                original_shape=original_shape,
+            )
         largest = float(singular_values[0]) if singular_values.size else 0.0
         rank_tolerance = (
             np.finfo(float).eps * max(delta_residuals.shape) * largest if largest > 0.0 else 0.0
         )
         rank = int(np.count_nonzero(singular_values > rank_tolerance))
         if rank < delta_residuals.shape[1]:
-            fallback = self._fallback(
+            return self._fallback(
                 current,
                 residual,
                 history_size=history_size,
                 condition_number=None,
-                reason="ill_conditioned_history",
-            )
-            return AndersonUpdate(
-                state=fallback.state.reshape(original_shape),
-                method=fallback.method,
-                history_size=fallback.history_size,
-                condition_number=fallback.condition_number,
-                restarted=fallback.restarted,
-                rejection_reason=fallback.rejection_reason,
+                reason="rank_deficient_history",
+                original_shape=original_shape,
             )
         condition_number = largest / float(singular_values[-1])
         if not isfinite(condition_number) or condition_number > self.condition_limit:
-            fallback = self._fallback(
+            return self._fallback(
                 current,
                 residual,
                 history_size=history_size,
                 condition_number=condition_number,
                 reason="ill_conditioned_history",
-            )
-            return AndersonUpdate(
-                state=fallback.state.reshape(original_shape),
-                method=fallback.method,
-                history_size=fallback.history_size,
-                condition_number=fallback.condition_number,
-                restarted=fallback.restarted,
-                rejection_reason=fallback.rejection_reason,
+                original_shape=original_shape,
             )
 
-        gram = delta_residuals.T @ delta_residuals
-        regularization_scale = max(1.0, float(np.sum(delta_residuals * delta_residuals)))
-        regularized_gram = gram + (
-            self.regularization * regularization_scale * np.eye(gram.shape[0])
+        regularization_scale = largest * largest
+        filtered_inverse = singular_values / (
+            singular_values * singular_values + self.regularization * regularization_scale
         )
-        try:
-            coefficients = np.linalg.solve(
-                regularized_gram,
-                delta_residuals.T @ residual,
-            )
-        except np.linalg.LinAlgError:
-            fallback = self._fallback(
-                current,
-                residual,
-                history_size=history_size,
-                condition_number=condition_number,
-                reason="least_squares_failure",
-            )
-            return AndersonUpdate(
-                state=fallback.state.reshape(original_shape),
-                method=fallback.method,
-                history_size=fallback.history_size,
-                condition_number=fallback.condition_number,
-                restarted=fallback.restarted,
-                rejection_reason=fallback.rejection_reason,
-            )
+        coefficients = right_vectors_transpose.T @ (filtered_inverse * (left_vectors.T @ residual))
         accelerated = (
             current
             + self.damping * residual
             - (delta_states + self.damping * delta_residuals) @ coefficients
         )
         if not np.all(np.isfinite(accelerated)):
-            fallback = self._fallback(
+            return self._fallback(
                 current,
                 residual,
                 history_size=history_size,
                 condition_number=condition_number,
                 reason="nonfinite_accelerated_state",
-            )
-            return AndersonUpdate(
-                state=fallback.state.reshape(original_shape),
-                method=fallback.method,
-                history_size=fallback.history_size,
-                condition_number=fallback.condition_number,
-                restarted=fallback.restarted,
-                rejection_reason=fallback.rejection_reason,
+                original_shape=original_shape,
             )
         return AndersonUpdate(
             state=np.asarray(accelerated.reshape(original_shape), dtype=float),

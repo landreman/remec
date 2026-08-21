@@ -57,6 +57,7 @@ def test_picard_options_are_public_and_deterministically_serializable() -> None:
     assert '"max_iterations":17' in canonical_json(options)
     assert '"magnetic_scale":2.0' in canonical_json(options)
     assert '"anderson_depth":5' in canonical_json(options)
+    assert options.anderson_condition_limit == pytest.approx(1.0e5)
 
     with pytest.raises(TypeError, match="magnetic_scale"):
         PicardOptions()  # type: ignore[call-arg]

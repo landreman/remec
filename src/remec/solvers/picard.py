@@ -34,7 +34,7 @@ class PicardOptions:
     minimum_layer_cells: float = 6.0
     anderson_depth: int = 0
     anderson_regularization: float = 1.0e-12
-    anderson_condition_limit: float = 1.0e12
+    anderson_condition_limit: float = 1.0e5
 
     def __post_init__(self) -> None:
         if not isfinite(self.damping) or not 0.0 < self.damping <= 1.0:
