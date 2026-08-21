@@ -541,8 +541,21 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   attempts. The concrete 5.4 run driver owns configured checkpoint cadence, the
   across-iterate gate that the recorded projection correction converges to zero, and the
   non-strict warning path for under-resolved layers (5.2 uses strict failure).
-- [ ] **5.3** Anderson with fallback — `DESIGN.md` §13.3
-  <br>Measured: —
+- [x] **5.3** Anderson with fallback — `DESIGN.md` §13.3
+  <br>Measured: macOS / CPython 3.12.2 / NumPy 2.4.6 — backend-independent type-II
+  Anderson operates only on the flattened free magnetic vector, with configurable depth,
+  Tikhonov-regularized least squares, SVD rank/condition checks, history restart, and an exact
+  damped-Picard fallback. On the complete milestone-5.2 unstable map at damping 0.3, depths
+  1/2/5 converge to the same A*=2/3 fixed point in 3 cycles versus 13 for damping alone;
+  final fixed-point residuals are 1.987e-14 versus 2.000e-12. Depths 2/5 each reject and log
+  one rank-deficient history before falling back. Every independent profile, divergence, flux,
+  bounds, floor, and layer gate remains active; adapter-owned harmonic-flux and essential-trace
+  entries are unchanged. See `tests/manufactured/picard_anderson_convergence.csv` and
+  `docs/verification.md`.
+  <br>Next: milestone 5.4 should use the same free-state adapter, start each continuation stage
+  with a cleared Anderson history, and carry rejected-acceleration events into checkpoint/run
+  provenance. Fixed harmonic coefficients and essential traces must remain outside both
+  continuation and Anderson vectors.
 - [ ] **5.4** Staged continuation — `DESIGN.md` §14.4 · note: §9, §11.2
   <br>**Phase gate.** Acceptance: axisymmetric benchmark vs. Grad–Shafranov with
   p=p₀(s(ψ)) and I_tor=I₀(s(ψ)) within tolerance for at least two I₀ targets.
@@ -630,6 +643,12 @@ projection at 13.96 s; the next-slowest is the M3 gradient-comparison setup at 1
 The 19 Picard public-contract and manufactured tests pass serially in 0.70 s. No
 individual not-slow item exceeds ~20 s, and no existing `slow` test touches the new
 backend-independent driver.
+
+Measured 2026-08-21 on `milestone/5.3-anderson-fallback`: `make check` passes all 249
+not-slow tests in 37.52 s ✅. The slowest item is the curved-torus current projection at
+13.63 s; the next-slowest is the M3 gradient-comparison setup at 11.90 s. No individual
+not-slow item exceeds ~20 s, and no existing `slow` test touches the new
+backend-independent Anderson module.
 
 ## Release gates
 

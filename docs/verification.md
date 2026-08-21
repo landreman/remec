@@ -11,6 +11,58 @@
 > numbers remain valid. Milestone 3.5 migrated the public contract and layer-cake
 > oracle to p₀(s) and the factor V_Ω∫₀¹·ds.
 
+## Milestone 5.3 — Anderson acceleration with damped fallback
+
+The nonlinear update after the compatible (M1) candidate now optionally uses the
+backend-independent type-II Anderson formula
+
+\[
+f_k=g_k-x_k,\qquad
+x_{k+1}=x_k+\beta f_k-(\Delta X_k+\beta\Delta F_k)\gamma_k,
+\]
+
+where \(\gamma_k\) solves the regularized least-squares problem
+
+\[
+\min_\gamma\;\|f_k-\Delta F_k\gamma\|_2^2
++\lambda\max(1,\|\Delta F_k\|_F^2)\|\gamma\|_2^2.
+\]
+
+The configured depth bounds the stored difference columns; the default depth remains zero,
+which reproduces milestone 5.2 scalar damping exactly. Before the regularized solve, an SVD
+checks numerical rank and condition number. A deficient or overly conditioned history is
+cleared, the current pair is retained as the new history origin, and that cycle accepts exactly
+\(x_k+\beta f_k\). Rejected attempts emit a structured `anderson_step_rejected` event with the
+reason, history size, condition estimate when finite, and `fallback="damped_picard"`.
+
+The accelerator sees only the adapter's flattened free magnetic coefficients. Fixed
+harmonic-flux coefficients and essential trace values stay outside the history and are
+independently pinned in the complete-cycle test. Every (M4a), (M3)--(M3b), reconstructed (M2)
+current, moment-preserving projection, and (M1) evaluation still runs before the update; the
+existing independent pressure/current, divergence, flux, floor, bounds, and layer-resolution
+gates remain the convergence conjunction.
+
+On the milestone-5.2 unstable manufactured map \(g(A)=2-2A\), with \(\beta=0.3\) and
+\(A^*=2/3\), Anderson reaches the same physical fixed point in three complete cycles instead of
+thirteen:
+
+| depth | cycles | Anderson updates | history restarts | final fixed-point norm | final update norm |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 0 | 13 | 0 | 0 | 2.0002e-12 | 6.0008e-13 |
+| 1 | 3 | 2 | 0 | 1.9873e-14 | 6.6613e-15 |
+| 2 | 3 | 1 | 1 | 1.9873e-14 | 5.9952e-15 |
+| 5 | 3 | 1 | 1 | 1.9873e-14 | 5.9952e-15 |
+
+The scalar depth-2/5 histories become rank-deficient after the successful secant update, so
+their one restart is deliberate coverage of the required fallback. A separate coupled two-vector
+fixed-point test exercises full-rank depth-2 least squares and bounds retained history. The
+machine-readable values are in `tests/manufactured/picard_anderson_convergence.csv` and are loaded
+by `test_anderson_accelerates_the_complete_picard_cycle_without_bypassing_gates`.
+
+Mutation checks are conspicuous: replacing every Anderson decision by damping restores 13 cycles
+and fails the recorded acceleration rows; disabling the rank-deficiency restart reaches a singular
+condition-number division and fails both the unit restart and full-cycle fallback contracts.
+
 ## Milestone 5.2 — damped Picard orchestration
 
 The nonlinear driver implements the note §9 and `DESIGN.md` §13.1 segregated order
