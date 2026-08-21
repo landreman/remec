@@ -37,6 +37,7 @@ from remec.solvers.picard import (
 )
 
 _TABLE = Path(__file__).with_name("picard_damping_convergence.csv")
+_ANDERSON_TABLE = Path(__file__).with_name("picard_anderson_convergence.csv")
 
 
 @dataclass
@@ -63,11 +64,17 @@ class _ManufacturedAxisymmetricCycle:
     verified_magnetic_inputs: list[NDArray[np.float64]] = field(default_factory=list)
     reference_solutions: list[NDArray[np.float64]] = field(default_factory=list)
     normalized_volume_inputs: list[NDArray[np.float64]] = field(default_factory=list)
+    complete_magnetic_inputs: list[NDArray[np.float64]] = field(default_factory=list)
+    complete_magnetic_state: NDArray[np.float64] = field(
+        default_factory=lambda: np.asarray((1.75, 0.0, -0.25, 0.5), dtype=float)
+    )
 
     def solve_reference_potential(
         self, magnetic_state: NDArray[np.float64]
     ) -> ReferencePotentialStep:
         self.verified_magnetic_inputs.append(magnetic_state.copy())
+        self.complete_magnetic_state[1:2] = magnetic_state
+        self.complete_magnetic_inputs.append(self.complete_magnetic_state.copy())
         reference_potential = np.asarray((float(magnetic_state[0]),), dtype=float)
         self.reference_solutions.append(reference_potential.copy())
         return ReferencePotentialStep(
@@ -180,6 +187,8 @@ def _solver(
     *,
     damping: float,
     max_iterations: int = 80,
+    anderson_depth: int = 0,
+    anderson_condition_limit: float = 1.0e5,
     logger: JsonEventLogger | None = None,
 ) -> DampedPicardSolver:
     return DampedPicardSolver(
@@ -201,6 +210,8 @@ def _solver(
             pressure_profile_tolerance=1.0e-10,
             current_profile_tolerance=1.0e-10,
             invariant_tolerance=1.0e-10,
+            anderson_depth=anderson_depth,
+            anderson_condition_limit=anderson_condition_limit,
         ),
         logger=logger,
     )
@@ -210,6 +221,14 @@ def _recorded_rows() -> dict[float, dict[str, float]]:
     with _TABLE.open(newline="") as table_file:
         return {
             float(row["damping"]): {key: float(value) for key, value in row.items()}
+            for row in csv.DictReader(table_file)
+        }
+
+
+def _anderson_rows() -> dict[int, dict[str, float]]:
+    with _ANDERSON_TABLE.open(newline="") as table_file:
+        return {
+            int(row["anderson_depth"]): {key: float(value) for key, value in row.items()}
             for row in csv.DictReader(table_file)
         }
 
@@ -297,6 +316,69 @@ def test_damped_picard_converges_at_the_manufactured_linear_rate(damping: float)
         np.asarray(result.projected_current),
         expected_projected_current,
     )
+
+
+@pytest.mark.parametrize("depth", [0, 1, 2, 5])
+def test_anderson_accelerates_the_complete_picard_cycle_without_bypassing_gates(
+    depth: int,
+) -> None:
+    """DESIGN §13.3 rows reach one fixed point without changing physical invariants."""
+    operators = _ManufacturedAxisymmetricCycle()
+    result = _solver(
+        operators,
+        damping=0.3,
+        anderson_depth=depth,
+        max_iterations=20,
+    ).solve(np.asarray((0.0,), dtype=float))
+    recorded = _anderson_rows()[depth]
+
+    assert result.converged
+    assert result.iterations == int(recorded["iterations"])
+    assert result.magnetic_state == pytest.approx((2.0 / 3.0,), abs=1.0e-11)
+    assert sum(row.update_method == "anderson" for row in result.history) == int(
+        recorded["anderson_steps"]
+    )
+    assert sum(row.anderson_history_restarted for row in result.history) == int(
+        recorded["history_restarts"]
+    )
+    assert recorded["final_fixed_point_residual_norm"] < 1.0e-11
+    assert recorded["final_state_update_norm"] < 1.0e-11
+    assert result.history[-1].fixed_point_residual_norm == pytest.approx(
+        recorded["final_fixed_point_residual_norm"], rel=1.0e-3, abs=1.0e-16
+    )
+    assert result.history[-1].state_update_norm == pytest.approx(
+        recorded["final_state_update_norm"], rel=1.0e-3, abs=1.0e-16
+    )
+    assert result.history[-1].pressure_profile_error < 1.0e-10
+    assert result.history[-1].current_profile_error < 1.0e-10
+    assert result.history[-1].projected_current_profile_error < 1.0e-10
+    assert result.history[-1].current_divergence_relative_residual < 1.0e-10
+    assert result.history[-1].magnetic_divergence_relative_residual < 1.0e-10
+    assert result.history[-1].toroidal_flux_relative_error < 1.0e-10
+    assert all(
+        complete[0] == 1.75 and tuple(complete[-2:]) == (-0.25, 0.5)
+        for complete in operators.complete_magnetic_inputs
+    )
+
+
+def test_anderson_rejects_ill_conditioned_history_and_logs_damped_fallback() -> None:
+    """A rank-deficient least-squares history restarts instead of accepting acceleration."""
+    stream = io.StringIO()
+    solver = _solver(
+        _ManufacturedAxisymmetricCycle(),
+        damping=0.3,
+        anderson_depth=5,
+        anderson_condition_limit=1.0e5,
+        logger=JsonEventLogger(stream),
+    )
+    result = solver.solve(np.asarray((0.0,), dtype=float))
+    records = [json.loads(line) for line in stream.getvalue().splitlines()]
+
+    rejected = [record for record in records if record["event"] == "anderson_step_rejected"]
+    assert rejected
+    assert rejected[0]["reason"] == "rank_deficient_history"
+    assert any(row.update_method == "damped_fallback" for row in result.history)
+    assert result.converged
 
 
 def test_picard_log_provenance_and_accepted_history_are_live() -> None:

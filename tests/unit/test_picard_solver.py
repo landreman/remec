@@ -19,7 +19,11 @@ import pytest
         ("magnetic_scale", -1.0, "magnetic_scale"),
         ("floor_sensitivity_tolerance", 0.0, "floor_sensitivity_tolerance"),
         ("minimum_layer_cells", 0.0, "minimum_layer_cells"),
-        ("anderson_depth", 1, "milestone 5.3"),
+        ("anderson_depth", -1, "anderson_depth"),
+        ("anderson_depth", True, "anderson_depth"),
+        ("anderson_depth", 1.5, "anderson_depth"),
+        ("anderson_regularization", 0.0, "anderson_regularization"),
+        ("anderson_condition_limit", 1.0, "anderson_condition_limit"),
     ],
 )
 def test_picard_options_reject_invalid_or_unimplemented_controls(
@@ -27,7 +31,7 @@ def test_picard_options_reject_invalid_or_unimplemented_controls(
     value: float,
     message: str,
 ) -> None:
-    """Invalid damping/tolerances and premature Anderson use fail at configuration time."""
+    """Invalid damping, tolerance, and Anderson controls fail at configuration time."""
     from remec.solvers.picard import PicardOptions
 
     arguments = {"magnetic_scale": 1.0, keyword: value}
@@ -41,12 +45,31 @@ def test_picard_options_are_public_and_deterministically_serializable() -> None:
     from remec.common.serialization import canonical_json
     from remec.solvers import DampedPicardSolver
 
-    options = PicardOptions(magnetic_scale=2.0, damping=0.25, max_iterations=17)
+    options = PicardOptions(
+        magnetic_scale=2.0,
+        damping=0.25,
+        max_iterations=17,
+        anderson_depth=5,
+    )
 
     assert DampedPicardSolver.__name__ == "DampedPicardSolver"
     assert '"damping":0.25' in canonical_json(options)
     assert '"max_iterations":17' in canonical_json(options)
     assert '"magnetic_scale":2.0' in canonical_json(options)
+    assert '"anderson_depth":5' in canonical_json(options)
+    assert options.anderson_condition_limit == pytest.approx(1.0e5)
 
     with pytest.raises(TypeError, match="magnetic_scale"):
         PicardOptions()  # type: ignore[call-arg]
+
+
+def test_picard_options_reject_an_inaccurate_anderson_filter_pair() -> None:
+    """The public controls enforce the documented one-percent singular filter bound."""
+    from remec.solvers.picard import PicardOptions
+
+    with pytest.raises(ValueError, match=r"anderson_regularization \* anderson_condition"):
+        PicardOptions(
+            magnetic_scale=1.0,
+            anderson_regularization=1.0e-10,
+            anderson_condition_limit=1.0e5,
+        )
