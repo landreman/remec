@@ -15,8 +15,7 @@
 
 The concrete R--Z driver uses natural continuation in pressure amplitude, current
 diffusivity `D_u`, and anisotropy ratio `epsilon_kappa = kappa_perp/kappa_parallel`.
-Every
-stage builds a fresh Anderson accelerator, receives only the previous stage's converged
+Every stage builds a fresh Anderson accelerator, receives only the previous stage's converged
 free `(psi, I=R B_phi)` coefficient vector, and records rejected acceleration attempts,
 profile gates, and checkpoint cadence under one deterministic configuration digest. The
 continuation path used for the acceptance table is
@@ -42,35 +41,61 @@ The current passed to Ampère is a compatible scalar-curl representation. Four s
 response columns correct its toroidal part, after which a strong discrete curl is
 independently re-integrated with the shared mollified shell weights. Both the raw M2
 current and this projected current realize every `I_0(s)` row below
-`4.5e-16` absolute error. The relative projection-correction norms decrease
+`4.5e-16` absolute error. Along the operational pressure ramp the relative
+projection-correction norms decrease
 from 0.21433 to 0.20691 for the 0.8-MA target and from 0.21407 to 0.20468 for the
-1.0-MA target. These coarse shaped-mesh corrections are reported rather than hidden;
-later mesh refinement should reduce them as in milestone 4.4.
+1.0-MA target. Because pressure changes on that path, a separate fixed-parameter mesh
+study owns the §27.4 convergence claim:
+
+| requested maxh | elements | correction norm | non-ideal / analytic L² |
+| ---: | ---: | ---: | ---: |
+| 0.32 | 100 | 0.23812 | 0.30704 |
+| 0.24 | 158 | 0.17367 | 0.27377 |
+| 0.18 | 238 | 0.20691 | 0.24109 |
+| 0.14 | 358 | 0.13285 | 0.23230 |
+| 0.10 | 564 | 0.07555 | 0.24308 |
+
+The correction has one explicitly retained pre-asymptotic reversal. Using
+`h_eff proportional to elements**(-1/2)`, its two finest adjacent rates are 2.170 and
+2.483, and the finest correction is below 10%. The non-ideal field error is not
+monotone on the same meshes; the table therefore exposes, rather than attributes away,
+the remaining nonlinear discretization variation.
 
 The primary reference is the analytic Zheng field, independent of the FEM solve. The
-same-mesh ideal FEM error is also measured so the non-ideal difference is not mislabeled
-as discretization error:
+same-mesh ideal FEM error isolates the ideal solve's discretization contribution; the
+separate h table above records the non-ideal path's mesh dependence:
 
 | current target | non-ideal / analytic relative L² (stages 1 → 3) | same-mesh ideal / analytic | final non-ideal / same-mesh ideal |
 | --- | --- | ---: | ---: |
 | 0.8 MA | 0.25994 → 0.25637 → 0.24109 | 5.352e-4 | 0.24105 |
 | 1.0 MA | 0.25937 → 0.25416 → 0.23377 | 5.352e-4 | 0.23373 |
 
-Thus the finite-`D_u`, finite-anisotropy, mollifier, and shell-discretization bias
-decreases at every stage for both profiles, while the ideal discretization contribution
-stays fixed and two orders of magnitude smaller. Across all six rows the M1, M3, M3b,
+To isolate the regularization trend from the pressure ramp, an additional 0.8-MA scan
+holds pressure amplitude at one. As `(D_u, epsilon_kappa)` decreases through
+`(0.060, 0.120)`, `(0.030, 0.060)`, and `(0.015, 0.030)`, the non-ideal/analytic error
+strictly decreases `0.32151 -> 0.31796 -> 0.30704`. The compatible-current correction
+increases `0.23309 -> 0.23558 -> 0.23812` on this fixed coarse mesh, which is why its
+acceptance evidence comes from the independent h-refinement table rather than the
+regularization scan.
+
+Across all six primary rows the M1, M3, M3b,
 and M4a relative residuals are below `4.0e-16`, the fixed-point residual is
-below `4.5e-9`, and the smooth axisymmetric scale spans 10.89 effective
-polynomial cells. The complete records are in
-`tests/verification/axisymmetric_nonideal_continuation.csv`.
+below `4.5e-9`, and the independently reconstructed analytic pressure-profile error is
+below `1.16e-11`. The smooth nested Zheng case contains neither a resonant-current layer
+nor an island-flattening pressure layer, so both layer-width diagnostics are recorded as
+not applicable; no domain-width proxy is used. The complete records are in
+`tests/verification/axisymmetric_nonideal_continuation.csv` and
+`tests/verification/axisymmetric_nonideal_refinement.csv`.
 
 The cheap PR sentinel executes one real shaped M4a--M1 cycle in about 13 seconds. The
-two complete three-stage/current-profile cases are marked `slow`; locally they take less
-than 70 seconds each and run nightly. Mutation checks show that replacing the M4a tensor
+two complete three-stage/current-profile cases and the independent scan/refinement legs
+are marked `slow` and run nightly. Mutation checks show that replacing the M4a tensor
 by its isotropic part collapses the direct finite-anisotropy solution difference from
 `4.66e-4` to zero, and deleting the `-D_u grad_perp(utilde)` term from the reconstructed
-M2 current opens the independently evaluated M3b gate to `1.19e-5`. Both mutations
-therefore turn the suite red despite successful inner sparse solves.
+M2 current opens the independently evaluated M3b gate to `1.19e-5`. Doubling the
+prescribed pressure-profile shape produces an independently measured relative error
+above 0.9. All three mutations therefore turn the suite red despite successful inner
+sparse solves.
 
 ## Milestone 5.4 — shaped analytic Grad–Shafranov benchmarks
 

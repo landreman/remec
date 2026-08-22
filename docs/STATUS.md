@@ -639,12 +639,17 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   epsilon_kappa 0.120 → 0.060 → 0.030, with a fresh Anderson history at every stage.
   On the smooth Zheng boundary, the 0.8-MA and 1.0-MA profile families realize all raw
   and compatible-projected I₀ shell moments below 3.34e-16 and 2.23e-16 absolute,
-  respectively; pressure-profile error is zero. M1/M3/M3b/M4a residuals stay below
+  respectively; independently reconstructed pressure-profile error stays below
+  1.16e-11. M1/M3/M3b/M4a residuals stay below
   4.0e-16 and fixed-point residuals below 4.5e-9. Non-ideal/analytic L² errors decrease
   strictly 0.25994 → 0.25637 → 0.24109 and 0.25937 → 0.25416 → 0.23377, while the
-  same-mesh ideal/analytic error is 5.352e-4. Compatible-current correction norms also
-  decrease 0.21433 → 0.20691 and 0.21407 → 0.20468. See
-  `tests/verification/axisymmetric_nonideal_continuation.csv` and
+  same-mesh ideal/analytic error is 5.352e-4. With pressure held at full amplitude, the
+  regularization-only errors decrease 0.32151 → 0.31796 → 0.30704. A five-mesh study
+  records the compatible-current correction 0.23812 → 0.17367 → 0.20691 → 0.13285 →
+  0.07555; the retained pre-asymptotic reversal is followed by fine rates 2.170 and
+  2.483. Critical-layer diagnostics are not applicable on this smooth nested case. See
+  `tests/verification/axisymmetric_nonideal_continuation.csv`,
+  `tests/verification/axisymmetric_nonideal_refinement.csv`, and
   `docs/verification.md`.
   <br>Next: Phase 6 should preserve the continuation stage/checkpoint contract while
   replacing this axisymmetric scalar-Ampère adapter with the 3D fixed-boundary blocks.
@@ -735,11 +740,13 @@ at 13.79 s; the next-slowest is the M3 gradient-comparison setup at 11.43 s. No 
 not-slow item exceeds ~20 s, and no existing `slow` test touches the new
 backend-independent Anderson module.
 
-Measured 2026-08-22 on `milestone/5.5-staged-continuation-nonideal`: `make check` passes
-all 274 not-slow tests in 49.80 s ✅. The slowest items are the curved-torus current
-projection at 13.54 s and the shaped non-ideal sentinel at 12.65 s. The two full shaped
-three-stage cases pass in 76.40 s and 83.06 s individually (159.86 s together), within
-the 90 s per-test and 5 min full-suite budgets.
+Measured 2026-08-22 on `milestone/5.5-staged-continuation-nonideal`: post-review
+`make check` passes all 277 not-slow tests in 41.08 s ✅. The slowest items are the
+curved-torus current projection at 13.53 s and the shaped non-ideal sentinel at 13.02 s.
+The two full shaped three-stage cases pass in 79.87 s and 85.89 s individually; the
+fixed-pressure/refinement legs take 27.38--70.03 s individually. Every slow test remains
+below 90 s, and the two loadscope modules take 166.16 s and 193.65 s on separate workers,
+within the 5 min full-suite budget.
 
 ## Release gates
 
