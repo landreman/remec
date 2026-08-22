@@ -20,6 +20,14 @@ from remec.solvers.axisymmetric import (
     AxisymmetricProfileClosure,
     AxisymmetricProfileClosureEvaluation,
 )
+from remec.solvers.continuation import (
+    ContinuationAcceptanceError,
+    ContinuationStage,
+    ContinuationStageResult,
+    StagedContinuationOptions,
+    StagedContinuationResult,
+    StagedContinuationSolver,
+)
 from remec.solvers.current_continuity import (
     ConstrainedCurrentContinuityResult,
     ConstrainedCurrentContinuitySolver,
@@ -46,6 +54,9 @@ __all__ = [
     "AxisymmetricProfileClosureEvaluation",
     "ConstrainedCurrentContinuityResult",
     "ConstrainedCurrentContinuitySolver",
+    "ContinuationAcceptanceError",
+    "ContinuationStage",
+    "ContinuationStageResult",
     "CurrentContinuityFormulation",
     "CurrentContinuityResult",
     "CurrentContinuitySolver",
@@ -61,6 +72,9 @@ __all__ = [
     "PicardOptions",
     "PollutionSafetyDiagnostic",
     "SpatialAnisotropicConductivity",
+    "StagedContinuationOptions",
+    "StagedContinuationResult",
+    "StagedContinuationSolver",
     "UnresolvedCurrentLayerError",
     "UnresolvedCurrentLayerWarning",
 ]
