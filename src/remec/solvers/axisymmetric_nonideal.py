@@ -191,8 +191,10 @@ class _ZhengContinuationContext:
         self.scalar_space = ng.H1(self.mesh, order=polynomial_order, dirichlet=".*")
         self.unconstrained_space = ng.H1(self.mesh, order=polynomial_order)
         self.ndof = self.scalar_space.ndof
-        self.shell_edges = np.linspace(0.0, 1.0, 5)
-        self.pressure_nodes = np.linspace(0.0, 1.0, 9)
+        # Explicit annotations keep the NumPy 2.2/Python 3.10 stubs from widening
+        # these deterministic grids to ``floating[Any]``.
+        self.shell_edges: FloatArray = np.linspace(0.0, 1.0, 5, dtype=np.float64)
+        self.pressure_nodes: FloatArray = np.linspace(0.0, 1.0, 9, dtype=np.float64)
         self.edge_toroidal_field = 1.0
         self.reference_flux = equilibrium.flux(ng.x, ng.y)
         self.reference_flux_gradient = ng.CoefficientFunction(
