@@ -441,6 +441,131 @@ oblique non-aligned fields; closed field lines; a magnetic island; a chaotic tes
 — reporting iteration counts vs. mesh size, order, and anisotropy. (hypre AMS and
 field-split alternatives belong to the PETSc branch evaluation.)
 
+### 8.6 Three-dimensional frozen-field island benchmark (Reiman–Greenside)
+
+The Section 8.3 pollution regression and the Phase 1 island tests are two-dimensional.
+They do not answer the question that decides whether a 3D run is affordable: at a given
+anisotropy, how many elements and how much wall-clock time does a *three-dimensional*
+solve need, and does the resulting pressure actually flatten inside an island? The
+repository MUST therefore contain a **frozen-field** 3D benchmark that solves only
+(M4a)–(M4b) — no (M1), no (M2)–(M3b), no Picard iteration — on a prescribed analytic
+field containing both good surfaces and a magnetic island chain. This benchmark is a
+prerequisite for the coupled 3D milestones, because the coupled problem is a strict
+superset of it: a cost or resolution surprise found here is cheap to diagnose, and the
+same surprise found inside a Picard loop is not.
+
+**The field.** Use the analytic model field of Reiman & Greenside, Comput. Phys. Commun.
+43 (1986) 157, which is manifestly divergence-free and whose field lines obey an
+explicitly known one-and-a-half-degree-of-freedom Hamiltonian:
+
+> **B** = ∇Ψ_t × ∇Θ + ∇Φ × ∇Ψ_p, Ψ_t = r²/2,
+>  Ψ_p = t₀Ψ_t + t₁Ψ_t² − ε₁r²cos(2Θ − Φ) − ε₂r³cos(3Θ − Φ),
+
+with (r, Θ) polar coordinates in the cross-section and Φ the periodic angle. Ψ_p is the
+field-line Hamiltonian, with canonical pair (Ψ_t, Θ) and Φ playing the role of time.
+Reiman and Greenside's example values are t₀ = 0.29, t₁ = 0.38. Setting **ε₂ = 0 leaves a
+single m = 2, n = 1 island chain**, which is the configuration this benchmark uses;
+ε₁ = ε₂ = 0 is the integrable, island-free control; both ε nonzero is available later for
+island-overlap and stochastic studies (Section 22 chaotic-layer regression).
+
+Properties the implementation MUST verify rather than assume:
+
+- **B** = ∇×**A** with **A** = Ψ_t∇Θ − Ψ_p∇Φ, so ∇·**B** = 0 identically. The discrete
+  divergence of the interpolated field is a test, not an assumption, and **A** is also a
+  ready-made exact vector potential for the coupled milestone that follows.
+- With the axial angle Φ = z/R₀, ∇Ψ_t×∇Θ = ẑ exactly, so B_z ≡ 1 and
+  |**B**| = 1 + O(R₀⁻²): the field has no nulls anywhere in the domain and the Section 6
+  B_floor MUST stay inactive. This isolates the anisotropy question from small-B
+  protection, unlike the Section 8.3 Sovinec field.
+- Rotational transform ι(r) = dΨ_p⁽⁰⁾/dΨ_t = t₀ + t₁r². At the reference values
+  ι(0) = 0.29 and ι(1) = 0.67, so the ι = 1/2 resonance sits at
+  r_s = √((1/2 − t₀)/t₁) = 0.74339 and the ι = 1/3 resonance at 0.33769, both strictly
+  inside r = 1.
+- The m = 2 island width, which for this Hamiltonian is available in *closed form* rather
+  than only as the usual asymptotic estimate — the implementation MUST re-derive it and
+  check it against the traced separatrix rather than take it on faith. Passing to the
+  resonant angle ζ = 2Θ − Φ, the exactly conserved quantity is
+  K(Ψ_t, ζ) = (2t₀−1)Ψ_t + 2t₁Ψ_t² − 4ε₁Ψ_t cos ζ. Its separatrix roots on the O-point cut
+  are Ψ_± = (√A ± 2√ε₁)²/(4t₁) with A = 1 − 2t₀, so with r = √(2Ψ_t) the radial extrema are
+  r_± = √(2Ψ_±) and the **exact** radial full width is
+  w_island = r_+ − r_− = 4√(ε₁/(2t₁)), independent of r_s and of R₀, valid for
+  ε₁ < A/4 = (1 − 2t₀)/4 (0.105 at the reference values). The familiar pendulum estimate
+  4√(|Ψ̂(Ψ_s)|/|dι/dΨ_t|) with Ψ̂ = −2ε₁Ψ_t reproduces this exactly, because the
+  perturbation is linear in Ψ_t. This is what lets milestone 6.1 assert an equality to
+  tracer tolerance instead of an asymptotic agreement.
+
+**The domain.** A periodic straight cylinder Ω = {r < a} with z ∈ [0, 2πR₀) identified and
+Φ = z/R₀ (`PeriodicCylinder3D`, Section 16.2). The choice is deliberate: the domain is
+topologically a solid torus, so it carries the same nontrivial first cohomology, harmonic
+field, and toroidal flux as the eventual Section 16.4 geometry, yet its mesh is affine and
+its geometry exact — no geometry-approximation error is entangled with the anisotropy
+measurement. Choose a so that no *driven* resonance sits on the wall (at the reference
+values ι = 2/3 occurs at r = 0.99561; the m = 2 drive does not resonate there, but any
+study that turns on ε₂ or changes t₀, t₁ MUST re-check this). Boundary conditions are the
+Section 4 v1 set restricted to (M4a)–(M4b): χ = 0 on r = a, periodic in z.
+
+**What is measured.** With S_ref = 1 and a user-supplied p₀(s):
+
+1. *Cost.* For each anisotropy on a ladder (suggested ε_κ = 10⁻², 10⁻³, …, 10⁻⁶, or as
+   far as the solver reaches), a machine-readable table of element count, H¹ DOF count,
+   polynomial order, assembly time, factorization/solve time, peak memory, linear-solver
+   path (direct, or CG with which Section 8.5 preconditioner), and iteration counts. This
+   table is the deliverable that tells a user what a 3D run costs.
+2. *The resolution requirement, stated as a criterion and not as a wall-clock.* The
+   smallest (h, p) at which all three of the following hold at once: the Section 8.3
+   pollution measure — extended to this field by solving with κ⊥ = 0 and matching the
+   computed core amplitude to the radial power balance that must carry ∫S_ref out through
+   r = a — satisfies κ⊥,num < 0.1κ⊥ for the physical κ⊥ of that row; the critical width
+   w_c is spanned by at least `min_layer_cells` local element widths; and the measured
+   flattening width moves by less than a stated tolerance under one further refinement.
+3. *Pressure flattening.* p = p₀(s) sampled along a radial ray through an island O-point
+   and along a ray through an X-point at fixed Φ, plus the volume-averaged dp/ds. Report
+   the flattening width — the radial extent over which |dp/dr| falls below a stated
+   fraction of the ε₁ = 0 control at the same radius, mesh, order, and ε_κ — and the
+   pressure drop across the island.
+4. *Both sides of the Fitzpatrick threshold.* Here
+   w_c ≈ ε_κ^{1/4}√(R₀/(m·dι/dr)) ≈ 0.94·ε_κ^{1/4} at the reference values with m = 2,
+   R₀ = 1. The benchmark MUST demonstrate both branches of max(w_island, w_c): with ε₁
+   fixed, decreasing ε_κ makes the flattening width saturate at w_island; with ε_κ fixed,
+   an island deliberately narrower than w_c leaves the profile essentially unperturbed.
+   The reference values put this crossing at modest anisotropy — for ε₁ = 10⁻³,
+   w_island = 0.14510 exactly, while w_c runs from ≈ 0.297 at ε_κ = 10⁻² through ≈ 0.094
+   at ε_κ = 10⁻⁴ to ≈ 0.030 at ε_κ = 10⁻⁶ — so the threshold is crossed between
+   ε_κ = 10⁻³ (w_c ≈ 0.167 > w_island, no flattening) and ε_κ = 10⁻⁴ (w_c ≈ 0.094 <
+   w_island, flattening). That is what makes the benchmark affordable in 3D: the physics
+   the milestone must demonstrate does not require the production anisotropy. Unlike
+   w_island, w_c is an order-of-magnitude balance, so the demonstration is that the
+   flattening width follows max(w_island, w_c) and scales as ε_κ^{1/4} below threshold,
+   not that it equals this prefactor.
+5. *The level-set map across a separatrix.* This is the first time V_χ is built on a field
+   with a genuine island separatrix. The near-plateau of V_χ(χ̂) at the island level and
+   the corresponding spike in the co-area density −dV/dχ̂ are a second, independent
+   signature of flattening and MUST be reported, together with whether the Section 12.3
+   critical-level safeguards activated and what the mollifier width was there.
+6. *Topology overlay.* Poincaré sections of the same field (Section 19) overlaid with
+   isobars of the computed p, regenerated by a committed script, so the flattening is seen
+   to coincide with the island and not with a mesh feature.
+
+**Falsifiability.** The measured flattening MUST be shown to come from the island by
+controls that fail if it does not: (a) the ε₁ = 0 integrable field on the same mesh,
+order, and ε_κ shows no flattening at r_s; (b) an island narrower than w_c shows no
+flattening (item 4); (c) replacing **b** in K by the axisymmetric part of the same field,
+leaving everything else unchanged, removes the flattening; (d) an isotropic K removes it.
+A run that produces a flat spot for an isotropic K is measuring its own mesh.
+
+**Test placement and regeneration.** The full ladder is nightly. The largest rows MAY be
+produced by a committed regeneration script and pinned in the checked-in table, provided
+that script is the table's only source (never a hand edit; Section 22.1), and provided the
+not-slow subset still re-runs the smallest rows live, including at least one control from
+the falsifiability list.
+
+**When the cost is prohibitive.** If the resolution demanded by criterion 2 cannot be
+reached with the Section 21 direct-solver default, that is a real result: it belongs in
+the table and in `docs/verification.md`, it is a primary input to the Section 8.5
+preconditioner program, and if it changes the default solver policy it is an ADR. It is
+never a reason to lower the anisotropy target, relax the pollution gate, or reduce
+`min_layer_cells` (Sections 22.1 and 26).
+
 ---
 
 ## 9. Regularized current-continuity and profile-constraint solver (M3–M3b)
@@ -845,10 +970,10 @@ class Geometry(Protocol):
 ```
 
 Implement in order: `Slab2D` → `PeriodicBox3D` → `AxisymmetricRZ` →
-`SmoothSolidTorus3D` → `WallBoundedToroidalDomain`. Boundary regions MUST be named
-(future plates, walls, control surfaces).
+`PeriodicCylinder3D` → `SmoothSolidTorus3D` → `WallBoundedToroidalDomain`. Boundary
+regions MUST be named (future plates, walls, control surfaces).
 
-### 16.2 Slab and periodic box
+### 16.2 Slab, periodic box, and periodic cylinder
 
 The 2D slab is the primary kernel-development environment: Dirichlet and periodic scalar
 BCs, prescribed analytic **B** fields, manufactured anisotropic-diffusion and M3
@@ -856,6 +981,19 @@ solutions, island-like test fields. The periodic box uses Netgen periodic
 identifications and NGSolve `Periodic` spaces; MUST test scalar and vector periodicity,
 all three mean-flux components, and high-order compatibility — and do not assume every
 helper/preconditioner supports periodic wrappers; test each selected solver.
+
+`PeriodicCylinder3D` is the first genuinely three-dimensional *production* domain:
+Ω = {r < a} with z ∈ [0, 2πR₀) identified, meshed with affine tetrahedra and one Netgen
+periodic identification of the two end faces. Named boundaries: `wall` (r = a) and the
+identified pair. It is topologically a solid torus, so it carries the same nontrivial
+first cohomology, harmonic field, and toroidal flux as Sec. 16.4, while remaining exactly
+representable — its geometry-approximation error is zero. That is why the Sec. 8.6
+frozen-field anisotropy-cost benchmark and the first coupled 3D run both use it before
+the curved solid torus: a cost or accuracy result measured here cannot be blamed on
+geometry error. Its periodic H¹, H(curl), and H(div) spaces MUST be tested to the same
+standard as the periodic box — scalar and vector periodicity, all mean-flux components,
+high-order compatibility, and per-solver periodic-wrapper support — before any solve
+depends on them.
 
 ### 16.3 Axisymmetric R–Z
 
@@ -990,9 +1128,13 @@ implied 1D source expressed consistently in s (including the required V_Ω facto
 total power Γ(0) (admissibility checks on p₀); the geometric conductance from note Eq.
 (conductance), named `pressure_conductance` in software so it cannot be confused with
 the mean-current multiplier G(s); I_tor(s)−I₀(s), shell residuals, toroidal variation,
-⟨ũ⟩_s, G(s), and D_uG′∇ᵣs; a field-line tracer with Poincaré sections (SciPy ODE on the
-H(div) **B**) for topology visualization; and layer-width estimators for w_c and δ.
-These feed the Section 5 balance checks and the verification battery.
+⟨ũ⟩_s, G(s), and D_uG′∇ᵣs; a field-line tracer with Poincaré sections (SciPy ODE on
+either a prescribed analytic **B** or the H(div) **B**) for topology visualization,
+including persisted trace data, recovered ι(r), located island O- and X-points, measured
+island width, and isobar overlays on the section (Sec. 8.6); and layer-width estimators
+for w_c and δ, including a pressure-flattening-width estimator measured against an
+island-free control field. These feed the Section 5 balance checks and the verification
+battery.
 
 ---
 
@@ -1015,11 +1157,12 @@ remec/
 ├── src/remec/
 │   ├── __init__.py, config.py, normalization.py, problem.py, solution.py,
 │   │   state.py, profiles.py, boundary.py, cli.py
-│   ├── geometry/    base.py slab.py periodic_box.py axisymmetric.py
-│   │                solid_torus.py wall.py
+│   ├── geometry/    base.py slab.py periodic_box.py periodic_cylinder.py
+│   │                axisymmetric.py solid_torus.py wall.py
 │   ├── fem/         spaces.py forms.py operators.py quadrature.py projections.py
 │   │                ngsolve_utils.py
-│   ├── physics/     fields.py transport.py braginskii.py current.py
+│   ├── physics/     fields.py (analytic B: Sovinec island, Reiman–Greenside)
+│   │                transport.py braginskii.py current.py
 │   ├── solvers/     anisotropic.py current_continuity.py current_projection.py
 │   │                magnetics.py picard.py anderson.py newton.py continuation.py
 │   │                linalg/ (base.py native.py petsc_optional.py)
@@ -1097,7 +1240,10 @@ anisotropy scans nightly.
 **End-to-end and physics regressions (nightly):** axisymmetric benchmark — reduction to
 classical Grad–Shafranov with p=p₀(s(ψ)) and I_tor=I₀(s(ψ)) in the appropriate limit,
 including two distinct current targets, and reduced-vs-3D axisymmetric agreement where
-feasible; one island chain with w_c ∝ ε_κ^{1/4}
+feasible; the frozen-field 3D Reiman–Greenside island benchmark of Sec. 8.6 — cost and
+resolution table vs. order, mesh, and ε_κ, measured flattening width against both
+branches of max(w_island, w_c), and the island-free ε₁ = 0 control; one island chain with
+w_c ∝ ε_κ^{1/4}
 (Fitzpatrick threshold); current layer with δ ∝ D_u^{1/3} and bounded J∥;
 chaotic-layer pressure flattening; nested-surface limit; interpretive→predictive
 consistency (a predictive run driven by the recovered S_p^eff returns the interpretive
@@ -1274,14 +1420,39 @@ and regularization bias (finite ε_κ, D_u, mollifier width); the non-ideal-to-i
 difference must decrease as continuation stages the regularization parameters down. The
 X-point non-ideal comparison is a nightly diagnostic, not part of the gate.
 
-**Phase 6 — 3D fixed boundary.** 6.1 periodic-torus end-to-end benchmark. 6.2 smooth
-solid-torus mesh (simple torus, then shaped Fourier boundary, geometry-error report).
-6.3 Poincaré data generation, persistence, and plotting. 6.4 VMEC/VMEC++ reader and
-initialization of p₀(s) and cumulative I₀(s). 6.5 DESC reader with the same normalized
-profile contract. 6.6 reproducible finite-β fixed-boundary stellarator example with
-Poincaré/isobar/S_p^eff/pressure-conductance and I_tor−I₀ diagnostics; nested-surface
-case reproduces p=p₀(s(ψ)) and I_tor=I₀(s(ψ)) to the stated asymptotic/discretization
-tolerances; island case shows flattening with measured w_c∝ε_κ^{1/4} (nightly).
+**Phase 6 — 3D fixed boundary.** The ordering is deliberately *frozen field before
+coupled field*, and *exact geometry before curved geometry*. The coupled 3D problem is a
+strict superset of the (M4a)–(M4b) island study, so the study's cost and resolution
+requirements are measured first, on a domain that contributes no geometry error; and
+Poincaré tracing comes first so the island study has an independent, verified measurement
+of where the island actually is.
+
+6.1 Poincaré sections and field-line tracing: data generation, persistence, and plotting,
+verified on the analytic fields of Sec. 8.6 — on the integrable ε₁ = ε₂ = 0 field the
+traced ι(r) MUST match t₀ + t₁r² and the residual island width MUST fall to tracer
+tolerance; on the ε₁ ≠ 0 field the tracer MUST locate the m = 2 O- and X-points and
+measure an island width agreeing with the resonant-Hamiltonian estimate 4√(ε₁/(2t₁)).
+6.2 `PeriodicCylinder3D` geometry plus the Reiman–Greenside analytic field module
+(Secs. 16.2 and 8.6): periodic scalar and vector spaces with all mean-flux components,
+exact ∇·**B** = 0 and the closed-form vector potential **A** = Ψ_t∇Θ − Ψ_p∇Φ, ι profile
+and resonance locations, and B-floor inactivity.
+6.3 frozen-field 3D island benchmark — the Phase 6 numerical gate. Solve (M4a)–(M4b)
+alone on that field at large anisotropy per Sec. 8.6: the cost/resolution table, pressure
+flattening inside the island, both branches of max(w_island, w_c), the ε₁ = 0 and
+isotropic-K controls, V_χ behavior across the separatrix, and Poincaré/isobar overlays.
+No coupled 3D work starts until this milestone has established what a 3D solve costs at
+the intended ε_κ.
+6.4 periodic-cylinder end-to-end coupled (M1)–(M4b) benchmark on the same geometry, using
+the 6.3 frozen state and the closed-form **A** as its initial guess.
+6.5 smooth solid-torus mesh (simple torus, then shaped Fourier boundary, geometry-error
+report); MUST also implement and validate the Sec. 7.2 scalar Neumann (or mixed harmonic)
+tangency correction, since milestone 4.3 supplies only the circular-torus closed form.
+6.6 VMEC/VMEC++ reader and initialization of p₀(s) and cumulative I₀(s). 6.7 DESC reader
+with the same normalized profile contract. 6.8 reproducible finite-β fixed-boundary
+stellarator example with Poincaré/isobar/S_p^eff/pressure-conductance and I_tor−I₀
+diagnostics; nested-surface case reproduces p=p₀(s(ψ)) and I_tor=I₀(s(ψ)) to the stated
+asymptotic/discretization tolerances; island case shows flattening with measured
+w_c∝ε_κ^{1/4} (nightly).
 
 **Phase 7 — extreme-anisotropy upgrade.** 7.1 literature-derived AP prototype (ADR
 first) on the Phase 1 tests. 7.2 closed-field AP verification (anisotropy-independent
@@ -1315,9 +1486,11 @@ and both regularization-gradient variants (Sec. 9.4); compatible magnetics +
 shell-moment-preserving current projection; damped
 Picard; restartable checkpoints; D_u/ε_κ scans; documented axisymmetric end-to-end
 verification; clear under-resolution warnings. (A 3D demonstration is desirable but not
-required if toroidal magnetics are not yet sufficiently verified.) `remec 0.2`: smooth
-3D solid torus; VMEC/VMEC++/DESC initialization; Anderson; a reproducible finite-β
-fixed-boundary stellarator case; first AP solver. `remec 0.3`: Newton–Krylov +
+required if toroidal magnetics are not yet sufficiently verified.) `remec 0.2`:
+Poincaré tracing; periodic cylinder plus the Sec. 8.6 frozen-field 3D island benchmark
+with its published cost/resolution table; smooth 3D solid torus; VMEC/VMEC++/DESC
+initialization; Anderson; a reproducible finite-β fixed-boundary stellarator case; first
+AP solver. `remec 0.3`: Newton–Krylov +
 continuation; PETSc benchmark results; shaped wall domains; initial tangent
 sensitivities.
 
@@ -1417,8 +1590,10 @@ actually implemented MUST be pinned to a primary source in an ADR.
 **Nonlinear solvers:** Knoll & Keyes, JCP 193 (2004) 357 (JFNK); Kelley & Keyes,
 SINUM 35 (1998) 508 (pseudo-transient continuation).
 **Physics/benchmarks:** Braginskii (1965); Fitzpatrick, Phys. Plasmas 2 (1995) 825;
-Rechester & Rosenbluth, PRL 40 (1978) 38; Hanson, Nucl. Fusion 55 (2015) (virtual
-casing).
+Rechester & Rosenbluth, PRL 40 (1978) 38; Reiman & Greenside, Comput. Phys. Commun. 43
+(1986) 157 (PIES; the analytic model field with islands and stochastic regions used by
+the Sec. 8.6 frozen-field 3D benchmark — the paper is the same `reiman1986` already cited
+by the note); Hanson, Nucl. Fusion 55 (2015) (virtual casing).
 **Equilibrium-code interop:** VMEC++ (github.com/proximafusion/vmecpp; classic
 `wout_*.nc`), DESC (github.com/PlasmaControl/DESC; native HDF5 + VMECIO), SIMSOPT,
 PlasmaPy (test-only), Gmsh (optional).

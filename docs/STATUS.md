@@ -30,6 +30,18 @@ edit.
 > non-ideal benchmark, phase gate). `scripts/zheng_grad_shafranov_benchmark.py` is the
 > committed seed for 5.4.
 
+> **2026-08-22 Phase-6 reorganization.** Phase 6 was reordered and extended around a
+> new *frozen-field* 3D benchmark. The coupled 3D run is a strict superset of solving
+> (M4a)-(M4b) on a fixed 3D field, so the cost, resolution, and island-flattening
+> questions are answered first, on an exactly representable domain, before any coupled 3D
+> solve is attempted. New rows: 6.1 Poincare tracing (moved up from the old 6.3 and given
+> analytic acceptance criteria), 6.2 `PeriodicCylinder3D` + the Reiman-Greenside analytic
+> field, and 6.3 the frozen-field (M4a)-(M4b) island benchmark (`DESIGN.md` §8.6, new).
+> The old 6.1 periodic end-to-end run is now 6.4 and moves onto the same geometry; the old
+> 6.2 solid torus is now 6.5; the old 6.4/6.5 readers are 6.6/6.7; the old 6.6 stellarator
+> example is 6.8. **Renumbering:** an existing reference to the "milestone 6.2" §7.2
+> tangency correction now means **6.5**.
+
 A milestone may only start when every milestone in the previous phase is `[x]` on the
 target integration branch (`DESIGN.md` §25). A `[x]` on an unmerged PR does not satisfy
 that dependency. Phase 7 may run in parallel with Phase 8.
@@ -443,7 +455,8 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   current projection on curved multiply connected geometry, preserve the harmonic
   coefficient outside the curl–curl solve, and distinguish the measured 1.05e-4 geometry
   tangency defect from the algebraic div(curl) invariant. This milestone supplies only
-  the validated circular-torus closed form; milestone 6.2 must implement and validate
+  the validated circular-torus closed form; milestone 6.5 (the solid-torus mesh, renumbered
+  from 6.2 on 2026-08-22) must implement and validate
   the §7.2 scalar Neumann (or mixed) tangency correction before shaped-torus use.
 - [x] **4.4** Constrained current projection — `DESIGN.md` §10 · note: (M1)–(M3b), §5.4
   <br>Acceptance: discrete ∇·B and paired projected-current divergence at roundoff on
@@ -672,22 +685,95 @@ that dependency. Phase 7 may run in parallel with Phase 8.
 
 ## Phase 6 — 3D fixed boundary
 
-- [ ] **6.1** Periodic-torus end-to-end benchmark — `DESIGN.md` §16.2 · note: §6, §9
-- [ ] **6.2** Smooth solid-torus mesh — `DESIGN.md` §16.4 (simple torus → shaped Fourier boundary; geometry-error report)
+Ordering rationale (`DESIGN.md` §25, §8.6): frozen field before coupled field, exact
+geometry before curved geometry, and Poincaré tracing before the island study that needs
+it. See the 2026-08-22 reorganization note at the top of this file for the old→new
+numbering.
+
+- [ ] **6.1** Poincaré sections and field-line tracing — `DESIGN.md` §19, §8.6 · note: §4.3
+  <br>Acceptance: field-line tracer (SciPy ODE) running on both a prescribed analytic
+  **B** and an H(div) **B**; trace data saved and reloaded with a versioned record;
+  plotting entry points. Verified against the §8.6 analytic fields, not against a picture:
+  on the integrable ε₁=ε₂=0 Reiman–Greenside field the traced ι(r) MUST reproduce
+  t₀+t₁r² to a stated tolerance and the residual apparent island width MUST fall to
+  tracer tolerance; on the ε₁≠0, ε₂=0 field the tracer MUST locate the m=2/n=1 O- and
+  X-points and measure a full island width agreeing with the closed-form separatrix width
+  w_island = 4√(ε₁/(2t₁)) (`DESIGN.md` §8.6 — exact for this Hamiltonian, not asymptotic,
+  for ε₁ < (1−2t₀)/4 = 0.105) over at least three values of ε₁ spanning a decade. Derive
+  that width in the implementation from the conserved
+  K = (2t₀−1)Ψ_t + 2t₁Ψ_t² − 4ε₁Ψ_t cos(2Θ−Φ); do not hard-code the reduced formula as
+  both the prediction and the reference.
+  <br>Placed first so that 6.3 has an independent measurement of where the island is,
+  rather than inferring island position from the pressure solution it is trying to test.
+- [ ] **6.2** `PeriodicCylinder3D` + Reiman–Greenside analytic field — `DESIGN.md` §16.2, §8.6 · note: §6 (M1)
+  <br>Acceptance: periodic straight-cylinder geometry (Ω={r<a}, z∈[0,2πR₀) identified) with
+  named boundaries, affine tetrahedra, one Netgen periodic identification; periodic H¹,
+  H(curl), and H(div) spaces tested for scalar and vector periodicity, all mean-flux
+  components, and high-order compatibility, with per-solver periodic-wrapper support
+  checked rather than assumed. Analytic field module implementing
+  **B** = ∇Ψ_t×∇Θ + ∇Φ×∇Ψ_p with the §8.6 Ψ_p, plus the closed-form vector potential
+  **A** = Ψ_t∇Θ − Ψ_p∇Φ; tests MUST verify discrete ∇·**B** at roundoff, curl(**A**)=**B**,
+  B_z≡1 with |**B**| bounded away from zero (B_floor inactive), ι(r)=t₀+t₁r², and the
+  computed resonance radii (0.74339 for ι=1/2 and 0.33769 for ι=1/3 at t₀=0.29, t₁=0.38).
+  <br>Design input: the domain is topologically a solid torus, so it exercises the same
+  nontrivial harmonic field and toroidal flux as §16.4 with zero geometry-approximation
+  error. Milestone 4.3's harmonic-flux machinery should be reused here, not re-derived.
+- [ ] **6.3** Frozen-field 3D island benchmark: (M4a)–(M4b) at large anisotropy — `DESIGN.md` §8.6, §12.3, §22 · note: §4.3, §8
+  <br>**Phase gate.** Acceptance: solve *only* (M4a)–(M4b) — no (M1), no (M2)–(M3b), no
+  Picard — on the 6.2 field with a single m=2 island chain (ε₂=0), and produce all of:
+  (a) a machine-readable cost table over an ε_κ ladder recording elements, H¹ DOFs, order,
+  assembly time, factorization/solve time, peak memory, linear-solver path, and iteration
+  counts; (b) the smallest (h,p) per ε_κ at which the §8.3 pollution measure (extended to
+  this field: κ⊥=0, amplitude matched to the radial power balance carrying ∫S_ref out
+  through r=a) satisfies κ⊥,num<0.1κ⊥, w_c is spanned by at least `min_layer_cells`
+  element widths, and the flattening width is refinement-converged to a stated tolerance;
+  (c) pressure flattening measured on p=p₀(s) along rays through the island O- and
+  X-points, reported as a flattening width relative to the ε₁=0 control and as a pressure
+  drop across the island; (d) *both* branches of max(w_island, w_c) — flattening width
+  saturating at w_island as ε_κ decreases at fixed ε₁, and no flattening for an island
+  deliberately narrower than w_c; (e) the V_χ near-plateau and −dV/dχ̂ spike at the island
+  level, with the §12.3 critical-level safeguard activity reported; (f) Poincaré/isobar
+  overlays regenerated by a committed script.
+  <br>Falsifiability (`DESIGN.md` §8.6, AGENTS.md "tests that can fail"): the ε₁=0
+  integrable control at the same mesh/order/ε_κ, the sub-w_c island, replacing **b** in K
+  by the axisymmetric part of the same field, and an isotropic K MUST each remove the
+  flattening. State in the PR body which of these mutations were run.
+  <br>Test placement: full ladder nightly; the largest rows MAY come from a committed
+  regeneration script and be pinned, provided that script is the table's only source and
+  the not-slow subset still re-runs the smallest rows live together with at least one
+  control. Budgets in `DESIGN.md` §22.1 apply unchanged.
+  <br>Reference numbers to check the setup against before trusting any solve
+  (t₀=0.29, t₁=0.38, m=2, R₀=1, a=1): r_s=0.74339; w_island = 4√(ε₁/(2t₁)) = 4.58831√ε₁
+  exactly, so ε₁=10⁻³ gives w_island=0.145095; w_c≈0.94074·ε_κ^{1/4}, so w_c≈0.297 at
+  ε_κ=10⁻², 0.167 at 10⁻³, 0.094 at 10⁻⁴ and 0.030 at 10⁻⁶. The Fitzpatrick crossing at
+  ε₁=10⁻³ therefore falls between ε_κ=10⁻³ and 10⁻⁴ — reachable at modest anisotropy,
+  which is what makes this affordable in 3D. w_island is an equality; w_c is an
+  order-of-magnitude balance, so the claim to demonstrate is the max(w_island,w_c)
+  behavior and the ε_κ^{1/4} scaling below threshold, not this prefactor. Reproduce all of
+  these in the code; do not assert them without derivation.
+  <br>If the resolution required by (b) cannot be reached with the §21 direct-solver
+  default, record it — it is a §8.5 preconditioner input and possibly an ADR. It is never
+  grounds for lowering the anisotropy target, relaxing the pollution gate, or reducing
+  `min_layer_cells`.
+- [ ] **6.4** Periodic-cylinder end-to-end coupled benchmark — `DESIGN.md` §16.2 · note: §6, §9
+  <br>Acceptance: full (M1)–(M4b) Picard on the 6.2 geometry, initialized from the 6.3
+  frozen state and the closed-form **A**; all §5 invariants active. This was the old 6.1;
+  it now runs on a geometry and at a resolution that 6.3 has already costed.
+- [ ] **6.5** Smooth solid-torus mesh — `DESIGN.md` §16.4 (simple torus → shaped Fourier boundary; geometry-error report)
   <br>Design input: implement and validate the §7.2 scalar Neumann (or mixed harmonic)
   tangency correction on the shaped boundary; milestone 4.3's circular closed form is
-  not a shaped-torus harmonic-field implementation.
-- [ ] **6.3** Poincare plots: compute data via field line tracing, save and load
-  data, functions to make plots.
-- [ ] **6.4** VMEC/VMEC++ reader + initialization — `DESIGN.md` §17
+  not a shaped-torus harmonic-field implementation. (Renumbered from 6.2 on 2026-08-22.)
+- [ ] **6.6** VMEC/VMEC++ reader + initialization — `DESIGN.md` §17
   <br>Acceptance: imports p₀(s) and derives cumulative enclosed toroidal current I₀(s)
   on the same normalized-volume grid; does not pass through a legacy F(p) profile.
-- [ ] **6.5** DESC reader — `DESIGN.md` §17
-  <br>Acceptance: same normalized p₀(s)/I₀(s) contract as 6.4.
-- [ ] **6.6** Finite-β fixed-boundary stellarator example — `DESIGN.md` §19, §22 (nightly)
+- [ ] **6.7** DESC reader — `DESIGN.md` §17
+  <br>Acceptance: same normalized p₀(s)/I₀(s) contract as 6.6.
+- [ ] **6.8** Finite-β fixed-boundary stellarator example — `DESIGN.md` §19, §22 (nightly)
   <br>Acceptance: nested-surface case reproduces p=p₀(s(ψ)) to O(ε_κ) and
   I_tor=I₀(s(ψ)) to constraint/discretization tolerance; island case shows flattening
-  with measured w_c∝ε_κ^{1/4}; diagnostics include the current-profile residual.
+  with measured w_c∝ε_κ^{1/4}; diagnostics include the current-profile residual. The
+  flattening measurement MUST reuse the 6.3 estimator so the shaped-geometry result is
+  comparable with the exact-geometry one.
 
 ## Phase 7 — extreme-anisotropy upgrade *(may run parallel to Phase 8)*
 

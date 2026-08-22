@@ -576,9 +576,10 @@ toroidal to radial raises the finest boundary-normal ratio from
 \(1.05\times10^{-4}\) to 1.32.
 
 This is deliberately the analytic circular-torus baseline. It does not claim that the
-same closed form is tangent to a shaped torus. Before milestone 6.2 admits shaped
-boundaries, it must implement and validate the scalar Neumann correction (or another
-§7.2 harmonic construction) on those geometries.
+same closed form is tangent to a shaped torus. Before the solid-torus milestone (6.5,
+renumbered from 6.2 in the 2026-08-22 Phase-6 reorganization) admits shaped boundaries,
+it must implement and validate the scalar Neumann correction (or another §7.2 harmonic
+construction) on those geometries.
 
 ## Milestone 4.2 — gauge-fixed curl–curl magnetostatics
 
