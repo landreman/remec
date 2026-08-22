@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ngsolve as ng
 import numpy as np
 import pytest
 
@@ -9,8 +10,13 @@ from remec.analytic_equilibria import (
     CerfonFreidbergBoundary,
     CerfonFreidbergShape,
     ZhengShape,
+    recover_smooth_flux_observables,
     solve_cerfon_freidberg,
     solve_zheng_equilibrium,
+)
+from remec.fem._axisymmetric import (
+    AxisymmetricGradShafranovCoefficients,
+    solve_axisymmetric_grad_shafranov,
 )
 from remec.geometry.axisymmetric import AxisymmetricFluxContourDomain
 
@@ -105,6 +111,7 @@ def test_cerfon_freidberg_constraints_operator_and_contour(
         assert equilibrium.radial_derivative(*upper_xpoint) == pytest.approx(0.0, abs=2.0e-11)
         assert equilibrium.vertical_derivative(*upper_xpoint) == pytest.approx(0.0, abs=2.0e-11)
         assert len(contour.corner_indices) == 2
+        assert contour.parameterizations
 
 
 def test_flux_contour_domain_has_one_constant_flux_wall() -> None:
@@ -128,3 +135,42 @@ def test_flux_contour_domain_has_one_constant_flux_wall() -> None:
     assert domain.metadata()["toroidal_discretization"] is None
     assert domain.metadata()["boundary_flux"] == pytest.approx(0.0)
     assert mesh.ngmesh.dim == 2
+
+
+def test_recovered_shape_observables_depend_on_an_interior_flux_level_set() -> None:
+    """Shape recovery rejects zero flux and responds to a homogeneous shape mutation."""
+    equilibrium = solve_zheng_equilibrium(
+        shape=ZhengShape(0.70, 0.49, 1.7, 0.125),
+        poloidal_beta=0.40,
+        plasma_current=1.0e6,
+    )
+    contour = equilibrium.boundary_contour(samples=129)
+    solution = solve_axisymmetric_grad_shafranov(
+        AxisymmetricFluxContourDomain(contour, maxh=0.25, geometry_order=3),
+        polynomial_order=2,
+        coefficients=AxisymmetricGradShafranovCoefficients(
+            pressure_flux_derivative=-equilibrium.a1 / (4.0e-7 * np.pi),
+            toroidal_field_drive=equilibrium.a2,
+            mu0=4.0e-7 * np.pi,
+        ),
+    )
+    mesh = solution._mesh
+    computed_flux = solution._flux
+    baseline = recover_smooth_flux_observables(
+        mesh=mesh,
+        flux=computed_flux,
+        search_contour=contour,
+    )
+    perturbed = recover_smooth_flux_observables(
+        mesh=mesh,
+        flux=computed_flux * (1.0 + 0.35 * (ng.x - equilibrium.shape.major_radius)),
+        search_contour=contour,
+    )
+    assert abs(perturbed.major_radius - baseline.major_radius) > 1.0e-3
+    assert abs(perturbed.triangularity - baseline.triangularity) > 1.0e-3
+    with pytest.raises(ValueError, match="nonzero interior flux"):
+        recover_smooth_flux_observables(
+            mesh=mesh,
+            flux=ng.CoefficientFunction(0.0),
+            search_contour=contour,
+        )

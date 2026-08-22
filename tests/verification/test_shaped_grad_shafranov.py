@@ -123,8 +123,13 @@ def _zheng_row(polynomial_order: int, maxh: float) -> _ErrorRow:
         flux=solution._flux,
         search_contour=contour,
     )
+    exact_observables = recover_smooth_flux_observables(
+        mesh=solution._mesh,
+        flux=exact,
+        search_contour=contour,
+        validate_boundary=False,
+    )
     exact_axis_radius, _ = _ZHENG.magnetic_axis()
-    requested = _ZHENG.shape
     assert solution.free_dof_relative_residual_norm < 1.0e-11
     return _ErrorRow(
         maxh,
@@ -133,10 +138,10 @@ def _zheng_row(polynomial_order: int, maxh: float) -> _ErrorRow:
         energy_error / energy_norm,
         boundary_geometry_error,
         abs(observables.axis_radius - exact_axis_radius),
-        abs(observables.major_radius - requested.major_radius),
-        abs(observables.minor_radius - requested.minor_radius),
-        abs(observables.elongation - requested.elongation),
-        abs(observables.triangularity - requested.triangularity),
+        abs(observables.major_radius - exact_observables.major_radius),
+        abs(observables.minor_radius - exact_observables.minor_radius),
+        abs(observables.elongation - exact_observables.elongation),
+        abs(observables.triangularity - exact_observables.triangularity),
     )
 
 
@@ -219,6 +224,16 @@ def test_shaped_zheng_full_order_scan(polynomial_order: int) -> None:
         assert row.boundary_geometry_error == pytest.approx(
             float(expected["boundary_geometry_error"]), rel=0.1, abs=1.0e-12
         )
+        for observable in (
+            "axis_radius_error",
+            "major_radius_error",
+            "minor_radius_error",
+            "elongation_error",
+            "triangularity_error",
+        ):
+            assert getattr(row, observable) == pytest.approx(
+                float(expected[observable]), rel=0.2, abs=1.0e-10
+            )
 
 
 def _cerfon_xpoint_rows() -> list[_XPointRow]:
@@ -229,7 +244,7 @@ def _cerfon_xpoint_rows() -> list[_XPointRow]:
         boundary=CerfonFreidbergBoundary.DOUBLE_NULL,
     )
     rows: list[_XPointRow] = []
-    for maxh in (0.38, 0.26, 0.18):
+    for maxh in (0.38, 0.26, 0.18, 0.12, 0.08):
         domain = AxisymmetricFluxContourDomain(
             equilibrium.boundary_contour(samples=385),
             maxh=maxh,

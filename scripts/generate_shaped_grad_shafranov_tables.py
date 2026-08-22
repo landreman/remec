@@ -12,7 +12,11 @@ from typing import Any
 def _write(path: Path, rows: list[dict[str, Any]]) -> None:
     """Write one deterministic CSV table."""
     with path.open("w", newline="") as table_file:
-        writer = csv.DictWriter(table_file, fieldnames=list(rows[0]))
+        writer = csv.DictWriter(
+            table_file,
+            fieldnames=list(rows[0]),
+            lineterminator="\n",
+        )
         writer.writeheader()
         writer.writerows(rows)
 

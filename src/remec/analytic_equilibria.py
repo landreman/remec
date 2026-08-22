@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from enum import Enum
+from functools import cache
 from itertools import pairwise
 from math import asin, cos, isfinite, log, pi
 from typing import Any, cast
@@ -360,11 +361,20 @@ def _zheng_quadrature(
     shape: ZhengShape, count: int
 ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
     """Gauss nodes under ``R=R0+a cos(theta)`` to regularize contour endpoints."""
-    nodes, weights = leggauss(count)
+    nodes, weights = _legendre_rule(count)
     angle = 0.5 * pi * (nodes + 1.0)
     radius = shape.major_radius + shape.minor_radius * np.cos(angle)
     transformed_weights = 0.5 * pi * weights * shape.minor_radius * np.sin(angle)
     return radius, transformed_weights
+
+
+@cache
+def _legendre_rule(count: int) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    """Cache the immutable Gauss--Legendre rule shared by Zheng coefficient trials."""
+    nodes, weights = leggauss(count)
+    nodes.setflags(write=False)
+    weights.setflags(write=False)
+    return nodes, weights
 
 
 def _zheng_shape_coefficients(shape: ZhengShape, a1: float, a2: float) -> NDArray[np.float64]:
@@ -506,6 +516,11 @@ class CerfonFreidbergShape:
         )
 
 
+# Cerfon--Freidberg Eq. (8) homogeneous basis, in order:
+# 1, R², Z²-R²logR, R⁴-4R²Z²,
+# 2Z⁴-9R²Z²+3R⁴logR-12R²Z²logR,
+# R⁶-12R⁴Z²+8R²Z⁴, and
+# 8Z⁶-140R²Z⁴+75R⁴Z²-15R⁶logR+180R⁴Z²logR-120R²Z⁴logR.
 _CERFON_BASES: tuple[tuple[_Term, ...], ...] = (
     ((1.0, 0, 0, False),),
     ((1.0, 2, 0, False),),
@@ -696,13 +711,13 @@ class CerfonFreidbergEquilibrium:
         corner_indices = tuple(
             int(np.argmin(np.abs(angles - corner_angle))) for corner_angle in corner_angles
         )
-        if corner_angles:
-            return FluxContour(radius, height, corner_indices)
         parameterizations: list[Callable[[float], tuple[float, float]]] = []
-        intervals = [(0.0, 2.0 * pi)]
+        interval_edges = (0.0, *sorted(corner_angles), 2.0 * pi)
+        intervals = list(pairwise(interval_edges))
         subdivided_intervals: list[tuple[float, float]] = []
         for start, stop in intervals:
-            edges = np.linspace(start, stop, 17)
+            subdivisions = max(1, int(np.ceil(16.0 * (stop - start) / (2.0 * pi))))
+            edges = np.linspace(start, stop, subdivisions + 1)
             subdivided_intervals.extend(
                 (float(left), float(right)) for left, right in pairwise(edges)
             )
@@ -794,6 +809,7 @@ def _cerfon_constraint_functions(
     shape: CerfonFreidbergShape,
     boundary: CerfonFreidbergBoundary,
 ) -> tuple[Callable[[Sequence[_Term]], float], ...]:
+    """Return paper Eqs. (10)--(12), with ``n1,n2,n3`` from Eq. (11)."""
     epsilon = shape.inverse_aspect_ratio
     inner, outer = shape.inner_radius, shape.outer_radius
     top_radius, top_height = shape.top_point
@@ -888,7 +904,7 @@ def solve_cerfon_freidberg(
 
 @dataclass(frozen=True, slots=True)
 class SmoothFluxObservables:
-    """Axis and boundary-shape measurements recovered from a computed ``Psi_h``."""
+    """Axis and interior-level-set measurements recovered from a computed ``Psi_h``."""
 
     axis_radius: float
     axis_flux: float
@@ -899,53 +915,99 @@ class SmoothFluxObservables:
     boundary_flux_rms: float
 
 
+def _ray_distance_to_contour(
+    contour: FluxContour,
+    origin: tuple[float, float],
+    angle: float,
+) -> float:
+    """Return the first positive intersection of a ray with a sampled contour."""
+    direction_radius, direction_height = np.cos(angle), np.sin(angle)
+    start_radius = contour.radius
+    start_height = contour.height
+    edge_radius = np.roll(start_radius, -1) - start_radius
+    edge_height = np.roll(start_height, -1) - start_height
+    relative_radius = start_radius - origin[0]
+    relative_height = start_height - origin[1]
+    denominator = direction_radius * edge_height - direction_height * edge_radius
+    nonparallel = np.abs(denominator) > 1.0e-14
+    distance = np.full(denominator.shape, np.inf)
+    segment_parameter = np.full(denominator.shape, np.inf)
+    distance[nonparallel] = (
+        relative_radius[nonparallel] * edge_height[nonparallel]
+        - relative_height[nonparallel] * edge_radius[nonparallel]
+    ) / denominator[nonparallel]
+    segment_parameter[nonparallel] = (
+        relative_radius[nonparallel] * direction_height
+        - relative_height[nonparallel] * direction_radius
+    ) / denominator[nonparallel]
+    valid = (
+        (distance > 0.0) & (segment_parameter >= -1.0e-12) & (segment_parameter <= 1.0 + 1.0e-12)
+    )
+    if not np.any(valid):
+        raise ValueError(f"failed to intersect shaped contour at angle {angle}")
+    return float(np.min(distance[valid]))
+
+
+def _flux_level_ray_distance(
+    *,
+    mesh: Any,
+    flux: Any,
+    origin: tuple[float, float],
+    angle: float,
+    boundary_distance: float,
+    target_flux: float,
+    radial_samples: int,
+) -> float:
+    """Locate the first ``Psi_h=target_flux`` crossing along one interior ray."""
+    cosine, sine = np.cos(angle), np.sin(angle)
+
+    def residual(distance: float) -> float:
+        return (
+            float(flux(mesh(origin[0] + distance * cosine, origin[1] + distance * sine)))
+            - target_flux
+        )
+
+    distances = np.linspace(0.0, 0.999 * boundary_distance, radial_samples)
+    values = _float_array([residual(float(distance)) for distance in distances])
+    crossings = np.flatnonzero(values[:-1] * values[1:] <= 0.0)
+    if crossings.size == 0:
+        raise ValueError(f"failed to close computed interior flux level at angle {angle}")
+    index = int(crossings[0])
+    lower, upper = float(distances[index]), float(distances[index + 1])
+    lower_value = float(values[index])
+    for _ in range(45):
+        middle = 0.5 * (lower + upper)
+        middle_value = residual(middle)
+        if lower_value * middle_value <= 0.0:
+            upper = middle
+        else:
+            lower, lower_value = middle, middle_value
+    return 0.5 * (lower + upper)
+
+
 def recover_smooth_flux_observables(
     *,
     mesh: Any,
     flux: Any,
     search_contour: FluxContour,
     axis_samples: int = 2001,
+    angular_samples: int = 65,
+    radial_samples: int = 33,
+    level_fraction: float = 0.05,
+    validate_boundary: bool = True,
 ) -> SmoothFluxObservables:
-    """Recover axis/shape observables from the computed homogeneous-Dirichlet ``Psi_h``.
+    """Recover axis and shape from an interior level set of computed ``Psi_h``.
 
-    Boundary coordinates come from the computed mesh, and only vertices at which
-    the supplied finite-element flux is its homogeneous boundary value are used.
-    The axis is independently recovered from the finite-element midplane field.
+    The axis is found from the midplane field.  Major/minor radius, elongation,
+    and triangularity are then measured on ``Psi_h=level_fraction*Psi_axis`` by
+    ray tracing from that axis; mesh-boundary coordinates only bracket the rays.
     """
     import ngsolve as ng
 
-    boundary_nodes = {vertex.nr for element in mesh.Elements(ng.BND) for vertex in element.vertices}
-    vertex_coordinates = np.asarray(
-        [tuple(mesh[ng.NodeId(ng.VERTEX, node)].point) for node in boundary_nodes]
-    )
-    boundary_rule = ng.IntegrationRule(ng.ET.SEGM, 20)
-    mapped_boundary = mesh.MapToAllElements({ng.ET.SEGM: boundary_rule}, ng.BND)
-    mapped_coordinates = np.column_stack(
-        (
-            np.asarray(ng.x(mapped_boundary), dtype=float).ravel(),
-            np.asarray(ng.y(mapped_boundary), dtype=float).ravel(),
-        )
-    )
-    coordinates = np.vstack((vertex_coordinates, mapped_coordinates))
-    radius = coordinates[:, 0]
-    height = coordinates[:, 1]
-    boundary_values = np.concatenate(
-        (
-            np.asarray([float(flux(mesh(float(r), float(z)))) for r, z in vertex_coordinates]),
-            np.asarray(flux(mapped_boundary), dtype=float).ravel(),
-        )
-    )
-    scale = max(1.0e-300, float(np.max(np.abs(boundary_values))))
-    boundary_flux_rms = float(np.sqrt(np.mean(boundary_values**2)))
-    if not np.all(np.isfinite(boundary_values)) or boundary_flux_rms > 1.0e-8 * max(1.0, scale):
-        raise ValueError("computed flux is not homogeneous on the supplied shaped boundary")
-
-    inner, outer = float(np.min(radius)), float(np.max(radius))
-    major_radius = 0.5 * (inner + outer)
-    minor_radius = 0.5 * (outer - inner)
-    top_index = int(np.argmax(height))
-    top_radius = float(radius[top_index])
-    top_height = float(height[top_index])
+    if axis_samples < 33 or angular_samples < 9 or radial_samples < 8:
+        raise ValueError("flux-observable sampling counts are too small")
+    if not 0.0 < level_fraction < 1.0:
+        raise ValueError("level_fraction must lie strictly between zero and one")
 
     contour_inner, contour_outer = search_contour.radial_bounds
     margin = 0.03 * (contour_outer - contour_inner)
@@ -959,7 +1021,62 @@ def recover_smooth_flux_observables(
     midplane_values = _float_array(
         [float(flux(mesh(float(value), 0.0))) for value in midplane_radius]
     )
+    interior_scale = float(np.max(np.abs(midplane_values)))
+    if not np.all(np.isfinite(midplane_values)) or interior_scale <= np.finfo(float).tiny:
+        raise ValueError("shape recovery requires nonzero interior flux")
     axis_radius, axis_flux = _refined_absolute_extremum(midplane_radius, midplane_values)
+
+    boundary_nodes = {vertex.nr for element in mesh.Elements(ng.BND) for vertex in element.vertices}
+    vertex_coordinates = np.asarray(
+        [tuple(mesh[ng.NodeId(ng.VERTEX, node)].point) for node in boundary_nodes]
+    )
+    boundary_rule = ng.IntegrationRule(ng.ET.SEGM, 20)
+    mapped_boundary = mesh.MapToAllElements({ng.ET.SEGM: boundary_rule}, ng.BND)
+    boundary_values = np.concatenate(
+        (
+            np.asarray([float(flux(mesh(float(r), float(z)))) for r, z in vertex_coordinates]),
+            np.asarray(flux(mapped_boundary), dtype=float).ravel(),
+        )
+    )
+    boundary_flux_rms = float(np.sqrt(np.mean(boundary_values**2)))
+    if not np.all(np.isfinite(boundary_values)) or (
+        validate_boundary and boundary_flux_rms > 1.0e-5 * abs(axis_flux)
+    ):
+        raise ValueError("computed flux is not homogeneous on the supplied shaped boundary")
+
+    origin = (axis_radius, 0.0)
+    target_flux = level_fraction * axis_flux
+
+    def level_distance(angle: float) -> float:
+        return _flux_level_ray_distance(
+            mesh=mesh,
+            flux=flux,
+            origin=origin,
+            angle=angle,
+            boundary_distance=_ray_distance_to_contour(search_contour, origin, angle),
+            target_flux=target_flux,
+            radial_samples=radial_samples,
+        )
+
+    outer = axis_radius + level_distance(0.0)
+    inner = axis_radius - level_distance(pi)
+    major_radius = 0.5 * (inner + outer)
+    minor_radius = 0.5 * (outer - inner)
+    angles = np.linspace(0.0, pi, angular_samples)
+    level_distances = _float_array([level_distance(float(angle)) for angle in angles])
+    level_heights = level_distances * np.sin(angles)
+    top_index = int(np.argmax(level_heights))
+    top_angle = float(angles[top_index])
+    if 0 < top_index < angular_samples - 1:
+        previous, center, following = level_heights[top_index - 1 : top_index + 2]
+        denominator = previous - 2.0 * center + following
+        if denominator != 0.0:
+            step = float(angles[1] - angles[0])
+            offset = 0.5 * (previous - following) / denominator * step
+            top_angle += float(np.clip(offset, -step, step))
+    top_distance = level_distance(top_angle)
+    top_radius = axis_radius + top_distance * float(np.cos(top_angle))
+    top_height = top_distance * float(np.sin(top_angle))
     return SmoothFluxObservables(
         axis_radius,
         axis_flux,
