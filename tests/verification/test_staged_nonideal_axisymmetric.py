@@ -10,6 +10,7 @@ import numpy as np
 import pytest
 
 from remec.analytic_equilibria import ZhengShape, solve_zheng_equilibrium
+from remec.profiles import TabulatedPressureProfile
 from remec.solvers.axisymmetric_nonideal import (
     _ZhengContinuationContext,
     run_zheng_nonideal_continuation,
@@ -28,7 +29,7 @@ def _recorded() -> dict[tuple[int, float], dict[str, float]]:
     with _TABLE.open(newline="") as table_file:
         return {
             (int(row["profile_index"]), float(row["pressure_amplitude"])): {
-                key: float(value) for key, value in row.items() if key != "profile_index"
+                key: float(value) for key, value in row.items() if key != "profile_index" and value
             }
             for row in csv.DictReader(table_file)
         }
@@ -73,6 +74,40 @@ def test_axisymmetric_m4a_anisotropy_is_live() -> None:
     assert relative_difference > 1.0e-4
 
 
+def test_pressure_profile_realization_error_is_independently_measured() -> None:
+    """Doubling the prescribed p0 shape fails the analytic Zheng pressure oracle."""
+    equilibrium = solve_zheng_equilibrium(
+        shape=ZhengShape(0.70, 0.49, 1.7, 0.125),
+        poloidal_beta=0.40,
+        plasma_current=0.8e6,
+    )
+    context = _ZhengContinuationContext(equilibrium, maxh=0.32, polynomial_order=2)
+    stage = _STAGES[0]
+    psi, toroidal_field = context.fields_from_state(context.initial_state(stage))
+    magnetic_field = context.magnetic_field(psi, toroidal_field)
+    chi, volume_map, mapped_points, _ = context.solve_reference_potential(
+        magnetic_field, stage.perpendicular_ratio
+    )
+    context._last_chi = chi
+    pressure, current = context.profiles(stage)
+    edge_pressure = float(pressure.pressures[-1])
+    doubled = TabulatedPressureProfile(
+        pressure.normalized_volumes,
+        tuple(edge_pressure + 2.0 * (value - edge_pressure) for value in pressure.pressures),
+    )
+    result = context.solve_current(
+        magnetic_field,
+        doubled,
+        current,
+        volume_map,
+        mapped_points,
+        stage=stage,
+        current_diffusivity=stage.current_diffusivity,
+    )
+
+    assert result.pressure_profile_error > 0.9
+
+
 @pytest.mark.slow
 @pytest.mark.parametrize("plasma_current", [0.8e6, 1.0e6])
 def test_shaped_nonideal_continuation_realizes_two_i0_targets_and_ideal_limit(
@@ -91,8 +126,8 @@ def test_shaped_nonideal_continuation_realizes_two_i0_targets_and_ideal_limit(
     assert all(row.pressure_profile_error < 1.0e-10 for row in rows)
     assert all(row.current_profile_error < 1.0e-10 for row in rows)
     assert all(row.projected_current_profile_error < 1.0e-10 for row in rows)
-    assert all(row.minimum_current_layer_cells >= 6.0 for row in rows)
-    assert all(row.minimum_pressure_layer_cells >= 6.0 for row in rows)
+    assert all(row.minimum_current_layer_cells is None for row in rows)
+    assert all(row.minimum_pressure_layer_cells is None for row in rows)
     assert all(
         fine.projection_correction_relative_norm < coarse.projection_correction_relative_norm
         for coarse, fine in pairwise(rows)

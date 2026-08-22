@@ -56,8 +56,8 @@ class ContinuationStageResult:
     nonideal_to_analytic_relative_l2_error: float
     ideal_fem_to_analytic_relative_l2_error: float
     nonideal_to_ideal_fem_relative_l2_difference: float
-    minimum_current_layer_cells: float
-    minimum_pressure_layer_cells: float
+    minimum_current_layer_cells: float | None
+    minimum_pressure_layer_cells: float | None
     rejected_acceleration_attempts: int = 0
 
 
@@ -236,11 +236,14 @@ class StagedContinuationSolver:
             row.nonideal_to_analytic_relative_l2_error,
             row.ideal_fem_to_analytic_relative_l2_error,
             row.nonideal_to_ideal_fem_relative_l2_difference,
-            row.minimum_current_layer_cells,
-            row.minimum_pressure_layer_cells,
         )
         if any(not isfinite(value) or value < 0.0 for value in scalar_values):
             raise ValueError("continuation diagnostics must be finite and non-negative")
+        layer_values = (row.minimum_current_layer_cells, row.minimum_pressure_layer_cells)
+        if any(
+            value is not None and (not isfinite(value) or value < 0.0) for value in layer_values
+        ):
+            raise ValueError("applicable layer diagnostics must be finite and non-negative")
         if row.nonlinear_iterations < 1 or row.rejected_acceleration_attempts < 0:
             raise ValueError("iteration and rejection counts are invalid")
         gates = (
@@ -266,9 +269,15 @@ class StagedContinuationSolver:
                 raise ContinuationAcceptanceError(
                     f"{name} error {value:.3e} exceeds {tolerance:.3e}"
                 )
-        if row.minimum_current_layer_cells < self.options.minimum_layer_cells:
+        if (
+            row.minimum_current_layer_cells is not None
+            and row.minimum_current_layer_cells < self.options.minimum_layer_cells
+        ):
             raise ContinuationAcceptanceError("current layer resolution is below the gate")
-        if row.minimum_pressure_layer_cells < self.options.minimum_layer_cells:
+        if (
+            row.minimum_pressure_layer_cells is not None
+            and row.minimum_pressure_layer_cells < self.options.minimum_layer_cells
+        ):
             raise ContinuationAcceptanceError("pressure layer resolution is below the gate")
         if previous is None:
             return

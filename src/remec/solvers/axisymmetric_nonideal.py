@@ -64,6 +64,7 @@ class _CurrentSolution:
     physical_current: Any
     target_current: FloatArray
     measured_current: FloatArray
+    pressure_profile_error: float
     relative_m3_residual: float
     relative_m3b_residual: float
 
@@ -333,6 +334,7 @@ class _ZhengContinuationContext:
         volume_map: MollifiedVolumeMap,
         mapped_points: Any,
         *,
+        stage: ContinuationStage,
         current_diffusivity: float,
     ) -> _CurrentSolution:
         r"""Solve bordered ``axi_M3``--``(M3b)`` and reconstruct physical ``(M2)``."""
@@ -349,7 +351,19 @@ class _ZhengContinuationContext:
             pressure_profile.normalized_volumes,
             pressure_profile.pressures,
         )
-        del pressure
+        realized_pressure = _sample_scalar(pressure, mapped_points)
+        expected_levels = np.interp(
+            volume_map.quadrature_normalized_volume,
+            self.pressure_nodes,
+            self.reference_level_nodes,
+        )
+        expected_pressure = (
+            1.0e3 - stage.pressure_amplitude**2 * self.equilibrium.a1 * expected_levels / _MU0
+        )
+        pressure_scale = max(1.0e-300, float(np.ptp(expected_pressure)))
+        pressure_profile_error = float(
+            np.max(np.abs(realized_pressure - expected_pressure)) / pressure_scale
+        )
         pressure_gradient = ng.CoefficientFunction(
             (pressure_gradient_2d[0], pressure_gradient_2d[1], 0.0)
         )
@@ -482,6 +496,7 @@ class _ZhengContinuationContext:
             physical_current,
             target,
             independent,
+            pressure_profile_error,
             relative_m3,
             relative_m3b,
         )
@@ -661,6 +676,7 @@ class _ZhengContinuationContext:
                 current_profile,
                 volume_map,
                 mapped_points,
+                stage=stage,
                 current_diffusivity=stage.current_diffusivity,
             )
             (
@@ -692,15 +708,11 @@ class _ZhengContinuationContext:
         assert current_solution is not None
         ideal_fem = self.ideal_fem(stage)
         analytic = stage.pressure_amplitude * self.reference_flux
-        pressure_error = 0.0
         current_error = float(
             np.max(np.abs(current_solution.measured_current - current_solution.target_current))
         )
         projected_current_error = float(
             np.max(np.abs(projected_current - current_solution.target_current))
-        )
-        minor_diameter_cells = (
-            2.0 * self.equilibrium.shape.minor_radius * self.polynomial_order / self.domain.maxh
         )
         return ContinuationStageResult(
             stage=stage,
@@ -711,7 +723,7 @@ class _ZhengContinuationContext:
             m3b_relative_residual=current_solution.relative_m3b_residual,
             m4a_relative_residual=m4a_residual,
             fixed_point_residual_norm=max(fixed_residual, m1_residual),
-            pressure_profile_error=pressure_error,
+            pressure_profile_error=current_solution.pressure_profile_error,
             current_profile_error=current_error,
             projected_current_profile_error=projected_current_error,
             target_total_current=float(current_solution.target_current[-1]),
@@ -719,8 +731,11 @@ class _ZhengContinuationContext:
             nonideal_to_analytic_relative_l2_error=self.relative_l2(psi, analytic),
             ideal_fem_to_analytic_relative_l2_error=self.relative_l2(ideal_fem, analytic),
             nonideal_to_ideal_fem_relative_l2_difference=self.relative_l2(psi, ideal_fem),
-            minimum_current_layer_cells=minor_diameter_cells,
-            minimum_pressure_layer_cells=minor_diameter_cells,
+            # This smooth nested-surface case contains neither a resonant M3 layer
+            # nor an island-flattening M4 layer.  A domain-width count is not a layer
+            # diagnostic, so both fields are explicitly not applicable here.
+            minimum_current_layer_cells=None,
+            minimum_pressure_layer_cells=None,
             rejected_acceleration_attempts=rejected_acceleration_attempts,
         )
 
@@ -742,6 +757,7 @@ def run_zheng_nonideal_continuation(
     stages: Sequence[ContinuationStage],
     maxh: float = 0.18,
     polynomial_order: int = 2,
+    require_decreasing_projection_correction: bool = True,
 ) -> StagedContinuationResult:
     r"""Run milestone 5.5 on one smooth Zheng ``psi=0`` shaped boundary.
 
@@ -772,7 +788,7 @@ def run_zheng_nonideal_continuation(
             residual_tolerance=1.0e-8,
             profile_tolerance=1.0e-10,
             minimum_layer_cells=6.0,
-            require_decreasing_projection_correction=True,
+            require_decreasing_projection_correction=require_decreasing_projection_correction,
         ),
     )
     return solver.solve(context.initial_state(stage_tuple[0]))

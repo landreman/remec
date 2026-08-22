@@ -108,6 +108,26 @@ def test_axisymmetric_run_requires_a_nonempty_schedule() -> None:
         run_zheng_nonideal_continuation(plasma_current=0.8e6, stages=())
 
 
+def test_absent_critical_layers_skip_only_the_layer_gates() -> None:
+    """A smooth nested case may report layer diagnostics as not applicable."""
+    builds: list[ContinuationStage] = []
+
+    class SmoothNested(_StageSolver):
+        def solve(self, initial_state: np.ndarray) -> ContinuationStageResult:
+            return replace(
+                super().solve(initial_state),
+                minimum_current_layer_cells=None,
+                minimum_pressure_layer_cells=None,
+            )
+
+    result = StagedContinuationSolver(
+        lambda stage: SmoothNested(stage, builds),
+        options=StagedContinuationOptions(_schedule()),
+    ).solve(np.asarray((0.0, 0.0)))
+
+    assert all(row.minimum_current_layer_cells is None for row in result.stages)
+
+
 @pytest.mark.parametrize(
     "stages, message",
     [
