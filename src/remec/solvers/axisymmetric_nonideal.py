@@ -580,10 +580,12 @@ class _ZhengContinuationContext:
 
         The raw ``(M2)`` toroidal current is first mapped through the scalar
         Grad--Shafranov operator.  Four shell-local response columns then correct the
-        strong discrete curl so its independently re-integrated ``(M3b)`` moments equal
-        ``I_0``.  The poloidal current is projected through the companion ``I=R B_phi``
-        potential, so the returned current is a curl representation and therefore
-        divergence-free by construction. The weak forms are
+        strong discrete curl so its same-quadrature ``(M3b)`` moments equal ``I_0``;
+        this equality is a discrete identity, while the correction norm measures the
+        physical mismatch and carries the ADR gate.  The poloidal current is projected
+        through the companion ``I=R B_phi`` potential, so the returned current is a
+        curl representation and therefore divergence-free by construction. The weak
+        forms are
         ``int grad(psi).grad(v)/R = int mu0 J_phi v + shell corrections`` and
         ``int grad(I).grad(q)/R = int (mu0 R J_Z,-mu0 R J_R).grad(q)/R``.
         The ``(Igrad)`` constant mode is fixed by the prescribed note-§11.2 condition

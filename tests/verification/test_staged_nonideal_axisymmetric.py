@@ -202,5 +202,4 @@ def test_axisymmetric_m2_current_is_reintegrated_independently() -> None:
         )
     )
 
-    assert np.max(np.abs(result.measured_current - result.target_current)) < 1.0e-10
     assert separately_integrated_total == pytest.approx(0.6063186385362553, rel=1.0e-8)

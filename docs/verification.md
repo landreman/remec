@@ -50,11 +50,12 @@ stagewise total `I_0` targets are respectively
 `0.753980 -> 1.005307 -> 1.256634`.
 
 The current passed to Ampère is a compatible scalar-curl representation. Four shell-local
-response columns correct its toroidal part, after which a strong discrete curl is
-independently re-integrated with the shared mollified shell weights. Both the raw M2
-current and this projected current realize every `I_0(s)` row below
-`4.5e-16` absolute error. Along the operational pressure ramp the relative
-projection-correction norms decrease
+response columns correct its toroidal part so the strong discrete curl's moments match
+`I_0(s)` under the same mapped quadrature. This match is a discrete identity, not an
+independent oracle; the separately pinned order-8 total-current integral detects M2
+mutations, while the projection-correction norm measures the physical mismatch and
+carries the ADR gate. The same-quadrature shell residuals are below `4.5e-16` absolute
+error. Along the operational pressure ramp the relative projection-correction norms decrease
 from 0.21429 to 0.20700 for the 0.8-MA target and from 0.21401 to 0.20488 for the
 1.0-MA target. Because pressure changes on that path, a separate fixed-parameter mesh
 study owns the §27.4 convergence claim:
