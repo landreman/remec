@@ -651,9 +651,14 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   `tests/verification/axisymmetric_nonideal_continuation.csv`,
   `tests/verification/axisymmetric_nonideal_refinement.csv`, and
   `docs/verification.md`.
-  <br>Blocked: ADR 0006 requires human sign-off on the axisymmetric `I=R B_phi` flux
-  constraint and whether the monitored compatible-current correction remains scalar or
-  escalates to a mixed u--J closure. Do not start Phase 6 from this adapter until decided.
+  <br>Decided 2026-08-22: ADR 0006 Option 1 approved — free-I trace with one bordered
+  prescribed-Ψ_t constraint, monitored scalar correction retained. Remaining 5.5 work:
+  implement the free-trace solve, regenerate the five-mesh refinement study and the
+  fixed-pressure regularization ladder extended to D_u ≤ 0.00375 / ε_κ ≤ 0.0075, and
+  evaluate the three binding escalation criteria in ADR 0006 (correction fine-rate ≥ 1.0
+  and finest correction ≤ 0.10; final-stage field error ≥ 20% below first-stage on the
+  extended ladder; relative Ψ_t residual ≤ 1e-10 in every accepted row). If any trigger
+  fires, schedule the mixed u--J closure (ADR 0006 Option 2) before the Phase-6 gate.
 
 ## Phase 6 — 3D fixed boundary
 
@@ -763,4 +768,4 @@ within the 5 min full-suite budget.
 | 0003 | 2.3 | Must the M4b mollifier-width JVP differentiate `epsilon = c h |grad chi|`? | Option 1 accepted |
 | 0004 | 4.4 | What terminal space/constraint makes curved HDiv current strongly divergence-free? | Option 4 superseded by ADR 0005 |
 | 0005 | 4.4 | Does the paired ordinary-L2 constraint coerce curved HDiv divergence pointwise to zero? | Option 1 approved |
-| 0006 | 5.5 | Should axisymmetric Ampère use a free-I flux constraint or mixed u--J closure? | Pending human sign-off |
+| 0006 | 5.5 | Should axisymmetric Ampère use a free-I flux constraint or mixed u--J closure? | Approved 2026-08-22: Option 1 (free-I trace + bordered Ψ_t constraint), with binding numeric escalation criteria to Option 2 |

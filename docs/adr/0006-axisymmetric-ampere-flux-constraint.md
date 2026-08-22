@@ -79,4 +79,39 @@ current correction or the field-error floor unchanged under a longer fixed-press
 regularization ladder, follow the existing §27.4 trigger and schedule Option 2 before
 the Phase-6 gate. Do not choose Option 3 without explicitly revising the milestone.
 
-DECISION: pending human sign-off
+## Escalation criteria (binding)
+
+The §27.4 escalation clause above is quantified here so that the Option-1 → Option-2
+decision is mechanical, not a fresh judgment call. Baselines are the constant-trace
+measurements recorded in `docs/STATUS.md` (milestone 5.5) and
+`tests/verification/axisymmetric_nonideal_refinement.csv`: finest-mesh (564-element)
+relative compatible-current correction 0.07555 with fine effective-h rates 2.170 and
+2.483; final-stage non-ideal/analytic L² errors 0.24109 and 0.23377; fixed-pressure
+regularization-only ladder 0.32151 → 0.31796 → 0.30704 over D_u 0.060 → 0.015.
+
+After the Option-1 free-trace solve lands, regenerate the five-mesh refinement study
+and extend the fixed-pressure regularization ladder by at least two further halvings of
+both D_u and epsilon_kappa (to D_u ≤ 0.00375, epsilon_kappa ≤ 0.0075), holding mesh,
+pressure amplitude, and I₀ targets fixed. **Schedule Option 2 before the Phase-6 gate
+if any of the following holds:**
+
+1. **Current correction fails to converge.** The least-squares effective-h rate over
+   the three finest meshes of the regenerated study falls below 1.0, or the finest-mesh
+   relative correction exceeds 0.10 (i.e. is no better than ~1.3x the constant-trace
+   baseline of 0.07555).
+2. **Field-error floor is unchanged.** Over the extended fixed-pressure ladder, the
+   non-ideal/analytic L² error at the final stage is not at least 20% below its
+   first-stage value, or the error is non-monotone across the extended ladder by more
+   than 2% of its running minimum.
+3. **Flux constraint is not algebraically tight.** The relative toroidal-flux residual
+   |Ψ_t,discrete − Ψ_t,prescribed| / |Ψ_t,prescribed| exceeds 1e-10 in any accepted
+   continuation row. This is a hard invariant of the bordered solve: a violation is a
+   solver defect to fix, and if it cannot be fixed within the scalar formulation it is
+   also an escalation trigger.
+
+If none of the three triggers fires, milestone 5.5 closes on the scalar Option-1
+formulation and the mixed u--J closure remains a deferred §27.4 contingency. Relaxing
+any threshold above requires amending this ADR with a new human sign-off, per the STOP
+conditions in `CLAUDE.md`.
+
+DECISION: option 1 approved, with the escalation criteria above binding.
