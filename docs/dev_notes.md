@@ -284,3 +284,11 @@
   `MollifiedVolumeMap.build` retain the `1.5` default. Doubling the benchmark partition
   from four to eight shells at `maxh=0.18` exhausts the 40-step Picard limit; shell-count
   refinement therefore remains an explicitly recorded resolution limitation.
+
+- Milestone 5.5 checkpoint portability (Netgen/NGSolve 6.2.2606): repeated shaped
+  `maxh=0.10` meshes can have the same H¹ dimension but different edge connectivity or
+  DOF ordering across Python-wheel builds (observed on macOS CPython 3.10 versus 3.12+
+  and Linux). A raw `GridFunction.vec` is therefore a valid restart only on the exact
+  serialized mesh that owns it. Cross-wheel verification checkpoints store vertex/edge
+  coordinates with their H¹ coefficients and reconstruct a warm start by local
+  quadratic interpolation; never infer portability from matching `ndof` alone.

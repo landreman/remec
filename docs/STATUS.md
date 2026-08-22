@@ -754,10 +754,10 @@ not-slow item exceeds ~20 s, and no existing `slow` test touches the new
 backend-independent Anderson module.
 
 Measured 2026-08-22 on `milestone/5.5-staged-continuation-nonideal`: final Option-1
-`make check` passes all 288 not-slow tests in 64.08 s ✅. The slowest items are the
-shaped non-ideal sentinel at 18.27 s and the curved-torus current projection at 13.64 s.
-`make test-full` passes all 308 tests in 289.87 s ✅; its longest slow tests are the
-first two overlapping fixed-pressure ladder segments at 68.50 s and 61.30 s. An initial
+`make check` passes all 288 not-slow tests in 65.18 s ✅. The slowest items are the
+shaped non-ideal sentinel at 18.51 s and the curved-torus current projection at 13.74 s.
+`make test-full` passes all 308 tests in 295.75 s ✅; its longest slow tests are the
+first two overlapping fixed-pressure ladder segments at 67.44 s and 61.97 s. An initial
 literal recomputation of every fine-table row took 477.30 s and contained 105--168 s
 individual tests. The final suite hoists the two mesh-constant Ampère factorizations,
 runs cold-start acceptance rows and bounded ladder segments nightly, and uses checked-in

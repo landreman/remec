@@ -174,6 +174,80 @@ def check_refinement_restart(maxh: float, state_filename: str) -> None:
         plasma_current=0.8e6,
     )
     context = _ZhengContinuationContext(equilibrium, maxh=maxh, polynomial_order=2)
+    _check_refinement_row(context, restart, maxh)
+
+
+def check_refinement_coordinate_restart(maxh: float, state_filename: str) -> None:
+    """Remap a fine checkpoint by topological-node coordinates, then recompute its row."""
+    records = np.loadtxt(
+        Path(__file__).with_name(state_filename),
+        delimiter=",",
+        skiprows=1,
+        dtype=float,
+    )
+    equilibrium = solve_zheng_equilibrium(
+        shape=ZhengShape(0.70, 0.49, 1.7, 0.125),
+        poloidal_beta=0.40,
+        plasma_current=0.8e6,
+    )
+    context = _ZhengContinuationContext(equilibrium, maxh=maxh, polynomial_order=2)
+    source_coordinates = records[:, 1:3]
+    source_values = records[:, 3:5]
+    vertex_points = {vertex.nr: tuple(map(float, vertex.point)) for vertex in context.mesh.vertices}
+    restart = np.zeros(context.ndof + context.toroidal_ndof, dtype=float)
+
+    def interpolate(radius: float, height: float) -> np.ndarray:
+        offset = source_coordinates - (radius, height)
+        distance_squared = np.sum(offset**2, axis=1)
+        closest = int(np.argmin(distance_squared))
+        if distance_squared[closest] < 1.0e-20:
+            return source_values[closest]
+        nearest = np.argpartition(distance_squared, 12)[:12]
+        scale = float(np.sqrt(np.max(distance_squared[nearest])))
+        radial = offset[nearest, 0] / scale
+        vertical = offset[nearest, 1] / scale
+        design = np.column_stack(
+            (
+                np.ones(len(nearest)),
+                radial,
+                vertical,
+                radial**2,
+                radial * vertical,
+                vertical**2,
+            )
+        )
+        weight = 1.0 / (0.1 + np.sqrt(distance_squared[nearest]) / scale)
+        coefficients = np.linalg.lstsq(
+            design * weight[:, None],
+            source_values[nearest] * weight[:, None],
+            rcond=None,
+        )[0]
+        return coefficients[0]
+
+    for kind, entities in ((0, context.mesh.vertices), (1, context.mesh.edges)):
+        for entity in entities:
+            if kind == 0:
+                radius, height = vertex_points[entity.nr]
+            else:
+                endpoints = [vertex_points[vertex.nr] for vertex in entity.vertices]
+                radius = sum(point[0] for point in endpoints) / 2.0
+                height = sum(point[1] for point in endpoints) / 2.0
+            psi_value, toroidal_value = interpolate(radius, height)
+            psi_dof = context.scalar_space.GetDofNrs(entity)[0]
+            toroidal_dof = context.toroidal_space.GetDofNrs(entity)[0]
+            restart[psi_dof] = psi_value
+            restart[context.ndof + toroidal_dof] = toroidal_value
+    for dof, free in enumerate(context.scalar_space.FreeDofs()):
+        if not free:
+            restart[dof] = 0.0
+    _check_refinement_row(context, restart, maxh)
+
+
+def _check_refinement_row(
+    context: _ZhengContinuationContext,
+    restart: np.ndarray,
+    maxh: float,
+) -> None:
     row = context.solve_stage(ContinuationStage(1.0, 0.015, 0.030), restart)
     with _TABLE.open(newline="") as table_file:
         record = next(
