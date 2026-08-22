@@ -5,6 +5,17 @@
 > descriptions of NGSolve expression behavior, but not of the production current-profile
 > closure. Follow `DESIGN.md` §9.2 and `STATUS.md` milestones 3.5–3.6.
 
+- Milestone 5.5 (NGSolve 6.2.2606): for a reduced axisymmetric volume map,
+  `extract_ngsolve_quadrature` supplies the R--Z area weights and deterministic mapped-
+  point ordering; multiply those weights by `2*pi*R` before building
+  `MollifiedVolumeMap` so M4b and M3b share the physical toroidal volume coordinate.
+  `GridFunction.Operator("hesse")` supplies the element-interior Hessian needed to
+  independently evaluate the strong discrete
+  `Delta*psi=psi_RR-psi_R/R+psi_ZZ`. A plain scalar GS mass projection does not preserve
+  mollified shell-current moments pointwise. Reuse its sparse inverse for one shell-local
+  response per constraint, solve the small response matrix, and re-integrate the corrected
+  strong curl; on the shaped benchmark this retains projected M3b moments below 5e-16.
+
 - Milestone 5.4 (Netgen/NGSolve 6.2.2606): `SplineGeometry.AddCurve` accepts a
   Python parameterization and works for one shaped solve, but repeatedly constructing
   many callback-backed curve segments can segfault in later `GenerateMesh` calls after
@@ -256,3 +267,30 @@
   several small ones elsewhere; and setup time shows up in `--durations` separately
   (`test_m3_gradient_comparison` spends 15 s in a module-scoped fixture), so read the
   `setup` rows, not just the `call` rows.
+
+- Milestone 5.5 Option 1 (NGSolve 6.2.2606): an unconstrained scalar H¹ stiffness
+  matrix retains its constant null mode even though `FreeDofs()` returns every DOF.
+  For the axisymmetric `Igrad` solve, copy that bit array with `ngsolve.BitArray`, clear
+  one deterministic anchor before the UMFPACK inverse, and then add the constant field
+  required by `integral_Omega I/R = Psi_t`. The shift leaves the stiffness residual
+  unchanged and enforces the prescribed flux to roundoff; projecting the algebraic
+  residual with the anchored bit array avoids counting the deliberately eliminated
+  null row.
+
+- Milestone 5.5 shaped benchmark (NGSolve 6.2.2606): its mollified volume map uses
+  `spatial_width_cells=0.35` rather than the general `1.5` default so the deliberately
+  coarse 100-element continuation sentinel retains a usable four-shell partition. The
+  standard `coarea_consistency_tolerance=0.1` remains active, and production callers of
+  `MollifiedVolumeMap.build` retain the `1.5` default. Doubling the benchmark partition
+  from four to eight shells at `maxh=0.18` exhausts the 40-step Picard limit; shell-count
+  refinement therefore remains an explicitly recorded resolution limitation.
+
+- Milestone 5.5 checkpoint portability (Netgen/NGSolve 6.2.2606): repeated shaped
+  `maxh=0.10` meshes can have the same H¹ dimension but different edge connectivity or
+  DOF ordering across Python-wheel builds (observed on macOS CPython 3.10 versus 3.12+
+  and Linux). A raw `GridFunction.vec` is therefore a valid restart only on the exact
+  serialized mesh that owns it. The cross-wheel finest-row verification checkpoint
+  therefore includes its 14-KiB compressed Netgen mesh and loads that mesh before
+  restoring the coefficient vector; never infer portability from matching `ndof`
+  alone, and never interpolate hierarchical H¹ coefficients as if they were point
+  values.

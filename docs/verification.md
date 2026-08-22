@@ -11,6 +11,127 @@
 > numbers remain valid. Milestone 3.5 migrated the public contract and layer-cake
 > oracle to p₀(s) and the factor V_Ω∫₀¹·ds.
 
+## Milestone 5.5 — staged continuation and the shaped non-ideal benchmark
+
+ADR 0006 approved the scalar Option-1 closure. The poloidal flux remains in the
+homogeneous-wall H¹ space, while `I=R B_phi` now uses unconstrained H¹. The `Igrad`
+stiffness null mode is eliminated for the sparse solve and then fixed algebraically by
+the one-row condition
+`Psi_t = integral_Omega I/R dR dZ`; this is the null-space form of the bordered
+prescribed-flux solve. By default the target is the full-amplitude analytic Zheng
+toroidal flux on the numerical mesh, and the public driver also accepts an explicit
+nonzero target.
+
+The concrete R--Z driver uses natural continuation in pressure amplitude, current
+diffusivity `D_u`, and anisotropy ratio `epsilon_kappa = kappa_perp/kappa_parallel`.
+Every stage builds a fresh Anderson accelerator, receives only the previous stage's converged
+free `(psi, I=R B_phi)` coefficient vector, and records rejected acceleration attempts,
+profile gates, and checkpoint cadence under one deterministic configuration digest. The
+continuation path used for the acceptance table is
+
+| pressure amplitude | `D_u` | `epsilon_kappa` |
+| ---: | ---: | ---: |
+| 0.6 | 0.060 | 0.120 |
+| 0.8 | 0.030 | 0.060 |
+| 1.0 | 0.015 | 0.030 |
+
+On the smooth Zheng `psi=0` shaped boundary, each nonlinear cycle solves the exact
+axisymmetric reductions in note §11: `axi_M4` for the reference potential, the shared
+mollified `s=V_chi(chi)/V_Omega` composition (M4b), the bordered `axi_M3`--(M3b)
+system for `(utilde, G)`, all three (M2) current terms, and both scalar Ampère updates
+for `(psi, I)`. The recorded M1 residual is for the compatible, shell-corrected
+Grad--Shafranov right-hand side together with `Igrad`; the raw reconstructed M2 current
+is checked separately by M3b and the correction norm. Axisymmetric quadrature uses the
+physical `2*pi*R dR dZ` volume
+measure. The run is nondimensionalized with `mu_0=1`; the two independently generated
+Zheng coefficient sets retain their distinct 0.8-MA and 1.0-MA current scales. Their
+stagewise total `I_0` targets are respectively
+`0.603184 -> 0.804246 -> 1.005307` and
+`0.753980 -> 1.005307 -> 1.256634`.
+
+The current passed to Ampère is a compatible scalar-curl representation. Four shell-local
+response columns correct its toroidal part, after which a strong discrete curl is
+independently re-integrated with the shared mollified shell weights. Both the raw M2
+current and this projected current realize every `I_0(s)` row below
+`4.5e-16` absolute error. Along the operational pressure ramp the relative
+projection-correction norms decrease
+from 0.21429 to 0.20700 for the 0.8-MA target and from 0.21401 to 0.20488 for the
+1.0-MA target. Because pressure changes on that path, a separate fixed-parameter mesh
+study owns the §27.4 convergence claim:
+
+| requested maxh | elements | correction norm | non-ideal / analytic L² |
+| ---: | ---: | ---: | ---: |
+| 0.32 | 100 | 0.23792 | 0.30571 |
+| 0.24 | 158 | 0.17417 | 0.27232 |
+| 0.18 | 238 | 0.20700 | 0.23985 |
+| 0.14 | 358 | 0.13205 | 0.23114 |
+| 0.10 | 564 | 0.07511 | 0.24187 |
+
+The correction has one explicitly retained pre-asymptotic reversal. Using
+`h_eff proportional to elements**(-1/2)`, the ADR-required least-squares rate over the
+three finest meshes is 2.352, and the finest correction is 0.07511. Both clear the
+Option-2 escalation thresholds of 1.0 and 0.10. The non-ideal field error is not
+monotone on the same meshes; the table therefore exposes, rather than attributes away,
+the remaining nonlinear discretization variation.
+
+The primary reference is the analytic Zheng field, independent of the FEM solve. The
+same-mesh ideal FEM error isolates the ideal solve's discretization contribution; the
+separate h table above records the non-ideal path's mesh dependence:
+
+| current target | non-ideal / analytic relative L² (stages 1 → 3) | same-mesh ideal / analytic | final non-ideal / same-mesh ideal |
+| --- | --- | ---: | ---: |
+| 0.8 MA | 0.25932 → 0.25533 → 0.23985 | 5.352e-4 | 0.23982 |
+| 1.0 MA | 0.25841 → 0.25261 → 0.23207 | 5.352e-4 | 0.23204 |
+
+To isolate the regularization trend from the pressure ramp, an additional 0.8-MA scan
+holds pressure amplitude and mesh fixed. Six halvings ending at
+`(D_u, epsilon_kappa)=(0.001875, 0.00375)` give non-ideal/analytic errors
+`0.31976 -> 0.31632 -> 0.30571 -> 0.28475 -> 0.26330 -> 0.25179`.
+The final/first ratio is 0.7874, below the ADR limit 0.80, and no point exceeds 102% of
+its running minimum. The correction itself is not the acceptance observable on this
+coarse regularization scan; its h-convergence is owned by the independent table above.
+
+Across every primary, ladder, and refinement row the relative toroidal-flux residual is
+at most `1.04e-15`, far below the hard `1e-10` gate. Across the six primary rows the
+combined compatible-M1/`Igrad` residual is below `3.52e-14`; M3, M3b, and M4a are below
+`3.6e-16`, the fixed-point residual is below `4.91e-9`, and the independently
+reconstructed analytic pressure-profile error is below `1.16e-11`. The magnetic floor
+is configurable (default `1e-12`); the minimum sampled physical field is at least
+`0.8515` and normalized floor activity is below `7.26e-25`. The smooth nested Zheng
+case contains neither a resonant-current layer
+nor an island-flattening pressure layer, so both layer-width diagnostics are recorded as
+not applicable; no domain-width proxy is used. The complete records are in
+`tests/verification/axisymmetric_nonideal_continuation.csv` and
+`tests/verification/axisymmetric_nonideal_refinement.csv`.
+
+The prescribed toroidal flux is the full-amplitude analytic Zheng value and is held
+fixed across the pressure ramp, representing fixed external toroidal-field flux. It is
+therefore not the `A=0.6` or `A=0.8` stage-local analytic value; it agrees with the
+analytic reference at the gated full-amplitude endpoint.
+
+The cheap PR sentinel executes one real shaped M4a--M1 cycle in about 19 seconds. The
+live checks reproduce both three-stage current-profile families on the 238-element
+acceptance mesh, both finest projection-refinement rows, and every six-stage
+fixed-pressure row. Each current family begins with a cold-start nightly solve; later
+rows and the fine-refinement cases start from checked-in accepted magnetic checkpoints
+and recompute the complete nonlinear map, diagnostics, and hard gates. Four load-scoped
+ladder modules use one cold continuation segment for rows 1--3 and accepted restarts
+for rows 4--6. This keeps every single test below
+90 seconds and the full suite below five minutes under xdist. The `maxh=0.10` restart
+loads its checked-in compressed Netgen mesh before restoring the matching H¹ vector,
+because identical `ndof` does not imply identical Netgen edge numbering across Python
+wheels. The other checkpoints rebuild their shaped meshes. Fast tests also read the
+machine-readable records and recompute the ADR rates and thresholds. Mutation checks
+show that replacing the M4a tensor
+by its isotropic part collapses the pinned finite-anisotropy difference `4.631e-4` to
+zero; deleting the M3 pressure-gradient drive/coupling collapses a pinned `utilde`
+difference of `0.3624`; and multiplying the (M2) diamagnetic term by `0.5` while
+consistently using that mutation in the constraint rows opens the separately assembled,
+order-8 M2 oracle to `1.70e-2`.
+Doubling the prescribed pressure-profile shape produces an independently measured
+relative error above 0.9. These mutations therefore turn the suite red despite
+successful inner sparse solves.
+
 ## Milestone 5.4 — shaped analytic Grad–Shafranov benchmarks
 
 The analytic-equilibrium module implements both Zheng et al. (1996), Eqs. (14)--(20),

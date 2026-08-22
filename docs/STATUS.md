@@ -621,7 +621,7 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   retain exact ray-root parameterizations on both sides of each X-point; do not replace
   them with a fixed sampled polygon. The double-null non-ideal
   case remains nightly diagnostic only, as specified below.
-- [ ] **5.5** Staged continuation + non-ideal benchmark — `DESIGN.md` §14.4, §25 · note: §9, §11.2
+- [x] **5.5** Staged continuation + non-ideal benchmark — `DESIGN.md` §14.4, §25 · note: §9, §11.2
   <br>**Phase gate.** Acceptance: staged continuation in pressure amplitude, D_u, and
   anisotropy; axisymmetric non-ideal (regularized M-equation) solve benchmarked against
   the milestone-5.4 Grad–Shafranov references with p=p₀(s(ψ)) and I_tor=I₀(s(ψ))
@@ -634,7 +634,38 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   the regularization parameters down. The X-point/separatrix non-ideal comparison is a
   nightly diagnostic, not part of the gate: finite anisotropy at a separatrix is a
   Phase-6/7-adjacent regime whose tolerance is not yet specified.
-  <br>Measured: —
+  <br>Measured: macOS / CPython 3.12.2 / NGSolve 6.2.2606 — natural continuation uses
+  pressure amplitudes 0.6 → 0.8 → 1.0 while reducing D_u 0.060 → 0.030 → 0.015 and
+  epsilon_kappa 0.120 → 0.060 → 0.030, with a fresh Anderson history at every stage.
+  On the smooth Zheng boundary, the 0.8-MA and 1.0-MA profile families realize all raw
+  and compatible-projected I₀ shell moments below 2.23e-16 and 4.45e-16 absolute,
+  respectively; independently reconstructed pressure-profile error stays below
+  1.16e-11. The combined compatible-M1/Igrad residual stays below 3.52e-14,
+  M3/M3b/M4a below 3.6e-16, and fixed-point residuals below 4.91e-9.
+  Non-ideal/analytic L² errors decrease strictly
+  0.25932 → 0.25533 → 0.23985 and 0.25841 → 0.25261 → 0.23207, while the
+  same-mesh ideal/analytic error is 5.352e-4. With pressure held at full amplitude, the
+  six-point regularization-only ladder decreases monotonically
+  0.31976 → 0.31632 → 0.30571 → 0.28475 → 0.26330 → 0.25179; the final/first ratio
+  0.7874 clears ADR 0006's 0.80 gate. A five-mesh study records the compatible-current
+  correction 0.23792 → 0.17417 → 0.20700 → 0.13205 → 0.07511; its three-finest-mesh
+  least-squares effective-h rate is 2.352, clearing the ≥1.0 rate and ≤0.10 finest
+  correction gates. Across every recorded row, relative toroidal-flux error is at most
+  1.04e-15; minimum sampled |B| is 0.8515 and default-floor activity stays below
+  7.26e-25. Critical-layer diagnostics are not applicable on this smooth nested case. See
+  `tests/verification/axisymmetric_nonideal_continuation.csv`,
+  `tests/verification/axisymmetric_nonideal_refinement.csv`, and
+  `docs/verification.md`.
+  <br>ADR 0006 Option 1 is implemented: free-I trace with prescribed-Ψ_t null-mode
+  constraint and monitored scalar correction retained. None of its three binding
+  escalation triggers fires, so the mixed u--J Option 2 remains the documented §27.4
+  contingency rather than scheduled Phase-6 prerequisite. The note-§12 doubled-shell
+  check remains a recorded resolution limitation: eight shells at `maxh=0.18` do not
+  converge within 40 Picard steps, with three of the accepted four shells already
+  spanning less than one sampled radial cell. Live nightly tests regenerate both
+  acceptance-mesh profile families, both finest correction rows, and all six
+  fixed-pressure rows; a separately assembled order-8 M2 oracle rejects the
+  factor-`0.5` diamagnetic mutation with relative discrepancy `1.70e-2`.
 
 ## Phase 6 — 3D fixed boundary
 
@@ -722,6 +753,22 @@ at 13.79 s; the next-slowest is the M3 gradient-comparison setup at 11.43 s. No 
 not-slow item exceeds ~20 s, and no existing `slow` test touches the new
 backend-independent Anderson module.
 
+Measured 2026-08-22 on `milestone/5.5-staged-continuation-nonideal`: final Option-1
+`make check` passes all 288 not-slow tests in 65.10 s ✅. The slowest items are the
+shaped non-ideal sentinel at 18.74 s and the curved-torus current projection at 14.05 s.
+`make test-full` passes all 308 tests in 263.21 s ✅; its longest slow tests are the
+fixed-pressure ladder segment at 68.34 s and the constrained-M3 scan at 50.84 s. An initial
+literal recomputation of every fine-table row took 477.30 s and contained 105--168 s
+individual tests. The final suite hoists the two mesh-constant Ampère factorizations,
+runs cold-start acceptance rows and a bounded ladder segment nightly, and uses checked-in
+accepted magnetic checkpoints only as initial guesses for later acceptance, endpoint,
+and finest-refinement rows. Every such test evaluates the complete
+M4a--M3--M3b--M2--M1 map and all hard invariants. The finest row loads its exact
+compressed Netgen mesh to make the hierarchical H¹ coefficient restart portable; the
+other rows rebuild their meshes, and no checkpoint supplies a diagnostic or asserted
+value. No tolerance or recorded rate moved; every individual test and both suite
+budgets now pass.
+
 ## Release gates
 
 - **0.1** — Phases 0–5 complete, including corrected normalized p₀(s)/I₀(s) and
@@ -736,3 +783,4 @@ backend-independent Anderson module.
 | 0003 | 2.3 | Must the M4b mollifier-width JVP differentiate `epsilon = c h |grad chi|`? | Option 1 accepted |
 | 0004 | 4.4 | What terminal space/constraint makes curved HDiv current strongly divergence-free? | Option 4 superseded by ADR 0005 |
 | 0005 | 4.4 | Does the paired ordinary-L2 constraint coerce curved HDiv divergence pointwise to zero? | Option 1 approved |
+| 0006 | 5.5 | Should axisymmetric Ampère use a free-I flux constraint or mixed u--J closure? | Approved 2026-08-22: Option 1 (free-I trace + bordered Ψ_t constraint), with binding numeric escalation criteria to Option 2 |
