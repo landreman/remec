@@ -13,6 +13,10 @@
 
 ## Milestone 5.5 — staged continuation and the shaped non-ideal benchmark
 
+> **Provisional pending ADR 0006.** The measurements below are reproducible, but the
+> milestone remains incomplete until the axisymmetric `I=R B_phi` toroidal-flux
+> constraint and scalar-projection versus mixed-u--J closure are approved.
+
 The concrete R--Z driver uses natural continuation in pressure amplitude, current
 diffusivity `D_u`, and anisotropy ratio `epsilon_kappa = kappa_perp/kappa_parallel`.
 Every stage builds a fresh Anderson accelerator, receives only the previous stage's converged

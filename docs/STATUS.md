@@ -621,7 +621,7 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   retain exact ray-root parameterizations on both sides of each X-point; do not replace
   them with a fixed sampled polygon. The double-null non-ideal
   case remains nightly diagnostic only, as specified below.
-- [x] **5.5** Staged continuation + non-ideal benchmark — `DESIGN.md` §14.4, §25 · note: §9, §11.2
+- [~] **5.5** Staged continuation + non-ideal benchmark — `DESIGN.md` §14.4, §25 · note: §9, §11.2
   <br>**Phase gate.** Acceptance: staged continuation in pressure amplitude, D_u, and
   anisotropy; axisymmetric non-ideal (regularized M-equation) solve benchmarked against
   the milestone-5.4 Grad–Shafranov references with p=p₀(s(ψ)) and I_tor=I₀(s(ψ))
@@ -651,8 +651,9 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   `tests/verification/axisymmetric_nonideal_continuation.csv`,
   `tests/verification/axisymmetric_nonideal_refinement.csv`, and
   `docs/verification.md`.
-  <br>Next: Phase 6 should preserve the continuation stage/checkpoint contract while
-  replacing this axisymmetric scalar-Ampère adapter with the 3D fixed-boundary blocks.
+  <br>Blocked: ADR 0006 requires human sign-off on the axisymmetric `I=R B_phi` flux
+  constraint and whether the monitored compatible-current correction remains scalar or
+  escalates to a mixed u--J closure. Do not start Phase 6 from this adapter until decided.
 
 ## Phase 6 — 3D fixed boundary
 
@@ -762,3 +763,4 @@ within the 5 min full-suite budget.
 | 0003 | 2.3 | Must the M4b mollifier-width JVP differentiate `epsilon = c h |grad chi|`? | Option 1 accepted |
 | 0004 | 4.4 | What terminal space/constraint makes curved HDiv current strongly divergence-free? | Option 4 superseded by ADR 0005 |
 | 0005 | 4.4 | Does the paired ordinary-L2 constraint coerce curved HDiv divergence pointwise to zero? | Option 1 approved |
+| 0006 | 5.5 | Should axisymmetric Ampère use a free-I flux constraint or mixed u--J closure? | Pending human sign-off |
