@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from enum import Enum
 from itertools import pairwise
 from math import asin, cos, isfinite, log, pi
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 from numpy.polynomial.legendre import leggauss
@@ -21,6 +21,11 @@ from numpy.typing import NDArray
 
 _MU0 = 4.0e-7 * pi
 _Term = tuple[float, int, int, bool]
+
+
+def _float_array(value: Any) -> NDArray[np.float64]:
+    """Return ``value`` as a float64 array with a NumPy-stub-stable type."""
+    return cast(NDArray[np.float64], np.asarray(value, dtype=np.float64))
 
 
 def _is_ngsolve(value: Any) -> bool:
@@ -261,7 +266,7 @@ class ZhengEquilibrium:
         )
 
     def _midplane_flux(self, radius: NDArray[np.float64]) -> NDArray[np.float64]:
-        return np.asarray(self.flux(radius, 0.0), dtype=float)
+        return _float_array(self.flux(radius, 0.0))
 
     def _vertical_coefficient(self, radius: NDArray[np.float64]) -> NDArray[np.float64]:
         return -4.0 * self.c3 * radius**2 - self.c4 - self.a2 / 2.0
@@ -271,7 +276,7 @@ class ZhengEquilibrium:
         squared = -self._midplane_flux(radius) / self._vertical_coefficient(radius)
         if np.min(squared) < -1.0e-10:
             raise ValueError("the requested Zheng coefficients do not form a closed contour")
-        return np.sqrt(np.maximum(squared, 0.0))
+        return _float_array(np.sqrt(np.maximum(squared, 0.0)))
 
     def _minimum_boundary_height_squared(self, quadrature_nodes: int = 240) -> float:
         radius, _ = _zheng_quadrature(self.shape, quadrature_nodes)
@@ -279,7 +284,9 @@ class ZhengEquilibrium:
 
     def magnetic_axis(self) -> tuple[float, float]:
         """Recover the midplane magnetic-axis radius and flux from analytic ``Psi``."""
-        radius = np.linspace(self.shape.inner_radius, self.shape.outer_radius, 20001)[1:-1]
+        radius = _float_array(
+            np.linspace(self.shape.inner_radius, self.shape.outer_radius, 20001)[1:-1]
+        )
         values = self._midplane_flux(radius)
         return _refined_absolute_extremum(radius, values)
 
@@ -289,11 +296,15 @@ class ZhengEquilibrium:
             raise ValueError("at least 32 samples are required for a shaped contour")
         upper_count = samples // 2
         lower_count = samples - upper_count
-        upper_radius = np.linspace(
-            self.shape.outer_radius, self.shape.inner_radius, upper_count, endpoint=False
+        upper_radius = _float_array(
+            np.linspace(
+                self.shape.outer_radius, self.shape.inner_radius, upper_count, endpoint=False
+            )
         )
-        lower_radius = np.linspace(
-            self.shape.inner_radius, self.shape.outer_radius, lower_count, endpoint=False
+        lower_radius = _float_array(
+            np.linspace(
+                self.shape.inner_radius, self.shape.outer_radius, lower_count, endpoint=False
+            )
         )
         radius = np.concatenate((upper_radius, lower_radius))
         height = np.concatenate(
@@ -605,8 +616,10 @@ class CerfonFreidbergEquilibrium:
 
     def magnetic_axis(self) -> tuple[float, float]:
         """Recover the midplane magnetic-axis radius and flux from analytic ``psi``."""
-        radius = np.linspace(self.shape.inner_radius, self.shape.outer_radius, 20001)[1:-1]
-        values = np.asarray(self.flux(radius, 0.0), dtype=float)
+        radius = _float_array(
+            np.linspace(self.shape.inner_radius, self.shape.outer_radius, 20001)[1:-1]
+        )
+        values = _float_array(self.flux(radius, 0.0))
         return _refined_absolute_extremum(radius, values)
 
     def _constraint_residuals(self) -> NDArray[np.float64]:
@@ -724,7 +737,7 @@ class CerfonFreidbergEquilibrium:
         radial_nodes, radial_weights = leggauss(radial_order)
         angular_nodes, angular_weights = leggauss(angular_order)
         angles = pi * (angular_nodes + 1.0)
-        angular_weights = pi * angular_weights
+        angular_weights *= pi
         axis_radius, _ = self.magnetic_axis()
         normalized_volume = 0.0
         flux_volume_integral = 0.0
@@ -936,12 +949,14 @@ def recover_smooth_flux_observables(
 
     contour_inner, contour_outer = search_contour.radial_bounds
     margin = 0.03 * (contour_outer - contour_inner)
-    midplane_radius = np.linspace(
-        contour_inner + margin,
-        contour_outer - margin,
-        axis_samples,
+    midplane_radius = _float_array(
+        np.linspace(
+            contour_inner + margin,
+            contour_outer - margin,
+            axis_samples,
+        )
     )
-    midplane_values = np.asarray(
+    midplane_values = _float_array(
         [float(flux(mesh(float(value), 0.0))) for value in midplane_radius]
     )
     axis_radius, axis_flux = _refined_absolute_extremum(midplane_radius, midplane_values)

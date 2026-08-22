@@ -8,6 +8,7 @@ from math import ceil, isfinite
 from typing import Any
 
 import numpy as np
+from numpy.typing import NDArray
 
 from remec.analytic_equilibria import FluxContour
 from remec.geometry.slab import _MeshBundle
@@ -63,7 +64,7 @@ class AxisymmetricFluxContourDomain:
 
 
 def _piecewise_linear_curve(
-    radius: np.ndarray, height: np.ndarray
+    radius: NDArray[np.float64], height: NDArray[np.float64]
 ) -> Callable[[float], tuple[float, float]]:
     """Return a Netgen ``[0,1]`` parameterization through sampled contour points."""
     count = radius.size
