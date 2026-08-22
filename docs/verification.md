@@ -104,16 +104,27 @@ not applicable; no domain-width proxy is used. The complete records are in
 `tests/verification/axisymmetric_nonideal_continuation.csv` and
 `tests/verification/axisymmetric_nonideal_refinement.csv`.
 
+The prescribed toroidal flux is the full-amplitude analytic Zheng value and is held
+fixed across the pressure ramp, representing fixed external toroidal-field flux. It is
+therefore not the `A=0.6` or `A=0.8` stage-local analytic value; it agrees with the
+analytic reference at the gated full-amplitude endpoint.
+
 The cheap PR sentinel executes one real shaped M4a--M1 cycle in about 19 seconds. The
-nightly live checks execute a three-stage pressure ramp on 100 elements and a second
-complete current-profile target on the same coarse mesh. The regenerated 238-element
-two-target table, five-mesh correction study, and six-stage fixed-pressure ladder own
-the quantitative gates above; fast tests read those machine-readable records and apply
-the unchanged tolerances. Mutation checks show that replacing the M4a tensor
+live checks reproduce both three-stage current-profile families on the 238-element
+acceptance mesh, both finest projection-refinement rows, and every six-stage
+fixed-pressure row. Each current family begins with a cold-start nightly solve; later
+rows and the fine-refinement cases start from checked-in accepted magnetic checkpoints
+but rebuild the shaped mesh and recompute the complete nonlinear map, diagnostics, and
+hard gates. Four load-scoped ladder modules use two overlapping continuation segments
+for rows 1--4 and accepted restarts for rows 5--6. This keeps every single test below
+90 seconds and the full suite below five minutes under xdist. Fast tests also read the
+machine-readable records and recompute the ADR rates and thresholds. Mutation checks
+show that replacing the M4a tensor
 by its isotropic part collapses the pinned finite-anisotropy difference `4.631e-4` to
 zero; deleting the M3 pressure-gradient drive/coupling collapses a pinned `utilde`
-difference of `0.3624`; and deleting the `-D_u grad_perp(utilde)` term from the
-reconstructed M2 current opens the independently evaluated M3b gate to `1.19e-5`.
+difference of `0.3624`; and multiplying the (M2) diamagnetic term by `0.5` while
+consistently using that mutation in the constraint rows opens the separately assembled,
+order-8 M2 oracle to `1.70e-2`.
 Doubling the prescribed pressure-profile shape produces an independently measured
 relative error above 0.9. These mutations therefore turn the suite red despite
 successful inner sparse solves.

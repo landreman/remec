@@ -37,6 +37,13 @@ The h study demonstrates an asymptotic decrease, but it does not decide whether 
 remaining correction and field-error floor are acceptable for the milestone or require
 the mixed formulation now.
 
+The note-§12 shell-resolution check is also unresolved on the milestone acceptance
+mesh: doubling the four-shell partition to eight shells (`edges=9`) at `maxh=0.18`
+does not converge within the 40-step nonlinear limit. Three of the original four shells
+already span less than one sampled radial cell on that mesh. This is recorded evidence
+for the deferred mixed-u--J contingency, not evidence for weakening the four-shell
+Option-1 gate.
+
 ## Options
 
 ### Option 1: Free-I trace with one prescribed-flux constraint; retain projected psi

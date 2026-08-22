@@ -659,7 +659,13 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   <br>ADR 0006 Option 1 is implemented: free-I trace with prescribed-Ψ_t null-mode
   constraint and monitored scalar correction retained. None of its three binding
   escalation triggers fires, so the mixed u--J Option 2 remains the documented §27.4
-  contingency rather than scheduled Phase-6 prerequisite.
+  contingency rather than scheduled Phase-6 prerequisite. The note-§12 doubled-shell
+  check remains a recorded resolution limitation: eight shells at `maxh=0.18` do not
+  converge within 40 Picard steps, with three of the accepted four shells already
+  spanning less than one sampled radial cell. Live nightly tests regenerate both
+  acceptance-mesh profile families, both finest correction rows, and all six
+  fixed-pressure rows; a separately assembled order-8 M2 oracle rejects the
+  factor-`0.5` diamagnetic mutation with relative discrepancy `1.70e-2`.
 
 ## Phase 6 — 3D fixed boundary
 
@@ -748,15 +754,18 @@ not-slow item exceeds ~20 s, and no existing `slow` test touches the new
 backend-independent Anderson module.
 
 Measured 2026-08-22 on `milestone/5.5-staged-continuation-nonideal`: final Option-1
-`make check` passes all 282 not-slow tests in 52.14 s ✅. The slowest items are the
-curved-torus current projection at 16.14 s and the shaped non-ideal sentinel at 15.46 s.
-`make test-full` passes all 298 tests in 169.92 s ✅; its longest slow test is the live
-100-element three-stage pressure ramp at 57.64 s. An initial literal recomputation of
-every fine-table row took 477.30 s and contained 105--109 s individual tests. The final
-suite hoists the two mesh-constant Ampère factorizations, keeps cheap live end-to-end
-checks for the staged ramp and second I₀ target, and applies the same numeric gates to
-the regenerated fine-mesh, refinement, and six-stage CSV records. No tolerance or
-recorded rate moved; every individual test and both suite budgets now pass.
+`make check` passes all 288 not-slow tests in 64.08 s ✅. The slowest items are the
+shaped non-ideal sentinel at 18.27 s and the curved-torus current projection at 13.64 s.
+`make test-full` passes all 308 tests in 289.87 s ✅; its longest slow tests are the
+first two overlapping fixed-pressure ladder segments at 68.50 s and 61.30 s. An initial
+literal recomputation of every fine-table row took 477.30 s and contained 105--168 s
+individual tests. The final suite hoists the two mesh-constant Ampère factorizations,
+runs cold-start acceptance rows and bounded ladder segments nightly, and uses checked-in
+accepted magnetic checkpoints only as initial guesses for later acceptance, endpoint,
+and finest-refinement rows. Every such test rebuilds the mesh and evaluates the complete
+M4a--M3--M3b--M2--M1 map and all hard invariants; the checkpoints do not supply any
+diagnostic or asserted value. No tolerance or recorded rate moved; every individual
+test and both suite budgets now pass.
 
 ## Release gates
 

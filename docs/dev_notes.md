@@ -276,3 +276,11 @@
   unchanged and enforces the prescribed flux to roundoff; projecting the algebraic
   residual with the anchored bit array avoids counting the deliberately eliminated
   null row.
+
+- Milestone 5.5 shaped benchmark (NGSolve 6.2.2606): its mollified volume map uses
+  `spatial_width_cells=0.35` rather than the general `1.5` default so the deliberately
+  coarse 100-element continuation sentinel retains a usable four-shell partition. The
+  standard `coarea_consistency_tolerance=0.1` remains active, and production callers of
+  `MollifiedVolumeMap.build` retain the `1.5` default. Doubling the benchmark partition
+  from four to eight shells at `maxh=0.18` exhausts the 40-step Picard limit; shell-count
+  refinement therefore remains an explicitly recorded resolution limitation.

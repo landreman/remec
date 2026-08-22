@@ -62,11 +62,13 @@ class _CurrentSolution:
     utilde: Any
     physical_u: Any
     physical_current: Any
+    independent_current: Any
     target_current: FloatArray
     measured_current: FloatArray
     pressure_profile_error: float
     relative_m3_residual: float
     relative_m3b_residual: float
+    independent_m2_relative_error: float
 
 
 def _sample_scalar(coefficient: Any, mapped_points: Any) -> FloatArray:
@@ -540,25 +542,60 @@ class _ZhengContinuationContext:
         )
         regularizing = -current_diffusivity * perpendicular(utilde_gradient)
         physical_current = physical_u * magnetic_field + diamagnetic + regularizing
-        independent = moments(ng.InnerProduct(physical_current, toroidal_gradient)).cumulative
+        # Rebuild (M2) independently of the component expressions used by the
+        # bordered rows above.  This is intentionally redundant: a coordinated
+        # mutation to (say) the diamagnetic term must not also mutate the public
+        # current-profile oracle.  A separate order-8 test integral additionally
+        # compares the assembled current with this oracle away from the constraint
+        # quadrature rule.
+        independent_current = (
+            physical_u * magnetic_field
+            + ng.Cross(magnetic_field, pressure_gradient) / magnitude**2
+            - current_diffusivity * perpendicular(utilde_gradient)
+        )
+        independent = moments(ng.InnerProduct(independent_current, toroidal_gradient)).cumulative
+        current_difference = physical_current - independent_current
+        weights = volume_map.quadrature_weights
+        oracle_difference_squared = float(
+            np.dot(
+                weights,
+                _sample_scalar(
+                    ng.InnerProduct(current_difference, current_difference), mapped_points
+                ),
+            )
+        )
+        oracle_norm_squared = float(
+            np.dot(
+                weights,
+                _sample_scalar(
+                    ng.InnerProduct(independent_current, independent_current), mapped_points
+                ),
+            )
+        )
+        independent_m2_relative_error = sqrt(
+            max(0.0, oracle_difference_squared) / max(1.0e-300, oracle_norm_squared)
+        )
         m3_residual = drive_form.vec.CreateVector()
         m3_residual.data = bilinear.mat * utilde.vec - drive_form.vec
         for coefficient, column in zip(free_g, p_forms[:-1], strict=True):
             m3_residual.data += float(coefficient) * column.vec
         m3_residual.data = ng.Projector(free, True) * m3_residual
         relative_m3 = float(ng.Norm(m3_residual)) / max(1.0, float(ng.Norm(drive_form.vec)))
-        relative_m3b = float(np.linalg.norm(independent - target)) / max(
-            1.0, float(np.linalg.norm(target))
+        relative_m3b = max(
+            float(np.linalg.norm(independent - target)) / max(1.0, float(np.linalg.norm(target))),
+            independent_m2_relative_error,
         )
         return _CurrentSolution(
             utilde,
             physical_u,
             physical_current,
+            independent_current,
             target,
             independent,
             pressure_profile_error,
             relative_m3,
             relative_m3b,
+            independent_m2_relative_error,
         )
 
     def solve_ampere_candidates(
