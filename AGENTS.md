@@ -57,8 +57,9 @@ review-ready or submitted milestone as `[~]`.
 3. Every nontrivial weak form or operator carries a docstring with the equation label
    from the note (M1)–(M4b) and the formula it implements.
 4. Convergence claims are backed by a measured rate table checked into
-   `tests/manufactured/` and referenced in `docs/verification.md`. A residual that got
-   small is not a convergence result (`docs/DESIGN.md` §26).
+   `tests/verification/` (which holds both manufactured-solution and
+   analytic-reference benchmarks) and referenced in `docs/verification.md`. A residual
+   that got small is not a convergence result (`docs/DESIGN.md` §26).
 5. `docs/STATUS.md` is updated in the PR: mark the row `[x]`, record the measured
    numbers, and note anything the next milestone should know. Use `[~]` only while the
    work is genuinely incomplete and not ready for review.
@@ -132,7 +133,7 @@ still over budget, speed up the slowest existing tests, worst first. When you re
 existing test's resolution, minimize the loss of meaningful coverage — keep the same
 mutation-detection and the same asymptotic rate, and record the before/after numbers in
 `docs/STATUS.md` and any affected table in `docs/verification.md`. Rate tables checked
-into `tests/manufactured/` must be regenerated, not hand-edited. Reducing an expected
+into `tests/verification/` must be regenerated, not hand-edited. Reducing an expected
 convergence rate or loosening an accuracy tolerance to save time is a STOP condition,
 not an optimization.
 

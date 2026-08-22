@@ -65,7 +65,7 @@ their one restart is deliberate coverage of the required fallback. Separate test
 two-vector map at scales \(10^{-6},1,10^6\), requiring identical update decisions and relative
 convergence, and a six-vector map whose five secant columns reach full rank before the bounded
 history rolls over. The machine-readable values are in
-`tests/manufactured/picard_anderson_convergence.csv` and are loaded by
+`tests/verification/picard_anderson_convergence.csv` and are loaded by
 `test_anderson_accelerates_the_complete_picard_cycle_without_bypassing_gates`; iteration/restart
 counts are pinned exactly while measured floating residuals use a cross-BLAS-safe relative
 tolerance of \(10^{-3}\) plus the stated upper bounds.
@@ -116,7 +116,7 @@ That manufactured map is
 damping. Under the accepted update its error obeys
 \(e^{k+1}=(1-3\alpha)e^k\), so the predicted contraction factor is
 \(|1-3\alpha|\). The checked-in
-`tests/manufactured/picard_damping_convergence.csv` is read and verified by
+`tests/verification/picard_damping_convergence.csv` is read and verified by
 `test_damped_picard_converges_at_the_manufactured_linear_rate`:
 
 | damping \(\alpha\) | iterations | predicted factor | observed factor | final fixed-point norm | final update norm |
@@ -194,7 +194,7 @@ solution
 \(1<R<2,\ 0<Z<1\) has
 \(-\Delta^*\psi=2\pi^2\psi+\pi\cos[\pi(R-1)]\sin(\pi Z)/R\); its explicit
 \(1/R\) term distinguishes this operator from Cartesian Poisson. The checked-in table
-`tests/manufactured/axisymmetric_grad_shafranov_rates.csv` contains all nine solves:
+`tests/verification/axisymmetric_grad_shafranov_rates.csv` contains all nine solves:
 
 | Degree \(p\) | Elements (coarse → fine) | L² rate | \(R^{-1}\)-energy rate |
 | --- | ---: | ---: | ---: |
@@ -226,7 +226,7 @@ cumulative shells for \(I_0=0.7s\) and
 Maximum absolute discrepancies are
 \(7.11\times10^{-15}\) and \(8.66\times10^{-15}\), respectively, below the
 \(10^{-8}\) acceptance gate; the machine-readable rows are in
-`tests/manufactured/axisymmetric_enclosed_current.csv`.
+`tests/verification/axisymmetric_enclosed_current.csv`.
 
 Mutation checks make both claims falsifiable. Replacing the \(R^{-1}\)-weighted
 stiffness by Cartesian Poisson raises the degree-2 coarse L² error from
@@ -272,7 +272,7 @@ moments before and after projection, their residuals, and the H¹-dual Ampère
 quadrature-consistency residual \((J_h,\nabla q_h)\).
 
 On affine unit cubes a smooth tangent analytic curl is projected over the checked-in
-`tests/manufactured/current_projection_rates.csv` sweep:
+`tests/verification/current_projection_rates.csv` sweep:
 
 | base order | subdivisions | elements | relative correction | relative divergence | Ampère residual |
 | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -356,7 +356,7 @@ Independent divergent and rotational fields produce order-one weak residuals, pr
 a disabled residual assembly from satisfying the roundoff gate.
 
 The OCC torus is curved at geometry orders 1--4. OCC produces 1,414 tetrahedra on
-macOS and 1,389 on Linux, so `tests/manufactured/harmonic_flux_torus.csv` contains and
+macOS and 1,389 on Linux, so `tests/verification/harmonic_flux_torus.csv` contains and
 strictly checks a full reference sweep keyed by `sys.platform` for each platform. These
 rows use NGSolve 6.2.2606; an unsupported platform fails with a complete measured CSV
 in the assertion message, which is the regeneration procedure rather than a reason to
@@ -432,7 +432,7 @@ gauge-multiplier norm is at most 3.65e-14. The independent curl-projection defec
 at most 2.37e-15, relative magnetic divergence is at most 9.53e-14, and relative
 boundary-normal residual is at most 6.32e-15; every magnetic invariant clears the
 curved-calibrated \(128\epsilon_{\rm mach}(p+2)^3\) gate. The full measurements are
-loaded and asserted from `tests/manufactured/gauge_fixed_curl_curl_rates.csv`, including
+loaded and asserted from `tests/verification/gauge_fixed_curl_curl_rates.csv`, including
 the curl-projection and boundary-normal diagnostics. Sampled \(|B_h|\) extrema are
 reported on every row (global sampled range 3.71e-3 to 4.100). On the finest p=3 row,
 the magnetic energy is 2.4673513 versus the analytic \(\pi^2/4=2.4674011\), a relative
@@ -494,7 +494,7 @@ All defects clear the automated order-scaled roundoff gate
 \(32\epsilon_{\rm mach}(p+2)^3\). The test loads the complete machine-readable record,
 asserts every space order, degree-of-freedom count, and Euler characteristic exactly,
 and bounds each recomputed defect against its recorded row. The record is
-`tests/manufactured/de_rham_pairing.csv`.
+`tests/verification/de_rham_pairing.csv`.
 
 NGSolve's Piola mappings preserve the magnetic part of the complex on curved geometry.
 The automated regression uses an order-3 curved, 107-tetrahedron OCC ball across every
@@ -514,7 +514,7 @@ affine sweep, so the independently calibrated roundoff gate is
 The negative controls remain O(1), proving the divergence diagnostic has teeth, while
 the worst curved-gate utilization is 0.287. The test loads and asserts these
 measurements, mesh size, space orders, degree-of-freedom counts, and curved volume from
-all six rows of `tests/manufactured/de_rham_curved.csv`. The volume 4.1894736 is also
+all six rows of `tests/verification/de_rham_curved.csv`. The volume 4.1894736 is also
 checked within 2e-3 of the unit-sphere value 4.1887902, so changing the geometry order
 to an affine mesh cannot preserve the test.
 
@@ -645,7 +645,7 @@ evaluator by auxiliary $u$ in the full-gradient rows changes the noise transfer 
 correction therefore fails the largest-$D_u$ CSV pin. The exact $J_\parallel/B$
 formula is independently guarded by the milestone-3.6 pointwise current test. The
 complete scan is checked in as
-`tests/manufactured/m3_gradient_du_limit.csv`.
+`tests/verification/m3_gradient_du_limit.csv`.
 
 ### Field-misalignment and solver-cost measurements
 
@@ -668,7 +668,7 @@ variant amplifications, $1.329/1.189\simeq1.12$, is the comparative signal.
 The multiplier-current norms are also variant-distinct in both controls, and all
 independently evaluated M3b residuals remain below $7.01\times10^{-17}$. These rows
 are in
-`tests/manufactured/m3_gradient_misalignment.csv`.
+`tests/verification/m3_gradient_misalignment.csv`.
 
 One frozen solve is the available proxy for one future Picard linearization. Each row
 records the counters at the actual call sites: one $A$ assembly, one UMFPACK
@@ -755,7 +755,7 @@ legacy prescribed-$F$ state is accepted.
 
 The coupled manufactured solution makes both $G$ couplings and all three M2 current
 components nonzero. The checked-in h/p/N table is
-`tests/manufactured/m3_constrained_rates.csv`. At polynomial order 2, the physical-$u$
+`tests/verification/m3_constrained_rates.csv`. At polynomial order 2, the physical-$u$
 L² errors converge as follows:
 
 | Variant | Subdivisions (per axis) | Error (coarse → fine) | Measured h-rate |
@@ -789,7 +789,7 @@ distinct old $F(p)$ shifts with the same boundary value reconstruct the same phy
 $u$ below $10^{-10}$.
 
 The fixed-$I_0$ regular-limit scan is recorded in
-`tests/manufactured/m3_constrained_du_scan.csv`. It uses a nondegenerate manufactured
+`tests/verification/m3_constrained_du_scan.csv`. It uses a nondegenerate manufactured
 family with both G couplings nonzero, one analytic $I_0(s)$ shared by every $D_u$, a
 bounded G profile that genuinely changes with $D_u$, and a shell-mean $\tilde u$
 correction proportional to $D_u$. For $D_u=0.08\to0.04\to0.02$,
@@ -910,7 +910,7 @@ $1.953\times10^{-5}$ (total). Rescaling the radius from 1 to 2.75 while scaling
 current density by inverse area changes the total profile by only
 $3.55\times10^{-15}$, and the shared sampled s field by $8.88\times10^{-16}$.
 The checked-in h-refinement table is
-`tests/manufactured/shell_current_moment_rates.csv`:
+`tests/verification/shell_current_moment_rates.csv`:
 
 | Radial cells | Quadrature order | Maximum cumulative error | Adjacent rate |
 | ---: | ---: | ---: | ---: |
@@ -960,7 +960,7 @@ Degree-three H1 elements use the production SUPG path for both runtime gradient
 variants. This milestone isolates the resonant advection/transverse-diffusion balance;
 the milestone-3.2 and 3.3 tests, rather than this width observable, constrain the other
 SUPG residual terms and their signs. The checked-in machine-readable scan is
-`tests/manufactured/m3_layer_scaling.csv`:
+`tests/verification/m3_layer_scaling.csv`:
 
 | Gradient variant | \(D_u\) | FWHM | Unit-prefactor inner scale | FWHM / inner scale | FWHM elements |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -983,7 +983,7 @@ The reported operational layer width is explicitly the reconstructed-current FWH
 called here with the measured FWHM: the statement that every row clears six elements
 is an FWHM-based verdict, not a claim that the unit-prefactor estimate itself clears
 six. Its mesh independence is checked at the thinnest case in
-`tests/manufactured/m3_layer_mesh_refinement.csv`:
+`tests/verification/m3_layer_mesh_refinement.csv`:
 
 | \((n_x,n_y)\) | Elements | Measured FWHM | FWHM elements |
 | --- | ---: | ---: | ---: |
@@ -1072,7 +1072,7 @@ The manufactured comparison uses the nonconstant divergence-free field from mile
 \(\tilde u_*=\sin(\pi x)\sin(\pi y)\). The complete strong direct-u residual for
 \(u_*=F(p)+\tilde u_*\) prescribes the drive independently. Direct-u and reconstructed
 utilde solutions are compared on every mesh in
-`tests/manufactured/m3_utilde_rates.csv`; the automated gates require both formulations
+`tests/verification/m3_utilde_rates.csv`; the automated gates require both formulations
 to clear the standard finest-pair \(p+0.8\) L2-rate threshold and their relative L2
 disagreement to remain below \(10^{-10}\).
 
@@ -1167,7 +1167,7 @@ choice before M3 becomes part of a checkpointable coupled run.
 The smooth all-terms manufactured solution is
 \(u_*=\sin(\pi x)\sin(\pi y)\) on the nonconstant divergence-free frozen field from
 milestone 3.1. Its complete strong (M3) residual prescribes the physical drive. The
-checked-in table `tests/manufactured/m3_supg_rates.csv` is recomputed within 5% in PR CI:
+checked-in table `tests/verification/m3_supg_rates.csv` is recomputed within 5% in PR CI:
 
 | Gradient variant | Degree 1 finest rate | Degree 2 finest rate | Degree 3 finest rate |
 | --- | ---: | ---: | ---: |
@@ -1283,7 +1283,7 @@ smoke jobs separately exercise the minimal wheel installation.
 
 The manufactured circle in the unit-square quadrant has the exact sharp volume
 \(\pi(0.6^2-\hat\chi)/4\). The measured zero-level results in
-`tests/manufactured/cutcell_circle_rates.csv` are:
+`tests/verification/cutcell_circle_rates.csv` are:
 
 | Triangles | Sharp cut-cell error | Cut-cell rate | Mollified–sharp difference | Difference rate |
 | ---: | ---: | ---: | ---: | ---: |
@@ -1417,7 +1417,7 @@ checks the inverse round-trip `inverse_level(volume(level))` within 0.04 over th
 analytic circle branch.
 
 The manufactured sphere resolution table is checked in at
-`tests/manufactured/mollified_sphere_volume_rates.csv`:
+`tests/verification/mollified_sphere_volume_rates.csv`:
 
 | Quadrature order | Absolute volume error | Adjacent rate |
 | ---: | ---: | ---: |
@@ -1526,7 +1526,7 @@ The closed-field scan uses the translated Sovinec flux
 \(B_{\rm floor}=10^{-6}\). Because
 \(\mathbf b_{\rm safe}\cdot\nabla\psi=0\) even at finite floor, the exact solution is
 \(\chi=\psi/(2\pi^2\kappa_\perp)\). The permanent scheduled table
-`tests/manufactured/closed_field_anisotropy_scan.csv` contains all 27 combinations of
+`tests/verification/closed_field_anisotropy_scan.csv` contains all 27 combinations of
 degrees 1–3, 32/128/512 elements, and
 \(\kappa_\perp/\kappa_\parallel=10^{-1},10^{-2},10^{-3}\). The measured effective
 diffusivity minus the physical \(\kappa_\perp\) is positive and decreases strictly
@@ -1574,7 +1574,7 @@ sense. The milestone 1.5 `Next:` follow-up records that separate sensitivity stu
 manufactured source is also sign-changing (a 201×201 point scan gives approximately
 \([-269.7,177.2]\)); like the milestone 1.2 direction-sensitive source, it is a linear
 verification device rather than an admissible positive reference source. The rate
-table is `tests/manufactured/analytic_island_rates.csv`.
+table is `tests/verification/analytic_island_rates.csv`.
 
 | Degree \(p\) | Elements (coarse → fine) | L² rate | K-energy rate |
 | --- | ---: | ---: | ---: |
@@ -1623,7 +1623,7 @@ Dirichlet data, the discrete central amplitude defines
 \(\kappa_{\perp,\mathrm{num}}=Q_0/(2\pi^2\chi_h(1/2,1/2))\).
 
 `test_sovinec_pollution_decreases_with_order_and_refinement` reads all nine rows
-of `tests/manufactured/sovinec_pollution.csv`, recomputes them within relative
+of `tests/verification/sovinec_pollution.csv`, recomputes them within relative
 tolerance \(10^{-5}\), and
 requires strict decreases at each adjacent order and refinement. The finest-pair
 rates use \(\log_2(\kappa_{\perp,\mathrm{num}}(h)/
@@ -1682,7 +1682,7 @@ data and the constant oblique conductivity
 \(\mathbf b=(3/5,4/5)\).  The source is evaluated analytically as
 \(-\nabla\cdot(\mathbf K\nablaχ)\).  The automated test
 `test_oblique_anisotropic_manufactured_convergence` reads the machine-readable error
-table in `tests/manufactured/oblique_anisotropic_rates.csv`, requires L² rate at least
+table in `tests/verification/oblique_anisotropic_rates.csv`, requires L² rate at least
 \(p+0.8\) and K-energy rate at least \(p-0.2\) on the finest refinement
 pair, and checks each recorded error within 5%.  `test_oblique_solution_reports_separate_parallel_and_perpendicular_energy`
 checks that both M4a contributions are reported separately and sum to the total.
@@ -1707,7 +1707,7 @@ reduction of note equation (M4a), \(-\Delta\chi=S_{\rm ref}\).  The automated te
 `test_isotropic_poisson_manufactured_convergence` reads the machine-readable error table,
 requires L² rate at least \(p+0.8\) and energy rate at least \(p-0.2\) on its finest
 refinement pair, and checks each error against the recorded value within 5%; the results are in
-`tests/manufactured/isotropic_poisson_rates.csv`. It also checks the homogeneous boundary
+`tests/verification/isotropic_poisson_rates.csv`. It also checks the homogeneous boundary
 trace and the free-DOF direct-solve residual at roundoff.
 
 | Degree \(p\) | Elements (coarse → fine) | L² rate | Energy rate |

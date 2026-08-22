@@ -15,7 +15,7 @@ from remec.level_set import (
     VolumeMapConsistencyWarning,
 )
 
-_MANUFACTURED_DIRECTORY = Path(__file__).parents[1] / "manufactured"
+_MANUFACTURED_DIRECTORY = Path(__file__).parents[1] / "verification"
 
 
 def _tensor_product_data(

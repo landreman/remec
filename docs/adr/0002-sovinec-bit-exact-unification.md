@@ -20,7 +20,7 @@ the common kernel, causing it to normalize an already-unit direction again.
 1. Keep the original dedicated Sovinec assembly for the exact regression table,
    while exposing it through `AnisotropicDiffusionSolver` as a separate strategy
    operation.
-2. Regenerate `tests/manufactured/sovinec_pollution.csv` using the common tensor
+2. Regenerate `tests/verification/sovinec_pollution.csv` using the common tensor
    path, record the measured deviation, and change the 1.5 acceptance statement
    from bit-exact preservation to a stated numerical tolerance.
 3. Continue investigating until the common path reproduces the original table

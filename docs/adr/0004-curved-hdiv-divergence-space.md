@@ -200,7 +200,7 @@ Concretely, replace DESIGN §5 invariant 2 with two invariants:
   at roundoff.  On curved meshes, `‖∇·J_h‖` must be measured and must satisfy the
   two-part acceptance criterion below — a convergence rate under `h`- and
   geometry-refinement, plus a magnitude backstop — with the measured rate table checked
-  into `tests/manufactured/` and the measured relative divergence recorded in
+  into `tests/verification/` and the measured relative divergence recorded in
   `docs/verification.md`.
 
 The acceptance test must also measure the gauge multiplier `λ_h` and confirm it
@@ -218,7 +218,7 @@ projection.
 
 **Primary gate — rate.** The measured `‖∇·J_h‖` must decrease at the predicted rate
 under both `h`-refinement and geometry-order refinement, per the rate table checked into
-`tests/manufactured/`.  A single small number at one resolution is not a convergence
+`tests/verification/`.  A single small number at one resolution is not a convergence
 result (`DESIGN.md` §26).
 
 **Backstop — magnitude.** At production resolution, the dimensionless relative
