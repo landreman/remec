@@ -870,6 +870,11 @@ Analytic solutions to the Grad-Shafranov equation can be found in the papers
 smooth boundaries) and `docs/CerfonFreidberg_2010_PoP_v17_p032502.md` (a more
 sophisticated model that allows up-down asymmetry and x-points).
 These analytic solutions can be used for benchmarking the axisymmetric remec solutions.
+Milestone 5.4 promotes them into an analytic-equilibrium module of the main package
+(coefficient solves, ψ and its derivatives, boundary-contour extraction) and benchmarks
+the FEM solver on shaped domains bounded by a ψ=const contour of the analytic solution
+— both smooth and X-point boundaries — rather than on rectangles with Dirichlet lifts.
+`scripts/zheng_grad_shafranov_benchmark.py` is the committed seed for that work.
 
 ### 16.4 Smooth solid torus (adjudicated strategy)
 
@@ -1023,7 +1028,7 @@ remec/
 │   ├── io/          checkpoint.py vmec.py desc.py vtk.py
 │   └── diagnostics/ residuals.py invariants.py layers.py seff.py conductance.py
 │                    poincare.py performance.py
-├── tests/           unit/ manufactured/ regression/ integration/ data/
+├── tests/           unit/ verification/ regression/ integration/ data/
 ├── examples/        slab_anisotropic.py periodic_island.py axisymmetric.py
 │                    fixed_boundary_3d.py
 └── benchmarks/      anisotropy/ scaling/ petsc_branch/
@@ -1251,9 +1256,23 @@ preservation of the (M3b) shell-current moments in the current passed to Ampère
 including the normalized p₀(s), I₀(s), and the enclosed-current relation of §11.2.
 5.2 damped Picard connecting χ → shared s → p₀(s) transplant → bordered M3–M3b →
 moment-preserving current projection → magnetics.
-5.3 Anderson with fallback and history tests. 5.4 staged continuation in pressure
-amplitude, D_u, anisotropy. Acceptance: axisymmetric benchmark vs. Grad–Shafranov with
-both p=p₀(s(ψ)) and I_tor=I₀(s(ψ)) within tolerance for at least two current profiles.
+5.3 Anderson with fallback and history tests. 5.4 shaped analytic Grad–Shafranov
+benchmarks (ideal): an analytic-equilibrium module in the main package implementing the
+Zheng (1996) and Cerfon–Freidberg (2010) Solov'ev-profile solutions of Sec. 16.3, shaped
+R–Z domains whose boundary is a ψ=const contour of the analytic solution (so the
+homogeneous-Dirichlet GS solver applies unchanged; rectangular Dirichlet-lift cases are
+not required), and ideal-FEM vs. ideal-analytic convergence tables for at least one
+smooth boundary and one X-point (separatrix) boundary, with the boundary
+geometry-approximation error reported alongside the FE rates. 5.5 staged continuation in
+pressure amplitude, D_u, anisotropy, plus the non-ideal benchmark. Acceptance for 5.5:
+axisymmetric non-ideal (regularized M-equation) solve vs. the 5.4 Grad–Shafranov
+references with both p=p₀(s(ψ)) and I_tor=I₀(s(ψ)) within tolerance for at least two
+current profiles. The primary non-ideal reference is the ideal *analytic* solution — it
+shares no discretization with the code under test — with the same-mesh ideal-FEM
+solution reported alongside to split the observed difference into discretization error
+and regularization bias (finite ε_κ, D_u, mollifier width); the non-ideal-to-ideal
+difference must decrease as continuation stages the regularization parameters down. The
+X-point non-ideal comparison is a nightly diagnostic, not part of the gate.
 
 **Phase 6 — 3D fixed boundary.** 6.1 periodic-torus end-to-end benchmark. 6.2 smooth
 solid-torus mesh (simple torus, then shaped Fourier boundary, geometry-error report).

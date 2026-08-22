@@ -20,6 +20,16 @@ edit.
 > until both corrective milestones pass. The authoritative note is
 > `docs/20260815-01_Regularized_3D_MHD_equilibrium.tex`; the August 14 note is historical.
 
+> **2026-08-21 pre-5.4 reorganization.** `tests/manufactured/` was renamed
+> `tests/verification/` — it holds analytic-reference benchmarks (islands, harmonic
+> torus, cut-cell circle, Grad–Shafranov) as well as strictly manufactured (MMS)
+> solutions, and the old name misdescribed the former. Historical rows below have had
+> their paths updated in place; the recorded measurements are unchanged. In the same
+> reorganization, the old milestone 5.4 (staged continuation, phase gate) was split into
+> 5.4 (shaped analytic Grad–Shafranov benchmarks, ideal) and 5.5 (staged continuation +
+> non-ideal benchmark, phase gate). `scripts/zheng_grad_shafranov_benchmark.py` is the
+> committed seed for 5.4.
+
 A milestone may only start when every milestone in the previous phase is `[x]` on the
 target integration branch (`DESIGN.md` §25). A `[x]` on an unmerged PR does not satisfy
 that dependency. Phase 7 may run in parallel with Phase 8.
@@ -51,7 +61,7 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   <br>Measured: merged PR #6; macOS / CPython 3.12.2 / NGSolve 6.2.2606 — finest-pair degree 1:
   L² 1.955, energy 0.981; degree 2: L² 2.992, energy 1.978; degree 3: L² 4.053,
   energy 3.005 (72 → 288 elements; deterministic structured triangles).
-  See `tests/manufactured/isotropic_poisson_rates.csv` and `docs/verification.md`.
+  See `tests/verification/isotropic_poisson_rates.csv` and `docs/verification.md`.
   <br>Next: milestone 1.2 extends this named-boundary slab to oblique anisotropy.
 - [x] **1.2** Oblique anisotropic K — `DESIGN.md` §8.1, §8.2 · note: §4
   <br>Acceptance: parallel/perpendicular diagnostics; order scans.
@@ -59,7 +69,7 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   `K = 2I + 5bbᵀ`, `b = (3/5, 4/5)`; finest-pair degree 1: L² 1.887, K-energy
   0.965; degree 2: L² 3.054, K-energy 1.968; degree 3: L² 4.089, K-energy 3.008
   (72 → 288 elements). The solver separately reports positive parallel and
-  perpendicular M4a energies. See `tests/manufactured/oblique_anisotropic_rates.csv`
+  perpendicular M4a energies. See `tests/verification/oblique_anisotropic_rates.csv`
   and `docs/verification.md`.
   <br>Next: the verification kernel remains internal; 1.5 owns the public
   `AnisotropicDiffusionSolver` interface extraction.
@@ -69,7 +79,7 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   κ∥ = 1 and κ⊥ = 0, κ⊥,num/κ∥ decreases on 32 → 128 → 512 elements from
   7.351e-2 → 1.967e-2 → 5.002e-3 (p=1), 1.627e-3 → 1.101e-4 → 7.193e-6
   (p=2), and 8.805e-6 → 1.622e-7 → 2.761e-9 (p=3). Finest-pair rates are
-  1.975, 3.936, and 5.877. See `tests/manufactured/sovinec_pollution.csv` and
+  1.975, 3.936, and 5.877. See `tests/verification/sovinec_pollution.csv` and
   `docs/verification.md`.
   <br>Next: milestone 1.4 can reuse the translated Sovinec field
   b = (∂yψ, −∂xψ)/|∇ψ| and should add an independent analytic-island field rather
@@ -81,8 +91,8 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   L² 1.810, K-energy 0.964; degree 2: L² 3.132, K-energy 1.983; degree 3: L² 4.053,
   K-energy 2.996 (200 → 800 elements). In the degree-3, 512-element closed-field scan,
   κ⊥,num/κ⊥ is 4.8e-6, 1.2e-5, and 6.4e-5 for κ⊥/κ∥ = 1e-1, 1e-2, and 1e-3.
-  See `tests/manufactured/analytic_island_rates.csv`,
-  `tests/manufactured/closed_field_anisotropy_scan.csv`, and `docs/verification.md`.
+  See `tests/verification/analytic_island_rates.csv`,
+  `tests/verification/closed_field_anisotropy_scan.csv`, and `docs/verification.md`.
   <br>Next: milestone 1.5 should route the constant, rank-one Sovinec, and new smoothly
   floored spatial-field assemblies through one interface without changing their tables;
   preserve the M4a tensor form `K = κ⊥I + (κ∥-κ⊥)b_safe b_safeᵀ` at field nulls,
@@ -116,7 +126,7 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   quadrature-resolution scan 24 → 48 → 96 measures adjacent rates 2.078 and
   2.058. The endpoint identities hold exactly, raw endpoint residuals are checked,
   and the 65-level table is strictly monotone with uniform enclosed-volume samples. See
-  `tests/manufactured/mollified_sphere_volume_rates.csv` and `docs/verification.md`.
+  `tests/verification/mollified_sphere_volume_rates.csv` and `docs/verification.md`.
   <br>Next: 2.2 added the FEM quadrature-extraction pass and consumed
   `MollifiedVolumeMap` through a monotone `VolumeProfile` transplant; that legacy
   profile takes dimensional V, so milestone 3.5 owns its migration to normalized s.
@@ -153,7 +163,7 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   128, 512, and 2048 triangles, with adjacent rates 3.999 and 3.636. The
   mollified-to-sharp differences are 3.202e-3, 8.016e-4, and 2.004e-4 with
   adjacent rates 1.998 and 2.000. See
-  `tests/manufactured/cutcell_circle_rates.csv` and `docs/verification.md`.
+  `tests/verification/cutcell_circle_rates.csv` and `docs/verification.md`.
   <br>Next: `CutCellVolumeReference` is deliberately a direct sharp-volume evaluator
   (`volume` plus `total_volume`), not the solver-facing differentiable map; retain
   `MollifiedVolumeMap` for inverse tabulation and the `(V_derivatives)` Newton action.
@@ -201,7 +211,7 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   diffusion manufactured cases pass for both variants. In the dedicated final-term
   case, the correct L² errors are 1.234e-6 / 1.234e-6 (∇⊥ / full ∇); deleting
   `D_u ∇ᵣu·∇p` raises them to 4.217e-2 / 4.230e-2. See
-  `tests/manufactured/m3_supg_rates.csv` and `docs/verification.md`.
+  `tests/verification/m3_supg_rates.csv` and `docs/verification.md`.
   <br>Revision note: retain the centralized complete strong residual and both provenance
   paths. Milestone 3.6 must add the −G′B·∇s term and apply every D_u term to ũ.
 - [x] **3.3** Algebraic F(p)-shift equivalence (historical negative control; not a current closure) — `DESIGN.md` §9.2, §9.4 · note: §5.4 "A change of variables does not restore the freedom"
@@ -217,7 +227,7 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   diffusion source norms 2.012e-1 (∇⊥) and 2.400e-1 (full ∇), independently verifies
   the other three shifted sources to 1e-12 relative tolerance, and pins diffusion by
   direct-u agreement. See
-  `tests/manufactured/m3_utilde_rates.csv` and `docs/verification.md`.
+  `tests/verification/m3_utilde_rates.csv` and `docs/verification.md`.
   Direct-u/ũ agreement remains below 3.0e-16 with deliberately active B floors of
   0.1 and 1.0 after matching the symmetric Galerkin projection convention exactly.
   <br>Revision note: keep this path private/legacy until 3.6 uses it for the required
@@ -240,8 +250,8 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   relative residuals stay below 4.36e-17; physical-u, M2-current, and J_parallel/B
   cross-checks pass. Legacy prescribed-F identifiers participate in the configuration
   digest and structured solve records; this provenance is historical and is replaced by
-  normalized I₀(s), G-basis, and shell-grid provenance in milestones 3.5–3.6. See `tests/manufactured/m3_layer_scaling.csv`,
-  `tests/manufactured/m3_layer_mesh_refinement.csv`, and `docs/verification.md`.
+  normalized I₀(s), G-basis, and shell-grid provenance in milestones 3.5–3.6. See `tests/verification/m3_layer_scaling.csv`,
+  `tests/verification/m3_layer_mesh_refinement.csv`, and `docs/verification.md`.
   <br>Next: milestone 3.5 is the normalization/shell-moment correction. Milestone 3.7 may
   later reuse this periodic machinery and physical-M2 Fourier observable as a scaling
   baseline, but not this slab as evidence for cross-variant agreement: B_x=0 makes the
@@ -274,7 +284,7 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   partition identities are imposed by construction; independent analytic cumulative
   and shellwise values are tested. Radius 1 → 2.75 domain rescaling changes the
   scaled I₀(s) result by 3.55e-15 and sampled s by 8.88e-16. See
-  `tests/manufactured/shell_current_moment_rates.csv` and `docs/verification.md`.
+  `tests/verification/shell_current_moment_rates.csv` and `docs/verification.md`.
   <br>Next: milestone 3.6 should pass its independently reconstructed physical M2
   component samples to `mollified_shell_current_moments`, reuse the exact shared s
   field, and compare those diagnostic rows—not its C_u/C_G matrices—with the input
@@ -312,8 +322,8 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   ‖D_uG′∇ᵣs‖₂ from 2.850e-2 → 1.361e-2 → 6.750e-3 (∇⊥) and 2.874e-2 →
   1.372e-2 → 6.804e-3 (full ∇); maximum |⟨ũ⟩| falls from 3.987e-2 to 9.379e-3.
   The constrained path reports physical J∥/B, including the full-gradient ũ correction.
-  See `tests/manufactured/m3_constrained_rates.csv`,
-  `tests/manufactured/m3_constrained_du_scan.csv`, and `docs/verification.md`.
+  See `tests/verification/m3_constrained_rates.csv`,
+  `tests/verification/m3_constrained_du_scan.csv`, and `docs/verification.md`.
   <br>Next: milestone 3.7 should retain this exact shared-s/PCHIP construction and
   independent current evaluator, use genuinely field-misaligned/resonant benchmarks
   and record reuse/iteration, oscillation, smearing, misalignment, and parallel-noise
@@ -357,8 +367,8 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   Across the resonant rows, full ∇ assembles A about 2.3 times faster; bordered-solve
   differences are below the run-to-run timing spread. Cross-iteration reuse is not
   implemented. The evidence does not justify changing the default from ∇⊥. See
-  `tests/manufactured/m3_gradient_du_limit.csv`,
-  `tests/manufactured/m3_gradient_misalignment.csv`, and `docs/verification.md`.
+  `tests/verification/m3_gradient_du_limit.csv`,
+  `tests/verification/m3_gradient_misalignment.csv`, and `docs/verification.md`.
   <br>Next: Phase 4 starts the compatible de Rham magnetic kernel. Preserve the runtime
   gradient selection and its independently reconstructed physical (M2) current through
   the later H(div) projection; milestone 4.4 must retain these M3b shell moments rather
@@ -384,7 +394,7 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   107-tetrahedron curved ball, the measured volume is 4.1894736 (unit-sphere reference
   4.1887902), the maximum HCurl-to-HDiv defect is 1.04e-14, maximum projected-field
   relative divergence is 2.79e-12, and the smallest random-HDiv control is 2.71. See
-  `tests/manufactured/de_rham_pairing.csv`, `tests/manufactured/de_rham_curved.csv`, and
+  `tests/verification/de_rham_pairing.csv`, `tests/verification/de_rham_curved.csv`, and
   `docs/verification.md`.
   <br>Next: milestone 4.2 should reuse these tetrahedral offsets for its H1 gauge and
   HCurl vector-potential spaces. On curved tetrahedra measure the (M1) magnetic
@@ -407,7 +417,7 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   current is removed entirely by the gauge multiplier to 1e-11; deleting its coupling
   makes the system singular. A μ₀=4πe-7 control preserves the manufactured A and
   verifies the 1/μ₀ magnetic-energy scaling.
-  See `tests/manufactured/gauge_fixed_curl_curl_rates.csv` and
+  See `tests/verification/gauge_fixed_curl_curl_rates.csv` and
   `docs/verification.md`.
   <br>Next: milestone 4.3 should reuse this exact Coulomb-gauge block on its analytic
   torus, add the harmonic field with its coefficient held fixed, and verify that the
@@ -427,7 +437,7 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   reaching 1.67e-5 (1.18e-6 relative), and sampled |B_h| stays in
   [0.66448, 1.23427]. The discrete curl of a zero-tangential-trace HCurl potential has
   toroidal flux below 1e-12; a nonzero-trace control has flux above 1.0. See
-  `tests/manufactured/harmonic_flux_torus.csv` and
+  `tests/verification/harmonic_flux_torus.csv` and
   `docs/verification.md`. Final local `make check`: 197 tests in 29.95 s.
   <br>Next: milestone 4.4 should use the order-4 analytic torus when testing the paired
   current projection on curved multiply connected geometry, preserve the harmonic
@@ -467,7 +477,7 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   1.00e-4 versus 4.00e-3 for the low-order pair, so the 1e-15 result is explicitly only
   the same-rule algebraic residual. The affine relative projection correction has
   finest-pair rates 1.9053 (base order 2) and 2.7856 (base order 3), while divergence
-  remains at roundoff. See `tests/manufactured/current_projection_rates.csv` and
+  remains at roundoff. See `tests/verification/current_projection_rates.csv` and
   `docs/verification.md`. Final post-review local `make check`: 203 not-slow tests in
   43.55 s; the torus acceptance test is in PR CI and takes 17.49 s.
   <br>Next: Phase 5 should pass the independently reconstructed three-component (M2)
@@ -497,8 +507,8 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   recovers I₀=0.7s and I₀=0.4s(2−s) on five cumulative shells with maximum absolute
   errors 7.11e-15 and 8.66e-15 at μ₀=2.3 and nonconstant ds/dψ, including their
   edge totals. See
-  `tests/manufactured/axisymmetric_grad_shafranov_rates.csv`,
-  `tests/manufactured/axisymmetric_enclosed_current.csv`, and `docs/verification.md`.
+  `tests/verification/axisymmetric_grad_shafranov_rates.csv`,
+  `tests/verification/axisymmetric_enclosed_current.csv`, and `docs/verification.md`.
   Final post-review local `make check`: 216 not-slow tests in 40.56 s; slowest
   15.57 s.
   <br>Next: milestone 5.2 should evaluate the profile closure on the Picard iterate's
@@ -532,13 +542,13 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   damping iterations, and completion under a recomputed 64-hex configuration digest;
   the history also pins the measured projection correction (6e-4) and magnetic minimum.
   See
-  `tests/manufactured/picard_damping_convergence.csv` and `docs/verification.md`.
+  `tests/verification/picard_damping_convergence.csv` and `docs/verification.md`.
   <br>Next: milestone 5.3 should accelerate the same free magnetic vector and reuse
   these independent gates/history records. Keep fixed harmonic-flux coefficients and
   essential traces in the backend adapter, outside Anderson history; restart on an
   ill-conditioned least-squares system and fall back to this verified damped step.
   Fixed scalar damping has no rejected trial steps; 5.3 must log rejected acceleration
-  attempts. The concrete 5.4 run driver owns configured checkpoint cadence, the
+  attempts. The concrete 5.5 run driver owns configured checkpoint cadence, the
   across-iterate gate that the recorded projection correction converges to zero, and the
   non-strict warning path for under-resolved layers (5.2 uses strict failure).
 - [x] **5.3** Anderson with fallback — `DESIGN.md` §13.3
@@ -550,20 +560,50 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   final fixed-point residuals are 1.987e-14 versus 2.000e-12. Depths 2/5 each reject and log
   one rank-deficient history before falling back. Every independent profile, divergence, flux,
   bounds, floor, and layer gate remains active; adapter-owned harmonic-flux and essential-trace
-  entries are unchanged. See `tests/manufactured/picard_anderson_convergence.csv` and
+  entries are unchanged. See `tests/verification/picard_anderson_convergence.csv` and
   `docs/verification.md`.
-  <br>Next: milestone 5.4 should use the same free-state adapter, start each continuation stage
+  <br>Next: milestone 5.5 (staged continuation) should use the same free-state adapter, start each continuation stage
   with a cleared Anderson history, and carry rejected-acceleration events into checkpoint/run
   provenance. It should add an explicit norm-growth acceptance/fallback policy before using
   extrapolation on production states. Fixed harmonic coefficients and essential traces must
   remain outside both continuation and Anderson vectors.
-- [ ] **5.4** Staged continuation — `DESIGN.md` §14.4 · note: §9, §11.2
-  <br>**Phase gate.** Acceptance: axisymmetric benchmark vs. Grad–Shafranov with
-  p=p₀(s(ψ)) and I_tor=I₀(s(ψ)) within tolerance for at least two I₀ targets.
+- [ ] **5.4** Shaped analytic Grad–Shafranov benchmarks (ideal) — `DESIGN.md` §16.3, §25 · note: §11
+  <br>Acceptance: promote the Zheng (1996) and Cerfon–Freidberg (2010) Solov'ev-profile
+  analytic solutions into an analytic-equilibrium module of the main package
+  (coefficient solves, ψ and its derivatives, boundary-contour extraction, figure-of-
+  merit integrals); add shaped R–Z domains whose boundary is a ψ=const contour of the
+  analytic solution, so the shipped homogeneous-Dirichlet GS solver applies unchanged
+  (rectangular Dirichlet-lift cases are not required — flux-contour boundaries only);
+  measure ideal-FEM vs. ideal-analytic convergence for at least one smooth boundary
+  (Zheng Fig. 1 and/or Cerfon–Freidberg smooth) and one X-point boundary
+  (Cerfon–Freidberg separatrix, which puts a corner on the domain boundary). Recover
+  shape/axis observables from the computed Ψ_h, not from the input coefficients, and
+  report the boundary geometry-approximation error alongside the FE rates
+  (`DESIGN.md` §16.4 pattern).
   <br>Measured: —
-  <br>Planned verification: include a shaped analytic Zheng or Cerfon–Freidberg
-  Grad–Shafranov solution from the §16.3 references, not only the rectangular
-  manufactured operator test supplied by 5.1.
+  <br>Test placement: one cheap smooth-boundary sentinel (single order, two meshes,
+  well under ~20 s) in the not-slow suite; the full order/mesh scans and the X-point
+  case marked `slow` for nightly, each under ~90 s. Rate tables in
+  `tests/verification/`, recorded in `docs/verification.md`.
+  <br>Seed: `scripts/zheng_grad_shafranov_benchmark.py` (committed 2026-08-21) already
+  implements the Zheng coefficient solve, analytic self-checks, shape recovery from
+  Ψ_h, and a rectangle-domain Dirichlet-lift benchmark tied back to the shipped
+  solver; reuse its analytic machinery in the package module and replace the rectangle
+  by flux-contour domains.
+- [ ] **5.5** Staged continuation + non-ideal benchmark — `DESIGN.md` §14.4, §25 · note: §9, §11.2
+  <br>**Phase gate.** Acceptance: staged continuation in pressure amplitude, D_u, and
+  anisotropy; axisymmetric non-ideal (regularized M-equation) solve benchmarked against
+  the milestone-5.4 Grad–Shafranov references with p=p₀(s(ψ)) and I_tor=I₀(s(ψ))
+  within tolerance for at least two I₀ targets on at least one shaped smooth-boundary
+  case. The primary non-ideal reference is the ideal *analytic* solution — it shares no
+  discretization with the code under test, so agreement cannot come from a shared bug.
+  Report the same-mesh ideal-FEM solution alongside to split the observed difference
+  into discretization error and regularization bias (finite ε_κ, D_u, mollifier
+  width), and show the non-ideal-to-ideal difference decreases as continuation stages
+  the regularization parameters down. The X-point/separatrix non-ideal comparison is a
+  nightly diagnostic, not part of the gate: finite anisotropy at a separatrix is a
+  Phase-6/7-adjacent regime whose tolerance is not yet specified.
+  <br>Measured: —
 
 ## Phase 6 — 3D fixed boundary
 
