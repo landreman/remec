@@ -50,6 +50,8 @@ class _StageSolver:
             pressure_profile_error=2.0e-12,
             current_profile_error=3.0e-12,
             projected_current_profile_error=4.0e-12,
+            target_toroidal_flux=1.25,
+            toroidal_flux_relative_error=5.0e-12,
             target_total_current=0.5 * self.stage.pressure_amplitude,
             projection_correction_relative_norm=1.0e-3 / index,
             nonideal_to_analytic_relative_l2_error=2.0e-2 / index,
@@ -57,6 +59,8 @@ class _StageSolver:
             nonideal_to_ideal_fem_relative_l2_difference=2.0e-2 / index,
             minimum_current_layer_cells=8.0,
             minimum_pressure_layer_cells=9.0,
+            minimum_magnetic_magnitude=0.7,
+            magnetic_floor_activity_l2=2.0e-24,
             rejected_acceleration_attempts=index - 1,
         )
 
@@ -148,6 +152,7 @@ def test_schedule_rejects_reversals(stages: tuple[ContinuationStage, ...], messa
         ({"pressure_profile_error": 1.0e-4}, "pressure profile"),
         ({"current_profile_error": 1.0e-4}, "current profile"),
         ({"projected_current_profile_error": 1.0e-4}, "projected current profile"),
+        ({"toroidal_flux_relative_error": 1.0e-4}, "toroidal flux"),
         ({"nonideal_to_analytic_relative_l2_error": 3.0e-2}, "regularization bias"),
         ({"projection_correction_relative_norm": 2.0e-3}, "projection correction"),
     ],

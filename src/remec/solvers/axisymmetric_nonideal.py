@@ -104,7 +104,7 @@ def _axisymmetric_volume_map(
             axisymmetric_data,
             spatial_width_cells=0.35,
             levels=levels,
-            coarea_consistency_tolerance=0.3,
+            coarea_consistency_tolerance=0.1,
         ),
         mapped_points,
     )
@@ -175,12 +175,23 @@ class _ZhengContinuationContext:
     """Shared mesh, ideal profiles, and stage-local reduced solves."""
 
     def __init__(
-        self, equilibrium: ZhengEquilibrium, *, maxh: float, polynomial_order: int
+        self,
+        equilibrium: ZhengEquilibrium,
+        *,
+        maxh: float,
+        polynomial_order: int,
+        toroidal_flux: float | None = None,
+        magnetic_floor: float = 1.0e-12,
     ) -> None:
         import ngsolve as ng
 
+        if not np.isfinite(magnetic_floor) or magnetic_floor <= 0.0:
+            raise ValueError("magnetic_floor must be finite and positive")
+        if toroidal_flux is not None and (not np.isfinite(toroidal_flux) or toroidal_flux == 0.0):
+            raise ValueError("toroidal_flux must be finite and nonzero")
         self.equilibrium = equilibrium
         self.polynomial_order = polynomial_order
+        self.magnetic_floor = magnetic_floor
         self.domain = AxisymmetricFluxContourDomain(
             equilibrium.boundary_contour(samples=257),
             maxh=maxh,
@@ -191,7 +202,10 @@ class _ZhengContinuationContext:
         self.geometry_owner = bundle._geometry_owner
         self.scalar_space = ng.H1(self.mesh, order=polynomial_order, dirichlet=".*")
         self.unconstrained_space = ng.H1(self.mesh, order=polynomial_order)
+        self.toroidal_space = self.unconstrained_space
         self.ndof = self.scalar_space.ndof
+        self.toroidal_ndof = self.toroidal_space.ndof
+        self._ampere_cache: tuple[Any, Any, Any, Any, Any, Any] | None = None
         # Explicit annotations keep the NumPy 2.2/Python 3.10 stubs from widening
         # these deterministic grids to ``floating[Any]``.
         self.shell_edges: FloatArray = np.linspace(0.0, 1.0, 5, dtype=np.float64)
@@ -203,6 +217,14 @@ class _ZhengContinuationContext:
                 equilibrium.radial_derivative(ng.x, ng.y),
                 equilibrium.vertical_derivative(ng.x, ng.y),
             )
+        )
+        full_ideal_i = ng.sqrt(
+            self.edge_toroidal_field**2 + 2.0 * equilibrium.a2 * self.reference_flux
+        )
+        self.toroidal_flux = (
+            float(toroidal_flux)
+            if toroidal_flux is not None
+            else float(ng.Integrate(full_ideal_i / ng.x, self.mesh, order=10))
         )
         self.reference_volume_map, self.reference_mapped_points = _axisymmetric_volume_map(
             self.mesh,
@@ -254,22 +276,42 @@ class _ZhengContinuationContext:
         amplitude = first_stage.pressure_amplitude
         psi = ng.GridFunction(self.scalar_space)
         psi.Set(amplitude * self.reference_flux)
-        toroidal_field = ng.GridFunction(self.scalar_space)
+        toroidal_field = ng.GridFunction(self.toroidal_space)
         ideal_i = ng.sqrt(
             self.edge_toroidal_field**2
             + 2.0 * amplitude**2 * self.equilibrium.a2 * self.reference_flux
         )
         toroidal_field.Set(ideal_i)
+        self._enforce_toroidal_flux(toroidal_field)
         return _vector_state(psi, toroidal_field)
+
+    def _enforce_toroidal_flux(self, toroidal_field: Any) -> float:
+        r"""Fix the ``(Igrad)`` constant mode by ``Psi_t=int_Omega I/R dR dZ``."""
+        import ngsolve as ng
+
+        flux_weight = float(ng.Integrate(1.0 / ng.x, self.mesh, order=10))
+        realized = float(ng.Integrate(toroidal_field / ng.x, self.mesh, order=10))
+        shift = (self.toroidal_flux - realized) / flux_weight
+        constant = ng.GridFunction(self.toroidal_space)
+        constant.Set(1.0)
+        toroidal_field.vec.data += shift * constant.vec
+        return self._toroidal_flux_relative_error(toroidal_field)
+
+    def _toroidal_flux_relative_error(self, toroidal_field: Any) -> float:
+        """Measure the accepted state's prescribed toroidal-flux invariant."""
+        import ngsolve as ng
+
+        realized = float(ng.Integrate(toroidal_field / ng.x, self.mesh, order=10))
+        return abs(realized - self.toroidal_flux) / abs(self.toroidal_flux)
 
     def fields_from_state(self, state: FloatArray) -> tuple[Any, Any]:
         """Restore the two full finite-element coefficient vectors."""
         import ngsolve as ng
 
-        if state.shape != (2 * self.ndof,):
+        if state.shape != (self.ndof + self.toroidal_ndof,):
             raise ValueError("axisymmetric continuation state has the wrong size")
         psi = ng.GridFunction(self.scalar_space)
-        toroidal_field = ng.GridFunction(self.scalar_space)
+        toroidal_field = ng.GridFunction(self.toroidal_space)
         psi.vec.FV().NumPy()[:] = state[: self.ndof]
         toroidal_field.vec.FV().NumPy()[:] = state[self.ndof :]
         return psi, toroidal_field
@@ -288,13 +330,21 @@ class _ZhengContinuationContext:
         magnetic_field: Any,
         perpendicular_ratio: float,
     ) -> tuple[Any, MollifiedVolumeMap, Any, float]:
-        r"""Solve axisymmetric ``(M4a)`` with ``K_2`` and uniform ``S_ref=1``."""
+        r"""Solve axisymmetric ``(M4a)`` with ``K_2`` and uniform ``S_ref=1``.
+
+        The assembled R--Z form is
+        ``int_Omega R grad(v).K_2 grad(chi) = int_Omega R v`` with ``chi=0`` on
+        the wall. The same solved ``chi`` owns the mollified ``s=V_chi/V_Omega``
+        composition used by ``(M4b)`` and ``(M3b)``.
+        """
         import ngsolve as ng
 
         trial, test = self.scalar_space.TnT()
         trial_gradient = ng.grad(trial)
         test_gradient = ng.grad(test)
-        magnitude = ng.sqrt(ng.InnerProduct(magnetic_field, magnetic_field) + 1.0e-24)
+        magnitude = ng.sqrt(
+            ng.InnerProduct(magnetic_field, magnetic_field) + self.magnetic_floor**2
+        )
         poloidal_direction = ng.CoefficientFunction(
             (magnetic_field[0] / magnitude, magnetic_field[1] / magnitude)
         )
@@ -337,7 +387,15 @@ class _ZhengContinuationContext:
         stage: ContinuationStage,
         current_diffusivity: float,
     ) -> _CurrentSolution:
-        r"""Solve bordered ``axi_M3``--``(M3b)`` and reconstruct physical ``(M2)``."""
+        r"""Solve bordered ``axi_M3``--``(M3b)`` and reconstruct physical ``(M2)``.
+
+        The weak operator contains ``v B.grad(utilde)``,
+        ``D_u grad_perp(v).grad_perp(utilde)``, the ``(B.grad(p))/B_safe^2`` reaction,
+        and ``-mu0 D_u grad_perp(utilde).grad(p) v/B_safe^2``. Its right-hand side is
+        ``2 B.(grad(p) x grad(B_safe))/B_safe^3``. Shell rows impose ``(M3b)`` and
+        the returned current is
+        ``J = u B + B x grad(p)/B_safe^2 - D_u grad_perp(utilde)`` from ``(M2)``.
+        """
         import ngsolve as ng
 
         normalized_volume, normalized_gradient = _pchip_volume_coordinate(
@@ -370,7 +428,9 @@ class _ZhengContinuationContext:
         trial, test = self.scalar_space.TnT()
         trial_gradient = ng.CoefficientFunction((ng.grad(trial)[0], ng.grad(trial)[1], 0.0))
         test_gradient = ng.CoefficientFunction((ng.grad(test)[0], ng.grad(test)[1], 0.0))
-        magnitude = ng.sqrt(ng.InnerProduct(magnetic_field, magnetic_field) + 1.0e-24)
+        magnitude = ng.sqrt(
+            ng.InnerProduct(magnetic_field, magnetic_field) + self.magnetic_floor**2
+        )
         direction = magnetic_field / magnitude
 
         def perpendicular(gradient: Any) -> Any:
@@ -508,22 +568,33 @@ class _ZhengContinuationContext:
         mapped_points: Any,
         target_current: FloatArray,
     ) -> tuple[Any, Any, float, FloatArray, float]:
-        r"""Apply the compatible, shell-moment-preserving axisymmetric ``(M1)`` update.
+        r"""Apply compatible axisymmetric ``(M1)`` and ``(Igrad)`` updates.
 
         The raw ``(M2)`` toroidal current is first mapped through the scalar
         Grad--Shafranov operator.  Four shell-local response columns then correct the
         strong discrete curl so its independently re-integrated ``(M3b)`` moments equal
         ``I_0``.  The poloidal current is projected through the companion ``I=R B_phi``
         potential, so the returned current is a curl representation and therefore
-        divergence-free by construction.
+        divergence-free by construction. The weak forms are
+        ``int grad(psi).grad(v)/R = int mu0 J_phi v + shell corrections`` and
+        ``int grad(I).grad(q)/R = int (mu0 R J_Z,-mu0 R J_R).grad(q)/R``.
+        The ``(Igrad)`` constant mode is fixed by the prescribed note-§11.2 condition
+        ``Psi_t=int_Omega I/R dR dZ``. The reported M1 residual is the maximum of the
+        corrected Grad--Shafranov and anchored ``Igrad`` residuals.
         """
         import ngsolve as ng
 
-        trial, test = self.scalar_space.TnT()
+        _, test = self.scalar_space.TnT()
+        _, i_test = self.toroidal_space.TnT()
         quadrature = ng.dx(bonus_intorder=6)
-        free = self.scalar_space.FreeDofs()
-        psi_form = ng.BilinearForm(self.scalar_space)
-        psi_form += (ng.InnerProduct(ng.grad(trial), ng.grad(test)) / ng.x).Compile() * quadrature
+        (
+            psi_form,
+            psi_inverse,
+            free,
+            i_form,
+            i_inverse,
+            anchored_free,
+        ) = self._ampere_operators()
         psi_rhs = ng.LinearForm(self.scalar_space)
         physical_j_phi = -current[2]
         psi_rhs += (_MU0 * physical_j_phi * test).Compile() * quadrature
@@ -541,34 +612,30 @@ class _ZhengContinuationContext:
             form = ng.LinearForm(self.scalar_space)
             form += (_MU0 * basis * test).Compile() * quadrature
             correction_forms.append(form)
-        i_form = ng.BilinearForm(self.scalar_space)
-        i_form += (ng.InnerProduct(ng.grad(trial), ng.grad(test)) / ng.x).Compile() * quadrature
         target_i_gradient = ng.CoefficientFunction(
             (_MU0 * ng.x * current[1], -_MU0 * ng.x * current[0])
         )
-        i_rhs = ng.LinearForm(self.scalar_space)
-        i_rhs += (ng.InnerProduct(target_i_gradient, ng.grad(test)) / ng.x).Compile() * quadrature
+        i_rhs = ng.LinearForm(self.toroidal_space)
+        i_rhs += (ng.InnerProduct(target_i_gradient, ng.grad(i_test)) / ng.x).Compile() * quadrature
         with ng.TaskManager():
-            psi_form.Assemble()
             psi_rhs.Assemble()
             for form in correction_forms:
                 form.Assemble()
-            i_form.Assemble()
             i_rhs.Assemble()
             psi = ng.GridFunction(self.scalar_space)
-            psi_inverse = psi_form.mat.Inverse(free, inverse="umfpack")
             psi.vec.data = psi_inverse * psi_rhs.vec
             responses: list[Any] = []
             for form in correction_forms:
                 response = ng.GridFunction(self.scalar_space)
                 response.vec.data = psi_inverse * form.vec
                 responses.append(response)
-            toroidal_field = ng.GridFunction(self.scalar_space)
-            toroidal_field.Set(self.edge_toroidal_field)
-            correction = i_rhs.vec.CreateVector()
-            correction.data = i_rhs.vec - i_form.mat * toroidal_field.vec
-            i_inverse = i_form.mat.Inverse(free, inverse="umfpack")
-            toroidal_field.vec.data += i_inverse * correction
+            toroidal_field = ng.GridFunction(self.toroidal_space)
+            toroidal_field.vec.data = i_inverse * i_rhs.vec
+        self._enforce_toroidal_flux(toroidal_field)
+        i_residual = i_rhs.vec.CreateVector()
+        i_residual.data = i_rhs.vec - i_form.mat * toroidal_field.vec
+        i_residual.data = ng.Projector(anchored_free, True) * i_residual
+        relative_i_residual = float(ng.Norm(i_residual)) / max(1.0, float(ng.Norm(i_rhs.vec)))
 
         def projected_moments(field: Any) -> _MomentRows:
             gradient = ng.grad(field)
@@ -599,7 +666,10 @@ class _ZhengContinuationContext:
         psi_residual = corrected_rhs.CreateVector()
         psi_residual.data = corrected_rhs - psi_form.mat * psi.vec
         psi_residual.data = ng.Projector(free, True) * psi_residual
-        residual = float(ng.Norm(psi_residual)) / max(1.0, float(ng.Norm(corrected_rhs)))
+        residual = max(
+            float(ng.Norm(psi_residual)) / max(1.0, float(ng.Norm(corrected_rhs))),
+            relative_i_residual,
+        )
         correction_samples = np.zeros_like(volume_map.quadrature_weights)
         for coefficient, basis in zip(correction_coefficients, correction_bases, strict=True):
             correction_samples += float(coefficient) * _sample_scalar(basis, mapped_points)
@@ -610,6 +680,56 @@ class _ZhengContinuationContext:
             / max(1.0e-300, float(np.dot(weights, raw_samples**2)))
         )
         return psi, toroidal_field, residual, projected_current, correction_norm
+
+    def _ampere_operators(self) -> tuple[Any, Any, Any, Any, Any, Any]:
+        """Assemble and factor the two mesh-constant ``(M1)``/``(Igrad)`` blocks once."""
+        import ngsolve as ng
+
+        if self._ampere_cache is None:
+            psi_trial, psi_test = self.scalar_space.TnT()
+            i_trial, i_test = self.toroidal_space.TnT()
+            quadrature = ng.dx(bonus_intorder=6)
+            psi_form = ng.BilinearForm(self.scalar_space)
+            psi_form += (
+                ng.InnerProduct(ng.grad(psi_trial), ng.grad(psi_test)) / ng.x
+            ).Compile() * quadrature
+            i_form = ng.BilinearForm(self.toroidal_space)
+            i_form += (
+                ng.InnerProduct(ng.grad(i_trial), ng.grad(i_test)) / ng.x
+            ).Compile() * quadrature
+            free = self.scalar_space.FreeDofs()
+            anchored_free = ng.BitArray(self.toroidal_space.FreeDofs())
+            anchored_free.Clear(0)
+            with ng.TaskManager():
+                psi_form.Assemble()
+                i_form.Assemble()
+                psi_inverse = psi_form.mat.Inverse(free, inverse="umfpack")
+                i_inverse = i_form.mat.Inverse(anchored_free, inverse="umfpack")
+            self._ampere_cache = (
+                psi_form,
+                psi_inverse,
+                free,
+                i_form,
+                i_inverse,
+                anchored_free,
+            )
+        return self._ampere_cache
+
+    def magnetic_floor_diagnostics(self, psi: Any, toroidal_field: Any) -> tuple[float, float]:
+        """Monitor the physical field minimum and regularized-direction floor activity."""
+        import ngsolve as ng
+
+        magnetic_field = self.magnetic_field(psi, toroidal_field)
+        magnitude_squared = _sample_scalar(
+            ng.InnerProduct(magnetic_field, magnetic_field), self.reference_mapped_points
+        )
+        physical_magnitude = np.sqrt(np.maximum(0.0, magnitude_squared))
+        activity = self.magnetic_floor**2 / (magnitude_squared + self.magnetic_floor**2)
+        weights = self.reference_volume_map.quadrature_weights
+        activity_l2 = sqrt(
+            float(np.dot(weights, activity**2)) / max(1.0e-300, float(np.sum(weights)))
+        )
+        return float(np.min(physical_magnitude)), activity_l2
 
     def ideal_fem(self, stage: ContinuationStage) -> Any:
         """Solve the same-mesh ideal GS problem used to separate discretization bias."""
@@ -714,6 +834,10 @@ class _ZhengContinuationContext:
         projected_current_error = float(
             np.max(np.abs(projected_current - current_solution.target_current))
         )
+        toroidal_flux_error = self._toroidal_flux_relative_error(toroidal_field)
+        minimum_magnetic_magnitude, floor_activity_l2 = self.magnetic_floor_diagnostics(
+            psi, toroidal_field
+        )
         return ContinuationStageResult(
             stage=stage,
             state=tuple(float(value) for value in _vector_state(psi, toroidal_field)),
@@ -726,6 +850,8 @@ class _ZhengContinuationContext:
             pressure_profile_error=current_solution.pressure_profile_error,
             current_profile_error=current_error,
             projected_current_profile_error=projected_current_error,
+            target_toroidal_flux=self.toroidal_flux,
+            toroidal_flux_relative_error=toroidal_flux_error,
             target_total_current=float(current_solution.target_current[-1]),
             projection_correction_relative_norm=projection_correction,
             nonideal_to_analytic_relative_l2_error=self.relative_l2(psi, analytic),
@@ -736,6 +862,8 @@ class _ZhengContinuationContext:
             # diagnostic, so both fields are explicitly not applicable here.
             minimum_current_layer_cells=None,
             minimum_pressure_layer_cells=None,
+            minimum_magnetic_magnitude=minimum_magnetic_magnitude,
+            magnetic_floor_activity_l2=floor_activity_l2,
             rejected_acceleration_attempts=rejected_acceleration_attempts,
         )
 
@@ -758,6 +886,8 @@ def run_zheng_nonideal_continuation(
     maxh: float = 0.18,
     polynomial_order: int = 2,
     require_decreasing_projection_correction: bool = True,
+    toroidal_flux: float | None = None,
+    magnetic_floor: float = 1.0e-12,
 ) -> StagedContinuationResult:
     r"""Run milestone 5.5 on one smooth Zheng ``psi=0`` shaped boundary.
 
@@ -780,6 +910,8 @@ def run_zheng_nonideal_continuation(
         equilibrium,
         maxh=maxh,
         polynomial_order=polynomial_order,
+        toroidal_flux=toroidal_flux,
+        magnetic_floor=magnetic_floor,
     )
     solver = StagedContinuationSolver(
         lambda stage: _StageSolver(context, stage),

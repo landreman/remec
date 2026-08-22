@@ -51,6 +51,8 @@ class ContinuationStageResult:
     pressure_profile_error: float
     current_profile_error: float
     projected_current_profile_error: float
+    target_toroidal_flux: float
+    toroidal_flux_relative_error: float
     target_total_current: float
     projection_correction_relative_norm: float
     nonideal_to_analytic_relative_l2_error: float
@@ -58,6 +60,8 @@ class ContinuationStageResult:
     nonideal_to_ideal_fem_relative_l2_difference: float
     minimum_current_layer_cells: float | None
     minimum_pressure_layer_cells: float | None
+    minimum_magnetic_magnitude: float
+    magnetic_floor_activity_l2: float
     rejected_acceleration_attempts: int = 0
 
 
@@ -79,6 +83,7 @@ class StagedContinuationOptions:
     checkpoint_cadence: int = 1
     residual_tolerance: float = 1.0e-8
     profile_tolerance: float = 1.0e-10
+    toroidal_flux_tolerance: float = 1.0e-10
     minimum_layer_cells: float = 6.0
     maximum_state_growth_factor: float = 10.0
     require_decreasing_regularization_bias: bool = True
@@ -93,6 +98,7 @@ class StagedContinuationOptions:
         for name in (
             "residual_tolerance",
             "profile_tolerance",
+            "toroidal_flux_tolerance",
             "minimum_layer_cells",
             "maximum_state_growth_factor",
         ):
@@ -198,6 +204,10 @@ class StagedContinuationSolver:
                     pressure_profile_error=row.pressure_profile_error,
                     current_profile_error=row.current_profile_error,
                     projected_current_profile_error=row.projected_current_profile_error,
+                    target_toroidal_flux=row.target_toroidal_flux,
+                    toroidal_flux_relative_error=row.toroidal_flux_relative_error,
+                    minimum_magnetic_magnitude=row.minimum_magnetic_magnitude,
+                    magnetic_floor_activity_l2=row.magnetic_floor_activity_l2,
                     nonideal_to_analytic_relative_l2_error=(
                         row.nonideal_to_analytic_relative_l2_error
                     ),
@@ -231,14 +241,20 @@ class StagedContinuationSolver:
             row.pressure_profile_error,
             row.current_profile_error,
             row.projected_current_profile_error,
+            abs(row.target_toroidal_flux),
+            row.toroidal_flux_relative_error,
             abs(row.target_total_current),
             row.projection_correction_relative_norm,
             row.nonideal_to_analytic_relative_l2_error,
             row.ideal_fem_to_analytic_relative_l2_error,
             row.nonideal_to_ideal_fem_relative_l2_difference,
+            row.minimum_magnetic_magnitude,
+            row.magnetic_floor_activity_l2,
         )
         if any(not isfinite(value) or value < 0.0 for value in scalar_values):
             raise ValueError("continuation diagnostics must be finite and non-negative")
+        if row.target_toroidal_flux == 0.0:
+            raise ValueError("target toroidal flux must be nonzero")
         layer_values = (row.minimum_current_layer_cells, row.minimum_pressure_layer_cells)
         if any(
             value is not None and (not isfinite(value) or value < 0.0) for value in layer_values
@@ -262,6 +278,11 @@ class StagedContinuationSolver:
                 "projected current profile",
                 row.projected_current_profile_error,
                 self.options.profile_tolerance,
+            ),
+            (
+                "toroidal flux",
+                row.toroidal_flux_relative_error,
+                self.options.toroidal_flux_tolerance,
             ),
         )
         for name, value, tolerance in gates:
