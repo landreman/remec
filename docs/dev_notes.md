@@ -267,3 +267,12 @@
   several small ones elsewhere; and setup time shows up in `--durations` separately
   (`test_m3_gradient_comparison` spends 15 s in a module-scoped fixture), so read the
   `setup` rows, not just the `call` rows.
+
+- Milestone 5.5 Option 1 (NGSolve 6.2.2606): an unconstrained scalar H¹ stiffness
+  matrix retains its constant null mode even though `FreeDofs()` returns every DOF.
+  For the axisymmetric `Igrad` solve, copy that bit array with `ngsolve.BitArray`, clear
+  one deterministic anchor before the UMFPACK inverse, and then add the constant field
+  required by `integral_Omega I/R = Psi_t`. The shift leaves the stiffness residual
+  unchanged and enforces the prescribed flux to roundoff; projecting the algebraic
+  residual with the anchored bit array avoids counting the deliberately eliminated
+  null row.

@@ -621,7 +621,7 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   retain exact ray-root parameterizations on both sides of each X-point; do not replace
   them with a fixed sampled polygon. The double-null non-ideal
   case remains nightly diagnostic only, as specified below.
-- [~] **5.5** Staged continuation + non-ideal benchmark — `DESIGN.md` §14.4, §25 · note: §9, §11.2
+- [x] **5.5** Staged continuation + non-ideal benchmark — `DESIGN.md` §14.4, §25 · note: §9, §11.2
   <br>**Phase gate.** Acceptance: staged continuation in pressure amplitude, D_u, and
   anisotropy; axisymmetric non-ideal (regularized M-equation) solve benchmarked against
   the milestone-5.4 Grad–Shafranov references with p=p₀(s(ψ)) and I_tor=I₀(s(ψ))
@@ -638,27 +638,28 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   pressure amplitudes 0.6 → 0.8 → 1.0 while reducing D_u 0.060 → 0.030 → 0.015 and
   epsilon_kappa 0.120 → 0.060 → 0.030, with a fresh Anderson history at every stage.
   On the smooth Zheng boundary, the 0.8-MA and 1.0-MA profile families realize all raw
-  and compatible-projected I₀ shell moments below 3.34e-16 and 2.23e-16 absolute,
+  and compatible-projected I₀ shell moments below 2.23e-16 and 4.45e-16 absolute,
   respectively; independently reconstructed pressure-profile error stays below
-  1.16e-11. M1/M3/M3b/M4a residuals stay below
-  4.0e-16 and fixed-point residuals below 4.5e-9. Non-ideal/analytic L² errors decrease
-  strictly 0.25994 → 0.25637 → 0.24109 and 0.25937 → 0.25416 → 0.23377, while the
+  1.16e-11. The combined compatible-M1/Igrad residual stays below 3.52e-14,
+  M3/M3b/M4a below 3.6e-16, and fixed-point residuals below 4.91e-9.
+  Non-ideal/analytic L² errors decrease strictly
+  0.25932 → 0.25533 → 0.23985 and 0.25841 → 0.25261 → 0.23207, while the
   same-mesh ideal/analytic error is 5.352e-4. With pressure held at full amplitude, the
-  regularization-only errors decrease 0.32151 → 0.31796 → 0.30704. A five-mesh study
-  records the compatible-current correction 0.23812 → 0.17367 → 0.20691 → 0.13285 →
-  0.07555; the retained pre-asymptotic reversal is followed by fine rates 2.170 and
-  2.483. Critical-layer diagnostics are not applicable on this smooth nested case. See
+  six-point regularization-only ladder decreases monotonically
+  0.31976 → 0.31632 → 0.30571 → 0.28475 → 0.26330 → 0.25179; the final/first ratio
+  0.7874 clears ADR 0006's 0.80 gate. A five-mesh study records the compatible-current
+  correction 0.23792 → 0.17417 → 0.20700 → 0.13205 → 0.07511; its three-finest-mesh
+  least-squares effective-h rate is 2.352, clearing the ≥1.0 rate and ≤0.10 finest
+  correction gates. Across every recorded row, relative toroidal-flux error is at most
+  1.04e-15; minimum sampled |B| is 0.8515 and default-floor activity stays below
+  7.26e-25. Critical-layer diagnostics are not applicable on this smooth nested case. See
   `tests/verification/axisymmetric_nonideal_continuation.csv`,
   `tests/verification/axisymmetric_nonideal_refinement.csv`, and
   `docs/verification.md`.
-  <br>Decided 2026-08-22: ADR 0006 Option 1 approved — free-I trace with one bordered
-  prescribed-Ψ_t constraint, monitored scalar correction retained. Remaining 5.5 work:
-  implement the free-trace solve, regenerate the five-mesh refinement study and the
-  fixed-pressure regularization ladder extended to D_u ≤ 0.00375 / ε_κ ≤ 0.0075, and
-  evaluate the three binding escalation criteria in ADR 0006 (correction fine-rate ≥ 1.0
-  and finest correction ≤ 0.10; final-stage field error ≥ 20% below first-stage on the
-  extended ladder; relative Ψ_t residual ≤ 1e-10 in every accepted row). If any trigger
-  fires, schedule the mixed u--J closure (ADR 0006 Option 2) before the Phase-6 gate.
+  <br>ADR 0006 Option 1 is implemented: free-I trace with prescribed-Ψ_t null-mode
+  constraint and monitored scalar correction retained. None of its three binding
+  escalation triggers fires, so the mixed u--J Option 2 remains the documented §27.4
+  contingency rather than scheduled Phase-6 prerequisite.
 
 ## Phase 6 — 3D fixed boundary
 
@@ -746,13 +747,16 @@ at 13.79 s; the next-slowest is the M3 gradient-comparison setup at 11.43 s. No 
 not-slow item exceeds ~20 s, and no existing `slow` test touches the new
 backend-independent Anderson module.
 
-Measured 2026-08-22 on `milestone/5.5-staged-continuation-nonideal`: post-review
-`make check` passes all 277 not-slow tests in 41.08 s ✅. The slowest items are the
-curved-torus current projection at 13.53 s and the shaped non-ideal sentinel at 13.02 s.
-The two full shaped three-stage cases pass in 79.87 s and 85.89 s individually; the
-fixed-pressure/refinement legs take 27.38--70.03 s individually. Every slow test remains
-below 90 s, and the two loadscope modules take 166.16 s and 193.65 s on separate workers,
-within the 5 min full-suite budget.
+Measured 2026-08-22 on `milestone/5.5-staged-continuation-nonideal`: final Option-1
+`make check` passes all 282 not-slow tests in 52.14 s ✅. The slowest items are the
+curved-torus current projection at 16.14 s and the shaped non-ideal sentinel at 15.46 s.
+`make test-full` passes all 298 tests in 169.92 s ✅; its longest slow test is the live
+100-element three-stage pressure ramp at 57.64 s. An initial literal recomputation of
+every fine-table row took 477.30 s and contained 105--109 s individual tests. The final
+suite hoists the two mesh-constant Ampère factorizations, keeps cheap live end-to-end
+checks for the staged ramp and second I₀ target, and applies the same numeric gates to
+the regenerated fine-mesh, refinement, and six-stage CSV records. No tolerance or
+recorded rate moved; every individual test and both suite budgets now pass.
 
 ## Release gates
 
