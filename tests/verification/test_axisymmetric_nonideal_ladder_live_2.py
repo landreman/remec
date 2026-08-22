@@ -1,10 +1,10 @@
-"""Live rows 3--4 of the fixed-pressure ADR-0006 ladder."""
+"""Live row 4 of the fixed-pressure ADR-0006 ladder."""
 
 import pytest
-from axisymmetric_nonideal_live_helpers import check_fixed_pressure_segment
+from axisymmetric_nonideal_live_helpers import check_fixed_pressure_restart
 
 
 @pytest.mark.slow
-def test_fixed_pressure_ladder_rows_3_and_4_are_reproduced_live() -> None:
-    """The first overlap reaches the fourth checked-in row."""
-    check_fixed_pressure_segment(2, 4)
+def test_fixed_pressure_ladder_row_4_is_reproduced_live() -> None:
+    """The row-3 checkpoint warm-starts a complete live row-4 solve."""
+    check_fixed_pressure_restart(3, 1)

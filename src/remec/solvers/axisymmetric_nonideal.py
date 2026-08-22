@@ -184,6 +184,7 @@ class _ZhengContinuationContext:
         polynomial_order: int,
         toroidal_flux: float | None = None,
         magnetic_floor: float = 1.0e-12,
+        mesh_filename: str | None = None,
     ) -> None:
         import ngsolve as ng
 
@@ -199,9 +200,13 @@ class _ZhengContinuationContext:
             maxh=maxh,
             geometry_order=polynomial_order + 1,
         )
-        bundle = self.domain.build_mesh()
-        self.mesh = bundle._mesh
-        self.geometry_owner = bundle._geometry_owner
+        if mesh_filename is None:
+            bundle = self.domain.build_mesh()
+            self.mesh = bundle._mesh
+            self.geometry_owner = bundle._geometry_owner
+        else:
+            self.mesh = ng.Mesh(mesh_filename)
+            self.geometry_owner = self.mesh.ngmesh
         self.scalar_space = ng.H1(self.mesh, order=polynomial_order, dirichlet=".*")
         self.unconstrained_space = ng.H1(self.mesh, order=polynomial_order)
         self.toroidal_space = self.unconstrained_space

@@ -289,6 +289,8 @@
   `maxh=0.10` meshes can have the same H¹ dimension but different edge connectivity or
   DOF ordering across Python-wheel builds (observed on macOS CPython 3.10 versus 3.12+
   and Linux). A raw `GridFunction.vec` is therefore a valid restart only on the exact
-  serialized mesh that owns it. Cross-wheel verification checkpoints store vertex/edge
-  coordinates with their H¹ coefficients and reconstruct a warm start by local
-  quadratic interpolation; never infer portability from matching `ndof` alone.
+  serialized mesh that owns it. The cross-wheel finest-row verification checkpoint
+  therefore includes its 14-KiB compressed Netgen mesh and loads that mesh before
+  restoring the coefficient vector; never infer portability from matching `ndof`
+  alone, and never interpolate hierarchical H¹ coefficients as if they were point
+  values.

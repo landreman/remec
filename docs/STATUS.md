@@ -754,18 +754,20 @@ not-slow item exceeds ~20 s, and no existing `slow` test touches the new
 backend-independent Anderson module.
 
 Measured 2026-08-22 on `milestone/5.5-staged-continuation-nonideal`: final Option-1
-`make check` passes all 288 not-slow tests in 65.18 s ✅. The slowest items are the
-shaped non-ideal sentinel at 18.51 s and the curved-torus current projection at 13.74 s.
-`make test-full` passes all 308 tests in 295.75 s ✅; its longest slow tests are the
-first two overlapping fixed-pressure ladder segments at 67.44 s and 61.97 s. An initial
+`make check` passes all 288 not-slow tests in 65.10 s ✅. The slowest items are the
+shaped non-ideal sentinel at 18.74 s and the curved-torus current projection at 14.05 s.
+`make test-full` passes all 308 tests in 263.21 s ✅; its longest slow tests are the
+fixed-pressure ladder segment at 68.34 s and the constrained-M3 scan at 50.84 s. An initial
 literal recomputation of every fine-table row took 477.30 s and contained 105--168 s
 individual tests. The final suite hoists the two mesh-constant Ampère factorizations,
-runs cold-start acceptance rows and bounded ladder segments nightly, and uses checked-in
+runs cold-start acceptance rows and a bounded ladder segment nightly, and uses checked-in
 accepted magnetic checkpoints only as initial guesses for later acceptance, endpoint,
-and finest-refinement rows. Every such test rebuilds the mesh and evaluates the complete
-M4a--M3--M3b--M2--M1 map and all hard invariants; the checkpoints do not supply any
-diagnostic or asserted value. No tolerance or recorded rate moved; every individual
-test and both suite budgets now pass.
+and finest-refinement rows. Every such test evaluates the complete
+M4a--M3--M3b--M2--M1 map and all hard invariants. The finest row loads its exact
+compressed Netgen mesh to make the hierarchical H¹ coefficient restart portable; the
+other rows rebuild their meshes, and no checkpoint supplies a diagnostic or asserted
+value. No tolerance or recorded rate moved; every individual test and both suite
+budgets now pass.
 
 ## Release gates
 

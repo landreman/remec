@@ -114,12 +114,13 @@ live checks reproduce both three-stage current-profile families on the 238-eleme
 acceptance mesh, both finest projection-refinement rows, and every six-stage
 fixed-pressure row. Each current family begins with a cold-start nightly solve; later
 rows and the fine-refinement cases start from checked-in accepted magnetic checkpoints
-but rebuild the shaped mesh and recompute the complete nonlinear map, diagnostics, and
-hard gates. Four load-scoped ladder modules use two overlapping continuation segments
-for rows 1--4 and accepted restarts for rows 5--6. This keeps every single test below
+and recompute the complete nonlinear map, diagnostics, and hard gates. Four load-scoped
+ladder modules use one cold continuation segment for rows 1--3 and accepted restarts
+for rows 4--6. This keeps every single test below
 90 seconds and the full suite below five minutes under xdist. The `maxh=0.10` restart
-is keyed by topological-node coordinates and locally interpolated, because identical
-`ndof` does not imply identical Netgen edge numbering across Python wheels. Fast tests also read the
+loads its checked-in compressed Netgen mesh before restoring the matching H¹ vector,
+because identical `ndof` does not imply identical Netgen edge numbering across Python
+wheels. The other checkpoints rebuild their shaped meshes. Fast tests also read the
 machine-readable records and recompute the ADR rates and thresholds. Mutation checks
 show that replacing the M4a tensor
 by its isotropic part collapses the pinned finite-anisotropy difference `4.631e-4` to
