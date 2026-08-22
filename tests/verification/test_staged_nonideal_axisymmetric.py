@@ -166,7 +166,7 @@ def test_axisymmetric_m3_pressure_gradient_terms_are_live() -> None:
 
 
 def test_axisymmetric_m2_current_is_reintegrated_independently() -> None:
-    """Reconstructed ``(M2)`` current moments do not reuse the bordered matrices."""
+    """An order-8 integral independently pins the reconstructed ``(M2)`` current."""
     import ngsolve as ng
 
     equilibrium = solve_zheng_equilibrium(

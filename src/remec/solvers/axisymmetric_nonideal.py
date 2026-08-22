@@ -545,9 +545,9 @@ class _ZhengContinuationContext:
         )
         regularizing = -current_diffusivity * perpendicular(utilde_gradient)
         physical_current = physical_u * magnetic_field + diamagnetic + regularizing
-        # Mandatory DESIGN 9.2 correction test (6): re-integrate the complete
-        # reconstructed physical (M2) current instead of reusing the separately
-        # assembled C_u/C_G and known-diamagnetic rows that determined free_g.
+        # Re-evaluate the complete reconstructed (M2) current as a diagnostic on
+        # the solve's mapped quadrature.  This shares quadrature with the bordered
+        # rows; the separate order-8 test integral is the independent mutation pin.
         measured_current = moments(ng.InnerProduct(physical_current, toroidal_gradient)).cumulative
         m3_residual = drive_form.vec.CreateVector()
         m3_residual.data = bilinear.mat * utilde.vec - drive_form.vec

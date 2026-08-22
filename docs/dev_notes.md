@@ -294,3 +294,9 @@
   restoring the coefficient vector; never infer portability from matching `ndof`
   alone, and never interpolate hierarchical H¹ coefficients as if they were point
   values.
+
+- Milestone 5.5 residual convention: the diagnostic fields named
+  `*_relative_residual` use `||r|| / max(1, ||rhs||)`. They are relative when the
+  assembled right-hand side has norm at least one and absolute below that scale; the
+  shaped benchmark's quoted M1/M3/M3b/M4a numbers and `1e-8` gate use this exact
+  normalization.

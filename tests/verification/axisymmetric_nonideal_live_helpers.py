@@ -60,7 +60,7 @@ def check_fixed_pressure_segment(start: int, stop: int) -> None:
 
 
 def check_fixed_pressure_restart(stage_index: int, restart_column: int) -> None:
-    """Recompute one fine ladder row from the preceding converged magnetic state."""
+    """Recompute one fine ladder row from a checked-in accepted magnetic state."""
     with _TABLE.open(newline="") as table_file:
         records = [
             {key: float(value) for key, value in row.items() if key != "study"}

@@ -664,9 +664,9 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   converge within 40 Picard steps, with three of the accepted four shells already
   spanning less than one sampled radial cell. Live nightly tests regenerate both
   acceptance-mesh profile families, both finest correction rows, and all six
-  fixed-pressure rows. Re-integrating the reconstructed physical (M2) current confirms
-  the shell constraints without reusing their bordered matrices; a separate order-8
-  domain integral pins the nonzero total `0.60631864`. A coordinated factor-`0.5`
+  fixed-pressure rows. The reconstructed (M2) shell residual is explicitly a
+  same-mapped-quadrature diagnostic rather than an independent oracle; a separate
+  order-8 domain integral pins the nonzero total `0.60631864`. A coordinated factor-`0.5`
   diamagnetic mutation moves six live acceptance/refinement rows outside their pins
   and shifts that separately integrated total to `0.60632431`.
 
@@ -757,8 +757,8 @@ not-slow item exceeds ~20 s, and no existing `slow` test touches the new
 backend-independent Anderson module.
 
 Measured 2026-08-22 on `milestone/5.5-staged-continuation-nonideal`: final Option-1
-`make check` passes all 289 not-slow tests in 55.05 s ✅. The slowest items are the
-curved-torus current projection at 13.51 s and shaped non-ideal sentinel at 12.97 s.
+`make check` passes all 289 not-slow tests in 56.23 s ✅. The slowest items are the
+curved-torus current projection at 13.57 s and shaped non-ideal sentinel at 13.21 s.
 `make test-full` passes all 309 tests in 193.30 s ✅; its longest slow tests are the
 constrained-M3 scan at 48.01 s and fixed-pressure ladder segment at 47.65 s. An initial
 literal recomputation of every fine-table row took 477.30 s and contained 105--168 s
