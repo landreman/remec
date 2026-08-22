@@ -621,7 +621,7 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   retain exact ray-root parameterizations on both sides of each X-point; do not replace
   them with a fixed sampled polygon. The double-null non-ideal
   case remains nightly diagnostic only, as specified below.
-- [ ] **5.5** Staged continuation + non-ideal benchmark — `DESIGN.md` §14.4, §25 · note: §9, §11.2
+- [x] **5.5** Staged continuation + non-ideal benchmark — `DESIGN.md` §14.4, §25 · note: §9, §11.2
   <br>**Phase gate.** Acceptance: staged continuation in pressure amplitude, D_u, and
   anisotropy; axisymmetric non-ideal (regularized M-equation) solve benchmarked against
   the milestone-5.4 Grad–Shafranov references with p=p₀(s(ψ)) and I_tor=I₀(s(ψ))
@@ -634,7 +634,20 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   the regularization parameters down. The X-point/separatrix non-ideal comparison is a
   nightly diagnostic, not part of the gate: finite anisotropy at a separatrix is a
   Phase-6/7-adjacent regime whose tolerance is not yet specified.
-  <br>Measured: —
+  <br>Measured: macOS / CPython 3.12.2 / NGSolve 6.2.2606 — natural continuation uses
+  pressure amplitudes 0.6 → 0.8 → 1.0 while reducing D_u 0.060 → 0.030 → 0.015 and
+  epsilon_kappa 0.120 → 0.060 → 0.030, with a fresh Anderson history at every stage.
+  On the smooth Zheng boundary, the 0.8-MA and 1.0-MA profile families realize all raw
+  and compatible-projected I₀ shell moments below 3.34e-16 and 2.23e-16 absolute,
+  respectively; pressure-profile error is zero. M1/M3/M3b/M4a residuals stay below
+  4.0e-16 and fixed-point residuals below 4.5e-9. Non-ideal/analytic L² errors decrease
+  strictly 0.25994 → 0.25637 → 0.24109 and 0.25937 → 0.25416 → 0.23377, while the
+  same-mesh ideal/analytic error is 5.352e-4. Compatible-current correction norms also
+  decrease 0.21433 → 0.20691 and 0.21407 → 0.20468. See
+  `tests/verification/axisymmetric_nonideal_continuation.csv` and
+  `docs/verification.md`.
+  <br>Next: Phase 6 should preserve the continuation stage/checkpoint contract while
+  replacing this axisymmetric scalar-Ampère adapter with the 3D fixed-boundary blocks.
 
 ## Phase 6 — 3D fixed boundary
 
@@ -721,6 +734,12 @@ all 255 not-slow tests in 37.50 s ✅. The slowest item is the curved-torus curr
 at 13.79 s; the next-slowest is the M3 gradient-comparison setup at 11.43 s. No individual
 not-slow item exceeds ~20 s, and no existing `slow` test touches the new
 backend-independent Anderson module.
+
+Measured 2026-08-22 on `milestone/5.5-staged-continuation-nonideal`: `make check` passes
+all 274 not-slow tests in 49.80 s ✅. The slowest items are the curved-torus current
+projection at 13.54 s and the shaped non-ideal sentinel at 12.65 s. The two full shaped
+three-stage cases pass in 76.40 s and 83.06 s individually (159.86 s together), within
+the 90 s per-test and 5 min full-suite budgets.
 
 ## Release gates
 

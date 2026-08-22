@@ -5,6 +5,17 @@
 > descriptions of NGSolve expression behavior, but not of the production current-profile
 > closure. Follow `DESIGN.md` §9.2 and `STATUS.md` milestones 3.5–3.6.
 
+- Milestone 5.5 (NGSolve 6.2.2606): for a reduced axisymmetric volume map,
+  `extract_ngsolve_quadrature` supplies the R--Z area weights and deterministic mapped-
+  point ordering; multiply those weights by `2*pi*R` before building
+  `MollifiedVolumeMap` so M4b and M3b share the physical toroidal volume coordinate.
+  `GridFunction.Operator("hesse")` supplies the element-interior Hessian needed to
+  independently evaluate the strong discrete
+  `Delta*psi=psi_RR-psi_R/R+psi_ZZ`. A plain scalar GS mass projection does not preserve
+  mollified shell-current moments pointwise. Reuse its sparse inverse for one shell-local
+  response per constraint, solve the small response matrix, and re-integrate the corrected
+  strong curl; on the shaped benchmark this retains projected M3b moments below 5e-16.
+
 - Milestone 5.4 (Netgen/NGSolve 6.2.2606): `SplineGeometry.AddCurve` accepts a
   Python parameterization and works for one shaped solve, but repeatedly constructing
   many callback-backed curve segments can segfault in later `GenerateMesh` calls after

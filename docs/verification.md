@@ -11,6 +11,67 @@
 > numbers remain valid. Milestone 3.5 migrated the public contract and layer-cake
 > oracle to p₀(s) and the factor V_Ω∫₀¹·ds.
 
+## Milestone 5.5 — staged continuation and the shaped non-ideal benchmark
+
+The concrete R--Z driver uses natural continuation in pressure amplitude, current
+diffusivity `D_u`, and anisotropy ratio `epsilon_kappa = kappa_perp/kappa_parallel`.
+Every
+stage builds a fresh Anderson accelerator, receives only the previous stage's converged
+free `(psi, I=R B_phi)` coefficient vector, and records rejected acceleration attempts,
+profile gates, and checkpoint cadence under one deterministic configuration digest. The
+continuation path used for the acceptance table is
+
+| pressure amplitude | `D_u` | `epsilon_kappa` |
+| ---: | ---: | ---: |
+| 0.6 | 0.060 | 0.120 |
+| 0.8 | 0.030 | 0.060 |
+| 1.0 | 0.015 | 0.030 |
+
+On the smooth Zheng `psi=0` shaped boundary, each nonlinear cycle solves the exact
+axisymmetric reductions in note §11: `axi_M4` for the reference potential, the shared
+mollified `s=V_chi(chi)/V_Omega` composition (M4b), the bordered `axi_M3`--(M3b)
+system for `(utilde, G)`, all three (M2) current terms, and both scalar Ampère updates
+for `(psi, I)`. Axisymmetric quadrature uses the physical `2*pi*R dR dZ` volume
+measure. The run is nondimensionalized with `mu_0=1`; the two independently generated
+Zheng coefficient sets retain their distinct 0.8-MA and 1.0-MA current scales. Their
+stagewise total `I_0` targets are respectively
+`0.603184 -> 0.804246 -> 1.005307` and
+`0.753980 -> 1.005307 -> 1.256634`.
+
+The current passed to Ampère is a compatible scalar-curl representation. Four shell-local
+response columns correct its toroidal part, after which a strong discrete curl is
+independently re-integrated with the shared mollified shell weights. Both the raw M2
+current and this projected current realize every `I_0(s)` row below
+`4.5e-16` absolute error. The relative projection-correction norms decrease
+from 0.21433 to 0.20691 for the 0.8-MA target and from 0.21407 to 0.20468 for the
+1.0-MA target. These coarse shaped-mesh corrections are reported rather than hidden;
+later mesh refinement should reduce them as in milestone 4.4.
+
+The primary reference is the analytic Zheng field, independent of the FEM solve. The
+same-mesh ideal FEM error is also measured so the non-ideal difference is not mislabeled
+as discretization error:
+
+| current target | non-ideal / analytic relative L² (stages 1 → 3) | same-mesh ideal / analytic | final non-ideal / same-mesh ideal |
+| --- | --- | ---: | ---: |
+| 0.8 MA | 0.25994 → 0.25637 → 0.24109 | 5.352e-4 | 0.24105 |
+| 1.0 MA | 0.25937 → 0.25416 → 0.23377 | 5.352e-4 | 0.23373 |
+
+Thus the finite-`D_u`, finite-anisotropy, mollifier, and shell-discretization bias
+decreases at every stage for both profiles, while the ideal discretization contribution
+stays fixed and two orders of magnitude smaller. Across all six rows the M1, M3, M3b,
+and M4a relative residuals are below `4.0e-16`, the fixed-point residual is
+below `4.5e-9`, and the smooth axisymmetric scale spans 10.89 effective
+polynomial cells. The complete records are in
+`tests/verification/axisymmetric_nonideal_continuation.csv`.
+
+The cheap PR sentinel executes one real shaped M4a--M1 cycle in about 13 seconds. The
+two complete three-stage/current-profile cases are marked `slow`; locally they take less
+than 70 seconds each and run nightly. Mutation checks show that replacing the M4a tensor
+by its isotropic part collapses the direct finite-anisotropy solution difference from
+`4.66e-4` to zero, and deleting the `-D_u grad_perp(utilde)` term from the reconstructed
+M2 current opens the independently evaluated M3b gate to `1.19e-5`. Both mutations
+therefore turn the suite red despite successful inner sparse solves.
+
 ## Milestone 5.4 — shaped analytic Grad–Shafranov benchmarks
 
 The analytic-equilibrium module implements both Zheng et al. (1996), Eqs. (14)--(20),
