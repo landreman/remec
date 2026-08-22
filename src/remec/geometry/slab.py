@@ -17,6 +17,7 @@ class _MeshBundle:
 
     _mesh: Any
     boundary_names: tuple[str, ...]
+    _geometry_owner: Any = None
 
 
 @dataclass(frozen=True, slots=True)

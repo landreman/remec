@@ -2,10 +2,125 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from math import ceil, isfinite
+from typing import Any
 
+import numpy as np
+
+from remec.analytic_equilibria import FluxContour
 from remec.geometry.slab import _MeshBundle
+
+
+@dataclass(frozen=True, slots=True)
+class AxisymmetricFluxContourDomain:
+    """A shaped R-Z domain whose single wall is an analytic constant-flux contour."""
+
+    contour: FluxContour
+    maxh: float
+    geometry_order: int = 2
+
+    def __post_init__(self) -> None:
+        if not isfinite(self.maxh) or self.maxh <= 0.0:
+            raise ValueError("maxh must be finite and positive")
+        if self.geometry_order < 1:
+            raise ValueError("geometry_order must be at least one")
+
+    def build_mesh(self) -> _MeshBundle:
+        """Build and curve a triangular mesh whose only boundary is ``wall``."""
+        import ngsolve as ng  # type: ignore[import-untyped]
+        from netgen.geom2d import SplineGeometry  # type: ignore[import-untyped]
+
+        geometry = SplineGeometry()
+        if self.contour.parameterizations:
+            curves = self.contour.parameterizations
+        else:
+            curves = tuple(
+                _piecewise_linear_curve(radius, height)
+                for radius, height in self.contour.curve_segments()
+            )
+        _append_quadratic_spline_chains(geometry, curves, maxh=self.maxh)
+        mesh = ng.Mesh(geometry.GenerateMesh(maxh=self.maxh))
+        if self.geometry_order > 1:
+            mesh.Curve(self.geometry_order)
+        return _MeshBundle(mesh, ("wall",), geometry)
+
+    def boundary_regions(self) -> dict[str, str]:
+        return {"flux_surface": "wall"}
+
+    def metadata(self) -> dict[str, object]:
+        return {
+            "geometry": "AxisymmetricFluxContourDomain",
+            "maxh": self.maxh,
+            "geometry_order": self.geometry_order,
+            "boundary_flux": 0.0,
+            "contour_samples": int(self.contour.radius.size),
+            "contour_corners": len(self.contour.corner_indices),
+            "boundary_regions": self.boundary_regions(),
+            "toroidal_discretization": None,
+        }
+
+
+def _piecewise_linear_curve(
+    radius: np.ndarray, height: np.ndarray
+) -> Callable[[float], tuple[float, float]]:
+    """Return a Netgen ``[0,1]`` parameterization through sampled contour points."""
+    count = radius.size
+
+    def parameterization(parameter: float) -> tuple[float, float]:
+        position = min(max(float(parameter), 0.0), 1.0) * (count - 1)
+        lower = min(int(position), count - 2)
+        fraction = position - lower
+        return (
+            float((1.0 - fraction) * radius[lower] + fraction * radius[lower + 1]),
+            float((1.0 - fraction) * height[lower] + fraction * height[lower + 1]),
+        )
+
+    return parameterization
+
+
+def _append_quadratic_spline_chains(
+    geometry: Any,
+    curves: tuple[Callable[[float], tuple[float, float]], ...],
+    *,
+    maxh: float,
+) -> None:
+    """Append explicit quadratic splines without retaining Python geometry callbacks."""
+    point_indices: dict[tuple[float, float], int] = {}
+
+    def append_point(point: tuple[float, float]) -> int:
+        key = (round(point[0], 14), round(point[1], 14))
+        if key not in point_indices:
+            point_indices[key] = geometry.AppendPoint(*point, maxh=maxh)
+        return point_indices[key]
+
+    target_segments = max(len(curves), ceil(10.0 / maxh))
+    for curve_index, curve in enumerate(curves):
+        first = (curve_index * target_segments) // len(curves)
+        last = ((curve_index + 1) * target_segments) // len(curves)
+        subdivisions = last - first
+        for index in range(subdivisions):
+            lower = index / subdivisions
+            upper = (index + 1) / subdivisions
+            midpoint = 0.5 * (lower + upper)
+            start = curve(lower)
+            interpolated_midpoint = curve(midpoint)
+            stop = curve(upper)
+            control = (
+                2.0 * interpolated_midpoint[0] - 0.5 * (start[0] + stop[0]),
+                2.0 * interpolated_midpoint[1] - 0.5 * (start[1] + stop[1]),
+            )
+            start_index = append_point(start)
+            midpoint_index = append_point(control)
+            stop_index = append_point(stop)
+            geometry.Append(
+                ["spline3", start_index, midpoint_index, stop_index],
+                leftdomain=1,
+                rightdomain=0,
+                bc="wall",
+                maxh=maxh,
+            )
 
 
 @dataclass(frozen=True, slots=True)

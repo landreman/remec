@@ -7,7 +7,7 @@ from math import isfinite
 from typing import Any
 
 from remec.common.threads import configure_threads
-from remec.geometry.axisymmetric import AxisymmetricRZDomain
+from remec.geometry.axisymmetric import AxisymmetricFluxContourDomain, AxisymmetricRZDomain
 from remec.options import RuntimeOptions
 
 
@@ -35,6 +35,7 @@ class _AxisymmetricGradShafranovSolution:
 
     _mesh: Any
     _flux: Any
+    _geometry_owner: Any
     polynomial_order: int
     elements: int
     free_dof_residual_norm: float
@@ -43,7 +44,7 @@ class _AxisymmetricGradShafranovSolution:
 
 
 def solve_axisymmetric_grad_shafranov(
-    domain: AxisymmetricRZDomain,
+    domain: AxisymmetricRZDomain | AxisymmetricFluxContourDomain,
     *,
     polynomial_order: int,
     coefficients: AxisymmetricGradShafranovCoefficients,
@@ -67,8 +68,9 @@ def solve_axisymmetric_grad_shafranov(
 
     import ngsolve as ng  # type: ignore[import-untyped]
 
-    mesh = domain.build_mesh()._mesh
-    space = ng.H1(mesh, order=polynomial_order, dirichlet="bottom|right|top|left")
+    mesh_bundle = domain.build_mesh()
+    mesh = mesh_bundle._mesh
+    space = ng.H1(mesh, order=polynomial_order, dirichlet=".*")
     trial, test = space.TnT()
     quadrature = ng.dx(bonus_intorder=6)
     bilinear_form = ng.BilinearForm(space)
@@ -105,6 +107,7 @@ def solve_axisymmetric_grad_shafranov(
     return _AxisymmetricGradShafranovSolution(
         mesh,
         flux,
+        mesh_bundle._geometry_owner,
         polynomial_order,
         mesh.ne,
         residual_norm,

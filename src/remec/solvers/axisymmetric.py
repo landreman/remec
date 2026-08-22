@@ -13,7 +13,7 @@ from remec.fem._axisymmetric import (
     _AxisymmetricGradShafranovSolution,
     solve_axisymmetric_grad_shafranov,
 )
-from remec.geometry.axisymmetric import AxisymmetricRZDomain
+from remec.geometry.axisymmetric import AxisymmetricFluxContourDomain, AxisymmetricRZDomain
 from remec.options import RuntimeOptions
 from remec.profiles import PressureProfile, ToroidalCurrentProfile
 
@@ -161,7 +161,7 @@ class AxisymmetricGradShafranovSolver:
 
     def solve(
         self,
-        domain: AxisymmetricRZDomain,
+        domain: AxisymmetricRZDomain | AxisymmetricFluxContourDomain,
         coefficients: AxisymmetricGradShafranovCoefficients,
     ) -> AxisymmetricGradShafranovResult:
         """Solve ``GS_recovered`` with frozen profile-derived source coefficients."""
@@ -169,7 +169,7 @@ class AxisymmetricGradShafranovSolver:
 
     def solve_with_flux(
         self,
-        domain: AxisymmetricRZDomain,
+        domain: AxisymmetricRZDomain | AxisymmetricFluxContourDomain,
         coefficients: AxisymmetricGradShafranovCoefficients,
     ) -> AxisymmetricGradShafranovPointSolution:
         """Solve ``GS_recovered`` and retain a typed point-flux evaluator."""
