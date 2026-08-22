@@ -5,6 +5,20 @@
 > descriptions of NGSolve expression behavior, but not of the production current-profile
 > closure. Follow `DESIGN.md` §9.2 and `STATUS.md` milestones 3.5–3.6.
 
+- Milestone 5.4 (Netgen/NGSolve 6.2.2606): `SplineGeometry.AddCurve` accepts a
+  Python parameterization and works for one shaped solve, but repeatedly constructing
+  many callback-backed curve segments can segfault in later `GenerateMesh` calls after
+  callback owners are destroyed. Build the flux contour as explicit `spline3` segments
+  instead. Netgen's middle `spline3` point is a quadratic control point, not a point
+  interpolated at parameter 1/2; for analytic endpoints `a,b` and desired midpoint `m`,
+  use control `2m-(a+b)/2`. The resulting meshes are stable under repeated construction.
+  `mesh.GetBoundaries()` repeats the shared `wall` name once per spline segment, so use
+  the region regex `".*"` for the homogeneous trace and compare the set of names in
+  geometry contracts. For an unstructured shaped-domain scan, measure rates with
+  `h_eff proportional sqrt(area/ne)` rather than the requested Netgen `maxh`: boundary
+  segmentation and mesher grading make adjacent element-count ratios differ materially
+  from `maxh` ratios.
+
 - Milestone 4.4 (NGSolve 6.2.2606): the Section-10 current saddle uses one scalar
   `NumberSpace(mesh)` per shell moment; `NumberSpace(mesh, dim=N)` has one vector-valued
   DOF and cannot be compounded with the scalar HDiv/L2 spaces in this wheel. A constant

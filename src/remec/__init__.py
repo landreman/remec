@@ -3,6 +3,16 @@
 from importlib.metadata import version
 from typing import Final
 
+from remec.analytic_equilibria import (
+    CerfonFreidbergBoundary,
+    CerfonFreidbergEquilibrium,
+    CerfonFreidbergShape,
+    FluxContour,
+    ZhengEquilibrium,
+    ZhengShape,
+    solve_cerfon_freidberg,
+    solve_zheng_equilibrium,
+)
 from remec.current_moments import (
     M2ToroidalCurrentSamples,
     ShellCurrentMoments,
@@ -27,6 +37,10 @@ __version__: Final = version("remec")
 __all__ = [
     "AnalyticPressureProfile",
     "AnalyticToroidalCurrentProfile",
+    "CerfonFreidbergBoundary",
+    "CerfonFreidbergEquilibrium",
+    "CerfonFreidbergShape",
+    "FluxContour",
     "InvalidProfileError",
     "M2ToroidalCurrentSamples",
     "Normalization",
@@ -38,6 +52,10 @@ __all__ = [
     "TabulatedToroidalCurrentProfile",
     "ToroidalCurrentProfile",
     "TransplantedProfile",
+    "ZhengEquilibrium",
+    "ZhengShape",
     "__version__",
     "mollified_shell_current_moments",
+    "solve_cerfon_freidberg",
+    "solve_zheng_equilibrium",
 ]

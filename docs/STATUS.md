@@ -567,7 +567,7 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   provenance. It should add an explicit norm-growth acceptance/fallback policy before using
   extrapolation on production states. Fixed harmonic coefficients and essential traces must
   remain outside both continuation and Anderson vectors.
-- [ ] **5.4** Shaped analytic Grad–Shafranov benchmarks (ideal) — `DESIGN.md` §16.3, §25 · note: §11
+- [x] **5.4** Shaped analytic Grad–Shafranov benchmarks (ideal) — `DESIGN.md` §16.3, §25 · note: §11
   <br>Acceptance: promote the Zheng (1996) and Cerfon–Freidberg (2010) Solov'ev-profile
   analytic solutions into an analytic-equilibrium module of the main package
   (coefficient solves, ψ and its derivatives, boundary-contour extraction, figure-of-
@@ -580,7 +580,30 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   shape/axis observables from the computed Ψ_h, not from the input coefficients, and
   report the boundary geometry-approximation error alongside the FE rates
   (`DESIGN.md` §16.4 pattern).
-  <br>Measured: —
+  <br>Measured: macOS / CPython 3.12.2 / NGSolve 6.2.2606 — the main-package
+  analytic-equilibrium module solves and independently checks Zheng (1996)
+  Eqs. (14)–(20) and Cerfon–Freidberg (2010) Eqs. (5)–(12), including first/second
+  derivatives, smooth and double-null ψ=0 contours, and current/beta/volume/perimeter
+  integrals. Zheng Fig. 1 realizes I_p=1 MA and β_pol=0.4 below 2e-10 relative;
+  the Cerfon–Freidberg ITER-like case gives β_t=0.04913 versus the quoted 0.05.
+  On shaped homogeneous-Dirichlet Zheng domains, finest-pair L²/weighted-energy rates
+  are 1.894/0.930 (p=1), 3.073/1.977 (p=2), and 4.394/3.149 (p=3) on
+  424 → 1,019 unstructured elements, using h_eff∝n_e^{-1/2}; finest normalized
+  boundary-geometry errors are 2.64–2.68e-7. The computed Ψ_h supplies the axis;
+  major/minor radius, elongation, and triangularity are measured on its interior
+  Ψ_h=0.05Ψ_axis level and compared with the same analytic level. The p=2 finest
+  errors are 1.91e-6, 4.98e-6, 1.68e-5, and 4.14e-6 respectively, and a fixed-mesh
+  flux-shape mutation moves the recovered observables. On the double-null
+  Cerfon–Freidberg separatrix, analytic per-arc CAD parameterizations remove the
+  fixed-sample geometry floor: 126 → 201 → 358 → 706 → 1,537 elements reduce
+  relative L² error 3.088e-3 → 1.152e-3 → 4.799e-4 → 1.804e-4 → 4.670e-5 and
+  boundary geometry error 3.388e-4 → 6.340e-5 → 1.950e-5 → 4.124e-6 → 1.432e-6;
+  finest-pair effective rates are 3.473 and 2.719, with residuals below 6.73e-15. See
+  `tests/verification/shaped_zheng_rates.csv`,
+  `tests/verification/cerfon_freidberg_xpoint_rates.csv`, and
+  `docs/verification.md`. Cached Gauss–Legendre rules reduce the Zheng analytic unit
+  test from about 5 s to 0.10 s. Final local `make check`: 261 not-slow tests in
+  37.87 s; shaped slow scans: 4 tests in 13.78 s, slowest 11.36 s.
   <br>Test placement: one cheap smooth-boundary sentinel (single order, two meshes,
   well under ~20 s) in the not-slow suite; the full order/mesh scans and the X-point
   case marked `slow` for nightly, each under ~90 s. Rate tables in
@@ -590,6 +613,14 @@ that dependency. Phase 7 may run in parallel with Phase 8.
   Ψ_h, and a rectangle-domain Dirichlet-lift benchmark tied back to the shipped
   solver; reuse its analytic machinery in the package module and replace the rectangle
   by flux-contour domains.
+  <br>Next: milestone 5.5 should use these analytic ψ fields as its primary ideal
+  references and the same-mesh shaped FEM fields only to separate discretization error
+  from finite-regularization bias. Retain the explicit quadratic-spline midpoint-control
+  construction and geometry-error diagnostic; callback-backed `AddCurve` meshes are not
+  stable under repeated construction in this Netgen wheel. Double-null contour arcs now
+  retain exact ray-root parameterizations on both sides of each X-point; do not replace
+  them with a fixed sampled polygon. The double-null non-ideal
+  case remains nightly diagnostic only, as specified below.
 - [ ] **5.5** Staged continuation + non-ideal benchmark — `DESIGN.md` §14.4, §25 · note: §9, §11.2
   <br>**Phase gate.** Acceptance: staged continuation in pressure amplitude, D_u, and
   anisotropy; axisymmetric non-ideal (regularized M-equation) solve benchmarked against
