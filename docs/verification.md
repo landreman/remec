@@ -121,13 +121,18 @@ for rows 4--6. This keeps every single test below
 loads its checked-in compressed Netgen mesh before restoring the matching H¹ vector,
 because identical `ndof` does not imply identical Netgen edge numbering across Python
 wheels. The other checkpoints rebuild their shaped meshes. Fast tests also read the
-machine-readable records and recompute the ADR rates and thresholds. Mutation checks
-show that replacing the M4a tensor
+machine-readable records and recompute the ADR rates and thresholds. The endpoint's
+fast live check restarts from the accepted row-6 state; a separate reachability run
+from row 5 converges to the same `0.251785387537` error in 39 of the 40 allowed Picard
+iterations. Mutation checks show that replacing the M4a tensor
 by its isotropic part collapses the pinned finite-anisotropy difference `4.631e-4` to
 zero; deleting the M3 pressure-gradient drive/coupling collapses a pinned `utilde`
-difference of `0.3624`; and multiplying the (M2) diamagnetic term by `0.5` while
-consistently using that mutation in the constraint rows opens the separately assembled,
-order-8 M2 oracle to `1.70e-2`.
+difference of `0.3624`; and multiplying the (M2) diamagnetic term by `0.5` consistently
+in the constraint rows and reconstructed current moves six live acceptance/refinement
+rows outside their pins and shifts the separately integrated total to `0.60632431`.
+The complete reconstructed (M2) current is re-integrated for
+the shell constraints without reusing the bordered matrices, and a separate order-8
+domain integral pins its nonzero total to `0.60631864`.
 Doubling the prescribed pressure-profile shape produces an independently measured
 relative error above 0.9. These mutations therefore turn the suite red despite
 successful inner sparse solves.

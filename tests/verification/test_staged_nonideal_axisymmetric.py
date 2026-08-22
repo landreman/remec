@@ -165,8 +165,8 @@ def test_axisymmetric_m3_pressure_gradient_terms_are_live() -> None:
     assert relative_difference == pytest.approx(0.3623776571562323, rel=0.05)
 
 
-def test_axisymmetric_m2_current_has_an_independent_oracle() -> None:
-    """A separately sampled ``(M2)`` oracle detects consistent component mutations."""
+def test_axisymmetric_m2_current_is_reintegrated_independently() -> None:
+    """Reconstructed ``(M2)`` current moments do not reuse the bordered matrices."""
     import ngsolve as ng
 
     equilibrium = solve_zheng_equilibrium(
@@ -193,10 +193,14 @@ def test_axisymmetric_m2_current_has_an_independent_oracle() -> None:
         current_diffusivity=stage.current_diffusivity,
     )
 
-    difference = result.physical_current - result.independent_current
-    separately_integrated_error = float(
-        ng.Integrate(ng.x * ng.InnerProduct(difference, difference), context.mesh, order=8)
+    toroidal_gradient = ng.CoefficientFunction((0.0, 0.0, -1.0 / ng.x))
+    separately_integrated_total = float(
+        ng.Integrate(
+            ng.x * ng.InnerProduct(result.physical_current, toroidal_gradient),
+            context.mesh,
+            order=8,
+        )
     )
 
-    assert result.independent_m2_relative_error < 1.0e-12
-    assert separately_integrated_error < 1.0e-24
+    assert np.max(np.abs(result.measured_current - result.target_current)) < 1.0e-10
+    assert separately_integrated_total == pytest.approx(0.6063186385362553, rel=1.0e-8)

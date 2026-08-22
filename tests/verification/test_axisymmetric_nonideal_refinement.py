@@ -8,8 +8,10 @@ from math import sqrt
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 _TABLE = Path(__file__).with_name("axisymmetric_nonideal_refinement.csv")
+_ACCEPTANCE_TABLE = Path(__file__).with_name("axisymmetric_nonideal_continuation.csv")
 
 
 def _records(study: str) -> list[dict[str, float]]:
@@ -32,6 +34,22 @@ def test_compatible_current_correction_meets_adr_0006_escalation_gate() -> None:
     assert least_squares_rate >= 1.0
     assert rows[-1]["projection_correction_relative_norm"] < 0.10
     assert all(row["toroidal_flux_relative_error"] < 1.0e-10 for row in rows)
+
+
+def test_acceptance_row_pins_the_middle_adr_rate_point() -> None:
+    """The live 0.8-MA endpoint fixes the shared ``maxh=0.18`` correction row."""
+    refinement = next(row for row in _records("projection_refinement") if row["maxh"] == 0.18)
+    with _ACCEPTANCE_TABLE.open(newline="") as table_file:
+        acceptance = next(
+            row
+            for row in csv.DictReader(table_file)
+            if int(row["profile_index"]) == 0 and float(row["pressure_amplitude"]) == 1.0
+        )
+
+    assert refinement["projection_correction_relative_norm"] == pytest.approx(
+        float(acceptance["projection_correction_relative_norm"]),
+        rel=1.0e-6,
+    )
 
 
 def test_fixed_pressure_record_meets_adr_0006_field_error_gate() -> None:

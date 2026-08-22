@@ -119,6 +119,7 @@ def _check_acceptance_row(row: ContinuationStageResult, record: dict[str, float]
     assert row.current_profile_error < 1.0e-10
     assert row.projected_current_profile_error < 1.0e-10
     assert row.toroidal_flux_relative_error < 1.0e-10
+    assert row.nonideal_to_analytic_relative_l2_error < 0.30
 
 
 def check_acceptance_cold_start(profile_index: int, plasma_current: float) -> None:
@@ -155,8 +156,15 @@ def check_acceptance_restart(
     )
     context = _ZhengContinuationContext(equilibrium, maxh=0.18, polynomial_order=2)
     row = context.solve_stage(ACCEPTANCE_STAGES[stage_index], restart)
-    record = _acceptance_records(profile_index)[ACCEPTANCE_STAGES[stage_index].pressure_amplitude]
+    records = _acceptance_records(profile_index)
+    record = records[ACCEPTANCE_STAGES[stage_index].pressure_amplitude]
     _check_acceptance_row(row, record)
+    assert (
+        row.nonideal_to_analytic_relative_l2_error
+        < records[ACCEPTANCE_STAGES[stage_index - 1].pressure_amplitude][
+            "nonideal_to_analytic_relative_l2_error"
+        ]
+    )
 
 
 def check_refinement_restart(
@@ -200,6 +208,7 @@ def _check_refinement_row(
             if source["study"] == "projection_refinement" and float(source["maxh"]) == maxh
         )
 
+    assert context.mesh.ne == int(record["elements"])
     assert row.projection_correction_relative_norm == pytest.approx(
         record["projection_correction_relative_norm"], rel=1.0e-5
     )
