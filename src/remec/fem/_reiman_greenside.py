@@ -9,7 +9,7 @@ from typing import Any
 import numpy as np
 
 from remec.fem._harmonic_flux import _quadrature_extrema
-from remec.fem.spaces import make_periodic_tetrahedral_de_rham_sequence
+from remec.fem._magnetostatics import reconstruct_periodic_magnetic_potential
 from remec.reiman_greenside import ReimanGreensideField
 
 
@@ -18,15 +18,22 @@ class ReimanGreensideDiscreteField:
     r"""Periodic discrete ``B_h = curl(A_h)`` and note-(M1) diagnostics."""
 
     vector_potential: Any
+    target_magnetic_field: Any
     magnetic_field: Any
     analytic_vector_potential: Any
     analytic_magnetic_field: Any
     curl_projection_relative_defect: float
     divergence_relative_norm: float
     analytic_field_relative_error: float
+    bz_l2_error: float
     sampled_magnetic_magnitude_minimum: float
     sampled_magnetic_magnitude_maximum: float
     b_floor_relative_activity: float
+    requested_axial_flux: float
+    target_axial_flux: float
+    reconstructed_axial_flux: float
+    gauge_constraint_relative_residual: float
+    harmonic_constraint_relative_residual: float
 
 
 def build_reiman_greenside_discrete_field(
@@ -34,6 +41,8 @@ def build_reiman_greenside_discrete_field(
     model: ReimanGreensideField,
     *,
     order: int,
+    harmonic_field: Any,
+    axial_flux: float,
     b_floor: float = 1.0e-8,
 ) -> ReimanGreensideDiscreteField:
     r"""Interpolate ``A``, form ``B_h=curl(A_h)``, and diagnose note equation (M1).
@@ -56,7 +65,6 @@ def build_reiman_greenside_discrete_field(
         raise ValueError("b_floor must be finite and positive")
     import ngsolve as ng  # type: ignore[import-untyped]
 
-    sequence = make_periodic_tetrahedral_de_rham_sequence(mesh, order=order)
     phi = ng.z / model.major_radius
     cosine = ng.cos(phi)
     sine = ng.sin(phi)
@@ -88,19 +96,15 @@ def build_reiman_greenside_discrete_field(
         (-psi_y / model.major_radius, psi_x / model.major_radius, 1.0)
     )
 
-    vector_potential = ng.GridFunction(sequence.hcurl)
-    vector_potential.Set(analytic_vector_potential)
-    trial, test = sequence.hdiv.TnT()
-    mass = ng.BilinearForm(sequence.hdiv)
-    mass += ng.InnerProduct(trial, test) * ng.dx
-    load = ng.LinearForm(sequence.hdiv)
-    load += ng.InnerProduct(ng.curl(vector_potential), test) * ng.dx
-    mass.Assemble()
-    load.Assemble()
-    magnetic_field = ng.GridFunction(sequence.hdiv)
-    magnetic_field.vec.data = (
-        mass.mat.Inverse(sequence.hdiv.FreeDofs(), inverse="sparsecholesky") * load.vec
+    reconstruction = reconstruct_periodic_magnetic_potential(
+        mesh,
+        analytic_magnetic_field,
+        harmonic_field,
+        base_order=order,
+        axial_flux=axial_flux,
     )
+    vector_potential = reconstruction.vector_potential
+    magnetic_field = reconstruction.magnetic_field
 
     integration_order = 2 * order + 12
     curl_norm = float(
@@ -160,7 +164,10 @@ def build_reiman_greenside_discrete_field(
         )
         / max(analytic_norm, np.finfo(float).tiny)
     )
-    analytic_magnitude = ng.sqrt(ng.InnerProduct(analytic_magnetic_field, analytic_magnetic_field))
+    bz_l2_error = float(
+        ng.sqrt(ng.Integrate((magnetic_field[2] - 1.0) ** 2, mesh, order=integration_order))
+    )
+    analytic_magnitude = ng.sqrt(ng.InnerProduct(magnetic_field, magnetic_field))
     sampled_minimum, sampled_maximum = _quadrature_extrema(
         mesh,
         analytic_magnitude,
@@ -174,13 +181,20 @@ def build_reiman_greenside_discrete_field(
     )
     return ReimanGreensideDiscreteField(
         vector_potential=vector_potential,
+        target_magnetic_field=reconstruction.target_magnetic_field,
         magnetic_field=magnetic_field,
         analytic_vector_potential=analytic_vector_potential,
         analytic_magnetic_field=analytic_magnetic_field,
         curl_projection_relative_defect=projection_defect,
         divergence_relative_norm=divergence_relative_norm,
         analytic_field_relative_error=analytic_error,
+        bz_l2_error=bz_l2_error,
         sampled_magnetic_magnitude_minimum=sampled_minimum,
         sampled_magnetic_magnitude_maximum=sampled_maximum,
         b_floor_relative_activity=floor_activity,
+        requested_axial_flux=reconstruction.requested_axial_flux,
+        target_axial_flux=reconstruction.target_axial_flux,
+        reconstructed_axial_flux=reconstruction.reconstructed_axial_flux,
+        gauge_constraint_relative_residual=reconstruction.gauge_constraint_relative_residual,
+        harmonic_constraint_relative_residual=reconstruction.harmonic_constraint_relative_residual,
     )

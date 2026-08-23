@@ -108,6 +108,8 @@ class PeriodicCylinder3D:
         )
         geometry = OCCGeometry(solid)
         mesh = ng.Mesh(geometry.GenerateMesh(maxh=self.max_element_size))
+        # Refine the straight mesh before curving: curving first leaves newly refined
+        # children with order-one geometry and destroys the ADR-0009 refinement scan.
         for _ in range(self.refinements):
             mesh.Refine()
         mesh.Curve(self.geometry_order)

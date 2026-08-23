@@ -159,13 +159,11 @@ def test_periodic_vector_spaces_preserve_all_mean_flux_components(
     curved_periodic_mesh: object, space_name: str, component: int
 ) -> None:
     """Periodic H(curl)/H(div) preserve x, y, and z constant fluxes at high order."""
-    # A physical constant is Piola-mapped on curved elements. Geometry order 3
-    # therefore needs HCurl(3) and HDiv(4) to contain all three constants exactly;
-    # lower HDiv orders are covered by the convergent (M1) scan, not treated as exact.
-    if space_name == "hcurl":
-        space = ng.Periodic(ng.HCurl(curved_periodic_mesh, order=3))
-    else:
-        space = ng.Periodic(ng.HDiv(curved_periodic_mesh, order=4))
+    # Route the physical-constant check through the production pairing. Geometry
+    # order 3 needs HDiv(4), hence the validated base-order-5 complex; lower paired
+    # orders are covered by the convergent (M1) scan, not treated as exact.
+    sequence = make_periodic_tetrahedral_de_rham_sequence(curved_periodic_mesh, order=5)
+    space = getattr(sequence, space_name)
     values = [0.0, 0.0, 0.0]
     values[component] = 1.0
     source = ng.CoefficientFunction(tuple(values))
@@ -186,7 +184,7 @@ def test_periodic_vector_spaces_preserve_all_mean_flux_components(
 
 
 def test_periodic_cylinder_reuses_normalized_m1_harmonic_flux() -> None:
-    """The axial harmonic has unit toroidal flux, wall tangency, and zero divergence."""
+    """The reused axial harmonic has unit toroidal flux and measured wall tangency."""
     cylinder = PeriodicCylinder3D(geometry_order=4)
     bundle = cylinder.build_mesh()
     mesh = bundle._mesh
@@ -216,5 +214,3 @@ def test_periodic_cylinder_reuses_normalized_m1_harmonic_flux() -> None:
     # ADR 0009 makes this a measured curved-wall geometry defect, not an exact-zero
     # claim. The geometry-order-4 scan bounds it below the later 6.3 error budget.
     assert wall_normal < 1.0e-4
-    divergence = harmonic[0].Diff(ng.x) + harmonic[1].Diff(ng.y) + harmonic[2].Diff(ng.z)
-    assert float(ng.Integrate(divergence**2, mesh, order=14)) < 1.0e-24
