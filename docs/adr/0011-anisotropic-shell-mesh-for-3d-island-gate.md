@@ -1,8 +1,7 @@
 # ADR 0011 — Radially graded mesh for the 3D island resolution gate
 
-Status: proposed
-
-DECISION: pending human sign-off
+Status: Accepted (Option 1, with Option 2 as its solver companion) — human sign-off
+2026-08-23
 
 ## Context
 
@@ -100,5 +99,42 @@ one-node cost. The implementation should retain Option 2 as the solver path abov
 direct threshold, but iterative algebra alone should not be treated as the resolution
 solution. Reject Options 3 and 4 because they relax the acceptance criterion.
 
-Until this decision is signed, milestone 6.3 remains blocked and no coupled 3D milestone
-may start.
+DECISION: Option 1 accepted with human sign-off (2026-08-23), with Option 2 retained as
+the solver path above the direct threshold. Options 3 and 4 are rejected as relaxations
+of the acceptance criterion. The sign-off also reviewed the practice of the established
+anisotropic-transport codes (NIMROD, M3D-C1, JOREK; Sovinec et al., J. Comput. Phys.
+195 (2004) 355; Hudson & Breslau, Phys. Rev. Lett. 100 (2008) 095001) and binds the
+following implementation directives:
+
+1. **Extrude-then-split construction.** Build a radially graded 2D disk mesh packed
+   around the target annuli, extrude it axially with coarse spacing, and split the
+   resulting prisms into tetrahedra with a consistent diagonal pattern so the periodic
+   z-faces pair exactly. Do not introduce a prism element contract against the
+   tetrahedral de Rham factory. The split mesh MUST pass the existing ADR 0009 curved
+   periodic geometry contract and the Section 16.2 periodic/de Rham gates before any
+   physics is trusted on it.
+2. **Grade radially before elongating aggressively.** Most of the cost win is radial
+   packing; extreme aspect ratios buy less and cost conditioning. Add a test that
+   measures the pollution ratio and solver iteration counts as a function of element
+   aspect ratio, and choose the stretch from that data, not by assumption.
+3. **Re-run the pollution gate on the new mesh family.** Pollution behavior on
+   stretched elements is a fresh question; the Section 8.3/8.6 pollution measure and
+   the falsifiability controls MUST be re-established on the graded mesh at each
+   ladder row. If pollution degrades on stretched elements, the symmetric parallel
+   discretization of Günter, Yu, Krüger & Lackner, J. Comput. Phys. 209 (2005) 354,
+   is the established fallback — a discretization change, and a new ADR, not a mesh
+   change.
+4. **Grade toward unperturbed surfaces, not the perturbed field.** Alignment/grading
+   is with respect to the axisymmetric flux surfaces (cylindrical annuli at the known
+   resonant radii); full 3D field alignment is rejected because it breaks at
+   separatrices and in the stochastic-field milestones that follow.
+5. **Parameterize the packing.** The mesh-grading machinery MUST take a target-annulus
+   list (radii and widths) as input rather than hard-coding r_s = 0.74339, because in
+   the coupled Picard problem the resonant radii come from the evolving iterate. This
+   is a rehearsal for production, not a one-off benchmark fixture.
+6. **Solver policy.** Use the direct solver below its configured threshold and a
+   native preconditioned-CG path above it, recording both in the milestone 6.3 cost
+   table. Iterative algebra alone is not the resolution solution; it is the memory
+   solution.
+
+Milestone 6.3 is unblocked by this decision.

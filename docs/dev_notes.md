@@ -10,7 +10,8 @@
   `mesh.Refine()` and before `mesh.Curve(order)`. Marking a resonant annulus on the coarse
   isotropic tetrahedral cylinder still refines most elements because their radial spans
   intersect the annulus; measured counts 800 -> 6,387 -> 49,372 -> 325,651 demonstrate
-  why ADR 0011 proposes a radially graded, field-elongated mesh instead.
+  why ADR 0011 (since accepted, 2026-08-23) replaces it with a radially graded mesh built
+  extrude-then-split.
 
 - Milestone 6.2 (Netgen/NGSolve 6.2.2606): build a periodic OCC cylinder by naming the
   lateral face and classifying the two end faces by their axial centers, then call

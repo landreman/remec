@@ -572,7 +572,13 @@ reached with the Section 21 direct-solver default, that is a real result: it bel
 the table and in `docs/verification.md`, it is a primary input to the Section 8.5
 preconditioner program, and if it changes the default solver policy it is an ADR. It is
 never a reason to lower the anisotropy target, relax the pollution gate, or reduce
-`min_layer_cells` (Sections 22.1 and 26).
+`min_layer_cells` (Sections 22.1 and 26). This clause fired: uniform and isotropic
+local refinement of the OCC tetrahedral mesh could not reach `min_layer_cells` across
+w_c below multi-million-element cost, and ADR 0011 (accepted 2026-08-23) selects the
+Section 16.2 radially graded mesh variant as the benchmark mesh, with direct solves
+below the Section 21 threshold and native preconditioned CG above it, both recorded in
+the criterion-1 cost table. Polynomial order controls pollution but does not count
+toward `min_layer_cells`, which remains an element-width criterion.
 
 ---
 
@@ -1009,6 +1015,21 @@ mean-flux components, high-order compatibility, and per-solver periodic-wrapper
 support — on the curved periodic mesh itself, and the discrete de Rham identities the
 Sec. 8.6 field tests assert (∇·**B** at roundoff, curl **A** = **B**) MUST be
 demonstrated on that curved mesh before any solve depends on them.
+
+`PeriodicCylinder3D` additionally supports a **radially graded** mesh variant
+(ADR 0011), required by the Sec. 8.6 resolution gate: a 2D disk mesh with radial
+layers packed around a caller-supplied target-annulus list (radii and widths — never a
+hard-coded resonance, because the coupled Picard problem supplies these from the
+evolving iterate), extruded axially with coarse spacing and split from prisms into
+tetrahedra with a consistent diagonal pattern that preserves the periodic end-face
+pairing. Grading targets the unperturbed axisymmetric annuli, not the perturbed field;
+full 3D field alignment is rejected (ADR 0011) because it fails at separatrices and in
+stochastic fields. The graded variant MUST satisfy every contract of this section and
+ADR 0009 — curved-wall geometry-error scan, periodic H¹/H(curl)/H(div) gates, discrete
+de Rham identities — on the graded mesh itself, and MUST carry a test measuring the
+Sec. 8.3 pollution ratio and solver iteration counts as a function of element aspect
+ratio, so the radial-to-angular/axial stretch is chosen from measured data. Radial
+grading comes first; aggressive elongation is adopted only where that test supports it.
 
 ### 16.3 Axisymmetric R–Z
 
