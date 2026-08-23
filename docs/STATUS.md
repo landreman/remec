@@ -866,7 +866,11 @@ numbering.
   spike/volume-plateau ratios are 1.226/1.281 with zero critical-safeguard activations.
   `frozen_field_island_benchmark.py` exclusively regenerates the cost/aspect CSVs and
   Poincare/isobar overlay. Local `make check` and the touched slow aspect scan are green;
-  the required complete branch `exhaustive.yml` run is pending before `[x]`.
+  the required complete branch `exhaustive.yml` run is pending before `[x]`. To retain
+  the two-minute fast budget, the existing M3 gradient-comparison fast sentinel now
+  computes only its central `D_u=0.02` pair (same 24-by-16 resolution and recorded
+  assertions); its setup fell from 26.1 s to 7.1 s, while the unchanged three-row ladder
+  remains developer-slow and passed in 61.3 s.
 - [ ] **6.4** Periodic-cylinder end-to-end coupled benchmark — `DESIGN.md` §16.2 · note: §6, §9
   <br>Acceptance: full (M1)–(M4b) Picard on the 6.2 geometry, initialized from the 6.3
   frozen state and the closed-form **A**; all §5 invariants active. This was the old 6.1;
