@@ -147,7 +147,7 @@ def recover_rotational_transform(trace: PoincareTrace) -> NDArray[np.float64]:
 
 
 def radial_excursion(trace: PoincareTrace) -> NDArray[np.float64]:
-    """Return each field line's apparent radial island width on the section."""
+    """Return peak-to-peak radius (an island-width proxy only for island lines)."""
     return np.asarray(np.ptp(trace.radii, axis=1), dtype=float)
 
 
@@ -162,13 +162,15 @@ def find_periodic_point(
     relative_tolerance: float = 1.0e-11,
     absolute_tolerance: float = 1.0e-13,
     maximum_step: float = 0.1,
+    root_tolerance: float = 1.0e-9,
 ) -> PeriodicPoint:
     r"""Locate and classify an O- or X-point from a field-line return map.
 
     The root condition is ``P^q(r,Theta) = (r, Theta + 2*pi*p)`` for
     ``q=period_turns`` and ``p=poloidal_winding``. Classification uses the trace of
-    the numerically differentiated monodromy: ``|tr(M)| < 2`` is elliptic (O), while
-    ``|tr(M)| > 2`` is hyperbolic (X).
+    the numerically differentiated monodromy: for the area-preserving return map of a
+    divergence-free field, ``|tr(M)| < 2`` is elliptic (O), while ``|tr(M)| > 2`` is
+    hyperbolic (X). A determinant check rejects maps that violate that premise.
     """
     guess_array = np.asarray(guess, dtype=float)
     if guess_array.shape != (2,) or not np.all(np.isfinite(guess_array)) or guess_array[0] <= 0.0:
@@ -184,6 +186,8 @@ def find_periodic_point(
         raise ValueError("section_phi must be finite")
     if isinstance(poloidal_winding, bool) or not isinstance(poloidal_winding, int):
         raise TypeError("poloidal_winding must be an integer")
+    if not isfinite(root_tolerance) or root_tolerance <= 0.0:
+        raise ValueError("root_tolerance must be positive and finite")
 
     from scipy.optimize import root  # type: ignore[import-untyped]
 
@@ -209,8 +213,11 @@ def find_periodic_point(
     solved = root(residual, guess_array, method="hybr", options={"xtol": 1.0e-10})
     residual_at_root = residual(np.asarray(solved.x, dtype=float))
     residual_norm = float(np.linalg.norm(residual_at_root))
-    if not solved.success and residual_norm > 10.0 * max(absolute_tolerance, relative_tolerance):
-        raise RuntimeError(f"periodic-point solve failed: {solved.message}")
+    if residual_norm > root_tolerance:
+        raise RuntimeError(
+            f"periodic-point residual {residual_norm:.3e} exceeds {root_tolerance:.3e}: "
+            f"{solved.message}"
+        )
 
     state = np.asarray(solved.x, dtype=float)
     monodromy = np.empty((2, 2))
@@ -222,6 +229,12 @@ def find_periodic_point(
             return_map(state + perturbation) - return_map(state - perturbation)
         ) / (2.0 * step)
     trace_value = float(np.trace(monodromy))
+    determinant = float(np.linalg.det(monodromy))
+    if abs(determinant - 1.0) > 1.0e-3:
+        raise RuntimeError(
+            "periodic-point classification requires an area-preserving return map; "
+            f"det(M)={determinant:.6g}"
+        )
     if abs(trace_value) < 2.0:
         kind = "O"
     elif abs(trace_value) > 2.0:

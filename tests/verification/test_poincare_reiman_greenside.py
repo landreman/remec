@@ -83,21 +83,26 @@ def test_integrable_trace_recovers_iota_and_zero_apparent_island_width() -> None
     assert np.max(radial_excursion(trace)) < 2.0e-10
 
 
+@pytest.mark.parametrize("major_radius", [1.0, 2.5])
 @pytest.mark.parametrize("epsilon_1", [1.0e-4, sqrt(1.0e-7), 1.0e-3])
-def test_tracer_locates_o_x_points_and_conserved_k_width(epsilon_1: float) -> None:
-    field = _ReimanGreensideField(epsilon_1)
+def test_tracer_locates_o_x_points_and_conserved_k_width(
+    epsilon_1: float, major_radius: float
+) -> None:
+    field = _ReimanGreensideField(epsilon_1, major_radius=major_radius)
     recorded = _recorded_row(epsilon_1)
     o_point = find_periodic_point(
         field,
         (_RESONANCE_RADIUS, 0.0),
         period_turns=2,
         poloidal_winding=1,
+        major_radius=major_radius,
     )
     x_point = find_periodic_point(
         field,
         (_RESONANCE_RADIUS, 0.5 * pi),
         period_turns=2,
         poloidal_winding=1,
+        major_radius=major_radius,
     )
 
     a_coefficient = 1.0 - 2.0 * _T0
@@ -125,24 +130,55 @@ def test_tracer_locates_o_x_points_and_conserved_k_width(epsilon_1: float) -> No
     assert exact_width == pytest.approx(float(recorded["closed_form_width"]), abs=2.0e-12)
     assert invariant_width == pytest.approx(exact_width, abs=2.0e-9)
 
+    inner_separatrix_radius = sqrt(
+        2.0 * (sqrt(a_coefficient) - 2.0 * sqrt(epsilon_1)) ** 2 / (4.0 * _T1)
+    )
+    near_separatrix = trace_poincare(
+        field,
+        np.array([[inner_separatrix_radius + 0.01 * exact_width, o_point.theta]]),
+        turns=80,
+        major_radius=major_radius,
+    )
+    traced_width = radial_excursion(near_separatrix)[0]
+    assert 0.97 * invariant_width < traced_width < invariant_width
 
-@pytest.mark.parametrize("subdivisions", [1, 2])
-def test_same_tracer_runs_on_an_hdiv_magnetic_field(subdivisions: int) -> None:
+
+@pytest.mark.parametrize(
+    ("subdivisions", "axial_field", "major_radius"),
+    [(1, 1.0, 1.0), (2, 0.5, 2.5)],
+)
+def test_same_tracer_runs_on_an_hdiv_magnetic_field(
+    subdivisions: int, axial_field: float, major_radius: float
+) -> None:
     rotation = 0.37
     mesh = MakeStructured3DMesh(
         hexes=False,
         nx=subdivisions,
         ny=subdivisions,
         nz=subdivisions,
-        mapping=lambda x, y, z: (2.0 * x - 1.0, 2.0 * y - 1.0, 2.0 * pi * z),
+        mapping=lambda x, y, z: (
+            2.0 * x - 1.0,
+            2.0 * y - 1.0,
+            2.0 * pi * major_radius * z,
+        ),
     )
     space = ng.HDiv(mesh, order=1)
     magnetic_field = ng.GridFunction(space)
-    magnetic_field.Set(ng.CoefficientFunction((-rotation * ng.y, rotation * ng.x, 1.0)))
-    evaluator = make_hdiv_field_evaluator(mesh, magnetic_field, periodic_z_length=2.0 * pi)
+    magnetic_field.Set(ng.CoefficientFunction((-rotation * ng.y, rotation * ng.x, axial_field)))
+    evaluator = make_hdiv_field_evaluator(
+        mesh,
+        magnetic_field,
+        periodic_z_length=2.0 * pi * major_radius,
+    )
 
-    trace = trace_poincare(evaluator, np.array([[0.3, 0.2]]), turns=3)
+    trace = trace_poincare(
+        evaluator,
+        np.array([[0.3, 0.2]]),
+        turns=3,
+        major_radius=major_radius,
+    )
 
     assert float(ng.Integrate(ng.div(magnetic_field) ** 2, mesh, order=5)) < 1.0e-24
-    assert recover_rotational_transform(trace)[0] == pytest.approx(rotation, abs=2.0e-10)
+    expected_iota = major_radius * rotation / axial_field
+    assert recover_rotational_transform(trace)[0] == pytest.approx(expected_iota, abs=2.0e-10)
     assert radial_excursion(trace)[0] < 2.0e-10

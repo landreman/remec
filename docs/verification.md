@@ -21,9 +21,9 @@ The production tracer parameterizes a field line by the periodic cylinder angle
 \frac{d\Theta}{d\Phi}=\frac{R_0 B_\Theta}{rB_z}
 \]
 
-with SciPy `solve_ivp`. DOP853 was selected because the live tolerance study below
-reaches roundoff-level errors without event interpolation: the requested Poincare planes
-are supplied directly as `t_eval`. The same public tracer accepts an ordinary analytic
+with SciPy `solve_ivp`. DOP853 reaches roundoff-level errors at the recorded default
+tolerances; no integrator-method comparison was performed. The requested Poincare planes
+are supplied directly as `t_eval`, so they need no event interpolation. The same public tracer accepts an ordinary analytic
 field callback or the private NGSolve adapter for an H(div) GridFunction, keeping
 NGSolve types out of the diagnostics API.
 
@@ -31,9 +31,12 @@ On the integrable Reiman--Greenside field (epsilon_1=epsilon_2=0), 32 turns from
 0.2, 0.5, and 0.8 recover `iota=t0+t1*r**2` with maximum absolute error
 4.33e-15. The maximum radial excursion, interpreted as residual apparent island width,
 is 1.78e-15 against a 2e-10 tracer-tolerance gate. An independently represented H(div)
-field `B=(-0.37*y, 0.37*x, 1)` on 6- and 48-tetrahedron meshes produces iota errors
-1.34e-15 and 3.34e-16, radial excursions below 3.67e-15, and independently measured
-divergence-squared integrals below 1.03e-28.
+field `B=(-0.37*y, 0.37*x, B_z)` on 6- and 48-tetrahedron meshes covers
+`(B_z,R0)=(1,1)` and `(0.5,2.5)`, recovering `iota=R0*0.37/B_z` at roundoff and
+independently measured divergence-squared integrals below 1.03e-28. These fields are
+exactly representable in H(div) order 1, so the two meshes verify the adapter and are not
+a discretization-convergence study; milestone 6.2 owns the interpolated
+Reiman--Greenside H(div) field.
 
 For the driven m=2,n=1 field, the period-two return-map solve locates one elliptic
 O-point and one hyperbolic X-point. The O/X classification comes from the numerically
@@ -53,6 +56,13 @@ These epsilon values span one decade. Across the table, the maximum O/X radial e
 is 9.52e-15. The machine-readable values are in
 `tests/verification/poincare_reiman_greenside.csv` and are recomputed live by
 `test_poincare_reiman_greenside.py`.
+
+The O/X radii pin the tracer against independent exact locations; because K is
+stationary at the X-point, the invariant-width row primarily verifies the numerical
+root implementation against the independent closed form. A separate driven-field
+check therefore seeds a traced line one percent inside the inner separatrix root. Over
+80 turns its peak-to-peak radius reaches 98.03%--98.15% of the invariant width from
+below for both `R0=1` and `R0=2.5`, directly tying the section data to the separatrix.
 
 Trace persistence uses an explicit schema-1 compressed NumPy record and rejects unknown
 versions. Plotting entry points consume a caller-supplied Matplotlib-compatible axes,
