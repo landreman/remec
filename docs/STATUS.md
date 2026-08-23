@@ -762,7 +762,7 @@ numbering.
   with sparse-Cholesky and UMFPACK; high-order periodic H(curl)/H(div) reproduce all
   three physical constant fluxes below 8e-14. Across base orders 1→4, the relative
   analytic-B errors are 1.980e-1, 4.013e-2, 8.660e-3, and 4.633e-4; the separate
-  base-order-1 h scan measures rate 1.269 (gate 0.8). The maximum curl-projection defect
+  periodic H¹(2) manufactured h scan measures L² rate 3.275 (gate 2.8). The maximum curl-projection defect
   is 4.62e-14 and maximum relative discrete divergence is 4.52e-13. Sampled |B| is
   1.00000007–1.20520 with B_floor activity zero; the production H(div) tracer differs
   from the analytic driven-field transform by 3.039e-4. See

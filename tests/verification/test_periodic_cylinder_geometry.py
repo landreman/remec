@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import sys
+from math import log
 from pathlib import Path
 
 import ngsolve as ng
@@ -15,6 +16,7 @@ from remec.geometry import PeriodicCylinder3D
 from remec.geometry.periodic_cylinder import PeriodicCylinderGeometryMetrics
 
 _TABLE_PATH = Path(__file__).with_name("periodic_cylinder_geometry.csv")
+_H1_TABLE_PATH = Path(__file__).with_name("periodic_cylinder_h1_rates.csv")
 _SCAN_CONFIGURATIONS = ((0, 1), (0, 2), (0, 4), (1, 1), (1, 2), (1, 4))
 
 
@@ -100,6 +102,40 @@ def _mass_project(space: object, source: object, *, inverse: str) -> ng.GridFunc
     result = ng.GridFunction(space)
     result.vec.data = mass.mat.Inverse(space.FreeDofs(), inverse=inverse) * load.vec
     return result
+
+
+def test_periodic_scalar_manufactured_solution_has_expected_h_rate() -> None:
+    """Periodic H1(2) reaches third-order L2 convergence for ``sin(z/R0)``."""
+    measured: list[tuple[int, int, float, float]] = []
+    for refinements in (0, 1):
+        cylinder = PeriodicCylinder3D(geometry_order=2, refinements=refinements)
+        mesh = cylinder.build_mesh()._mesh
+        space = ng.Periodic(ng.H1(mesh, order=2))
+        exact = ng.sin(ng.z / cylinder.major_radius)
+        result = _mass_project(space, exact, inverse="sparsecholesky")
+        error = float(ng.sqrt(ng.Integrate((result - exact) ** 2, mesh, order=12)))
+        volume = float(ng.Integrate(1.0, mesh, order=10))
+        h_eff = (volume / mesh.ne) ** (1.0 / 3.0)
+        measured.append((refinements, mesh.ne, h_eff, error))
+    coarse, refined = measured
+    measured_rate = log(coarse[3] / refined[3]) / log(coarse[2] / refined[2])
+    assert measured_rate > 2.8
+
+    with _H1_TABLE_PATH.open(newline="", encoding="utf-8") as stream:
+        recorded = [row for row in csv.DictReader(stream) if row["platform"] == sys.platform]
+    assert len(recorded) == 2, f"missing {sys.platform} periodic H1 rows: {measured!r}"
+    actual_rows: tuple[tuple[int, int, float, float, float | None], ...] = (
+        (*coarse, None),
+        (*refined, measured_rate),
+    )
+    for row, actual in zip(recorded, actual_rows, strict=True):
+        refinements, elements, h_eff, error, rate = actual
+        assert int(row["refinements"]) == refinements
+        assert int(row["elements"]) == elements
+        assert float(row["h_eff"]) == pytest.approx(h_eff, rel=2.0e-8)
+        assert float(row["l2_error"]) == pytest.approx(error, rel=2.0e-8)
+        if rate is not None:
+            assert float(row["finest_pair_rate"]) == pytest.approx(rate, rel=2.0e-8)
 
 
 @pytest.mark.parametrize("inverse", ["sparsecholesky", "umfpack"])

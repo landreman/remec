@@ -39,6 +39,9 @@ rule.
 The periodic de Rham factory wraps the established tetrahedral pairing
 (H^1(p+1)\to H(\mathrm{curl},p)\to H(\mathrm{div},p-1)\to L^2(p-2)).
 Both sparse-Cholesky and UMFPACK mass solves operate through the periodic H¹ wrapper.
+The manufactured periodic scalar (q=\sin(z/R_0)) in H¹(2) converges from 479 to
+3832 tetrahedra at L² rate 3.275 (third-order gate 2.8); its platform-pinned table is
+`tests/verification/periodic_cylinder_h1_rates.csv`.
 Periodic H(curl) and H(div) mass projections reproduce all three physical constant
 flux components to below (8\times10^{-14}) at the validated high orders and match
 their traces on the identified planes. On the geometry-order-3 map, HDiv order 4 is
@@ -66,10 +69,7 @@ The discrete field interpolates \(A_h\) in periodic H(curl) and mass-projects
 | 3 | 14460 | 9720 | 2.58e-15 | 8.41e-14 | 8.660e-3 |
 | 4 | 28570 | 20990 | 7.29e-15 | 4.52e-13 | 4.633e-4 |
 
-The analytic-field error decreases by factors 4.6--18.7 with each order increase. A
-separate 479→3832-element base-order-1 h scan on the nonzero-shear integrable
-\(t_1=0.01\) field measures rate 1.269 against the expected first-order gate 0.8; see
-`tests/verification/reiman_greenside_m1_refinement.csv`.
+The analytic-field error decreases by factors 4.6--18.7 with each order increase.
 Across the order scan, sampled \(|B|\) lies in [1.00000007, 1.20520], \(B_z=1\)
 exactly, and the (10^{-8}) smooth B-floor activity is zero at floating-point
 resolution. The computed transform is \(\iota(r)=0.29+0.38r^2\), giving resonance

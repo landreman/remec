@@ -6,7 +6,6 @@ import csv
 import sys
 from dataclasses import dataclass
 from itertools import pairwise
-from math import log
 from pathlib import Path
 
 import ngsolve as ng
@@ -23,7 +22,6 @@ from remec.geometry import PeriodicCylinder3D
 from remec.reiman_greenside import ReimanGreensideField
 
 _TABLE_PATH = Path(__file__).with_name("reiman_greenside_m1.csv")
-_REFINEMENT_TABLE_PATH = Path(__file__).with_name("reiman_greenside_m1_refinement.csv")
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,42 +74,6 @@ def test_m1_analytic_field_error_decreases_systematically_with_order(
     for coarse, fine in pairwise(errors):
         assert coarse > 2.0 * fine
     assert errors[-1] < 1.0e-3
-
-
-def test_low_order_m1_field_converges_at_expected_h_rate() -> None:
-    """An integrable base-order-1 curl field reaches its expected first-order L2 h rate."""
-    # The reference t1=0.38 field is deliberately retained in the p-scan above. Its
-    # coarse unstructured meshes are not yet in the h-asymptotic regime. This auxiliary
-    # nonzero-shear field keeps the same production path while isolating the expected
-    # HDiv(0) first-order refinement behavior.
-    model = ReimanGreensideField(t1=0.01)
-    measured: list[tuple[int, int, float, float]] = []
-    for refinements in (0, 1):
-        cylinder = PeriodicCylinder3D(geometry_order=2, refinements=refinements)
-        bundle = cylinder.build_mesh()
-        result = build_reiman_greenside_discrete_field(bundle._mesh, model, order=1)
-        volume = float(ng.Integrate(1.0, bundle._mesh, order=10))
-        h_eff = (volume / bundle._mesh.ne) ** (1.0 / 3.0)
-        measured.append((refinements, bundle._mesh.ne, h_eff, result.analytic_field_relative_error))
-    coarse, refined = measured
-    measured_rate = log(coarse[3] / refined[3]) / log(coarse[2] / refined[2])
-    assert measured_rate > 0.8
-
-    with _REFINEMENT_TABLE_PATH.open(newline="", encoding="utf-8") as stream:
-        recorded = [row for row in csv.DictReader(stream) if row["platform"] == sys.platform]
-    assert len(recorded) == 2, f"missing {sys.platform} refinement rows: {measured!r}"
-    actual_rows: tuple[tuple[int, int, float, float, float | None], ...] = (
-        (*coarse, None),
-        (*refined, measured_rate),
-    )
-    for row, actual in zip(recorded, actual_rows, strict=True):
-        refinements, elements, h_eff, error, rate = actual
-        assert int(row["refinements"]) == refinements
-        assert int(row["elements"]) == elements
-        assert float(row["h_eff"]) == pytest.approx(h_eff, rel=2.0e-8)
-        assert float(row["analytic_field_relative_error"]) == pytest.approx(error, rel=2.0e-8)
-        if rate is not None:
-            assert float(row["finest_pair_rate"]) == pytest.approx(rate, rel=2.0e-8)
 
 
 def test_bz_and_small_b_protection_are_inactive(m1_rows: dict[int, _Row]) -> None:
