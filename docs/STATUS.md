@@ -770,10 +770,16 @@ numbering.
   tests in 103.89 s; slowest test 19.92 s. See
   `tests/verification/periodic_cylinder_geometry.csv`,
   `tests/verification/reiman_greenside_m1.csv`, and `docs/verification.md`.
-  <br>Blocked: ADR 0010 records that NGSolve's periodic curved-HCurl `GridFunction.Set`
-  path preserves the discrete de Rham identities but does not deliver the expected
-  reference-field h rate; a human must choose a global commuting projection, a mixed
-  reconstruction, or an explicit amendment of the convergence-evidence contract.
+  <br>ADR 0010 accepted (Option 2, 2026-08-23): the noncommuting `GridFunction.Set`
+  field construction is replaced by a constrained mixed reconstruction — canonical
+  periodic-HDiv target for **B**, then the §7.3 gauge-fixed curl-constrained solve for
+  A_h, reusing the milestone 4.2/4.3 machinery with harmonic-flux compatibility made
+  explicit. Required gates: roundoff `B_h=curl(A_h)` and `div(B_h)`, axial flux, and a
+  regenerated three-level reference-field h scan at the nominal order-1 curl rate,
+  alongside the retained four-order p-scan. The human explicitly accepted this slice
+  of solver work moving forward from 6.4, since the same operator serves the Picard
+  magnetic update and the §17 import pipeline. No h rate is claimed for any remaining
+  `Set` path (see `docs/dev_notes.md`).
   <br>Next: milestone 6.3 must compute the selected mesh's live
   `maximum_relative_error` and enforce ADR 0009's geometry ≤ 0.1×physics-tolerance rule;
   the current coarse/refined order-4 budgets are 4.468e-5/6.407e-6. Use the public

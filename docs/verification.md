@@ -58,7 +58,12 @@ The production analytic module transcribes
 
 as smooth Cartesian polynomials times `sin(Phi)`/`cos(Phi)`, including at the axis.
 The discrete field interpolates \(A_h\) in periodic H(curl) and mass-projects
-\(\nabla\times A_h\) into paired periodic H(div). The order scan for
+\(\nabla\times A_h\) into paired periodic H(div). **ADR 0010 (accepted 2026-08-23):**
+this `GridFunction.Set`-based loading is a noncommuting local L2 projection whose
+curl converges at only ~0.6 at order 1, so no h rate is claimed for it; the
+production construction is being replaced by the ADR 0010 constrained mixed
+reconstruction, whose three-level h-rate table will be regenerated here. The p-scan
+below and the de Rham/roundoff identities remain valid evidence. The order scan for
 \((t_0,t_1,\epsilon_1,\epsilon_2,R_0)=(0.29,0.38,10^{-3},0,1)\) is recorded in
 `tests/verification/reiman_greenside_m1.csv`:
 

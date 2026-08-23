@@ -324,3 +324,16 @@
   assembled right-hand side has norm at least one and absolute below that scale; the
   shaped benchmark's quoted M1/M3/M3b/M4a numbers and `1e-8` gate use this exact
   normalization.
+
+- Milestone 6.2 HCurl interpolation (NGSolve 6.2.2606, macOS and Linux): the default
+  `GridFunction.Set` into periodic (curved or affine) HCurl is a local L2 projection,
+  not a commuting interpolation. `A_h` converges at its nominal rate but
+  `curl(A_h)` does not: the order-1 Reiman--Greenside reference field measured a B
+  rate of about 0.6 on three levels (Linux 0.607/0.615), unchanged by geometry order
+  1 versus 4. `Set(..., dual=True, bonus_intorder=8)` improves the measured
+  coarse-to-refined rates to 0.952/1.350/2.170 at orders 1/2/3 — still below the
+  nominal curl rates at orders 2–3, so quadrature is not the limiter.
+  `ng.Interpolate(A, HCurl)` returns an elementwise coefficient function that does
+  not expose `curl`, so it cannot feed the paired HDiv projection. Consequence
+  (ADR 0010): never claim an algebraic h rate for a field loaded through `Set`;
+  rate-bearing fields go through the constrained mixed reconstruction.

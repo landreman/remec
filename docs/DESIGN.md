@@ -1498,7 +1498,14 @@ measure an island width agreeing with the resonant-Hamiltonian estimate 4√(ε�
 geometry-order scan bounding the wall geometry error; periodic scalar and vector spaces
 with all mean-flux components tested on the curved mesh, discrete ∇·**B** at roundoff
 and the closed-form vector potential **A** = Ψ_t∇Θ − Ψ_p∇Φ demonstrated on the curved
-mesh, ι profile and resonance locations, and B-floor inactivity.
+mesh, ι profile and resonance locations, and B-floor inactivity. Per ADR 0010 the
+discrete field is built by a constrained mixed reconstruction — a canonical periodic
+H(div) target for **B**, then the Sec. 7.3 gauge-fixed curl-constrained solve for A_h,
+reusing the milestone 4.2/4.3 machinery with harmonic-flux compatibility explicit —
+gated by a three-level reference-field h scan at the nominal order-1 curl rate in
+addition to the p-scan; NGSolve's noncommuting `GridFunction.Set` carries no h-rate
+claim. This deliberately pulls a slice of the 6.4 solver work forward, since the same
+operator serves the Sec. 11 magnetic update and the Sec. 17 import pipeline.
 6.3 frozen-field 3D island benchmark — the Phase 6 numerical gate. Solve (M4a)–(M4b)
 alone on that field at large anisotropy per Sec. 8.6: the cost/resolution table, pressure
 flattening inside the island, both branches of max(w_island, w_c), the ε₁ = 0 and

@@ -1,6 +1,6 @@
 # ADR 0010: Periodic curved-HCurl commuting interpolation contract
 
-**Status:** Proposed — human decision required
+**Status:** Accepted (Option 2) — human sign-off 2026-08-23
 
 ## Context
 
@@ -98,4 +98,44 @@ for this issue.
 
 ## Decision
 
-DECISION: pending human sign-off
+DECISION: Option 2 accepted with human sign-off (2026-08-23). Milestone 6.2 replaces
+the noncommuting `GridFunction.Set` construction of the discrete Reiman--Greenside
+field with a constrained mixed reconstruction: canonically interpolate or project the
+analytic **B** into periodic HDiv, then solve for a periodic HCurl potential whose
+curl equals that divergence-free field, with the gauge and any periodic harmonic flux
+class made explicit rather than silently projected away.
+
+The deciding consideration beyond this ADR's tradeoffs: the reconstruction operator is
+not milestone-local. It is the DESIGN.md Section 7.3 gauge-fixed curl-constrained
+solve with right-hand side `(B_target, curl(v))`, which is the same operator the
+Section 13 Picard magnetic update (Sec. 11) uses every coupled iteration and the same
+step 4 of the Section 17 compatible import pipeline. Milestones 4.2 (gauge-fixed
+curl--curl) and 4.3 (harmonic flux machinery) already provide the core pieces; the new
+work is their adaptation and validation on the periodic curved cylinder, which
+milestone 6.4 needs regardless. The human explicitly accepts the resulting modest
+enlargement of milestone 6.2 with this slice of work previously scoped under 6.4.
+
+Binding conditions:
+
+1. **Reuse, not re-derivation.** The reconstruction MUST be built on the milestone
+   4.2 gauge-fixed curl--curl operator and, where a harmonic class is involved, the
+   milestone 4.3 machinery, with their behavior on the periodic curved spaces
+   demonstrated by tests rather than assumed.
+2. **Gates.** The reconstruction MUST pass, on the curved periodic mesh: the
+   roundoff-level ADR 0009 identities (`B_h = curl(A_h)` for the reconstructed
+   potential, discrete `div(B_h) = 0`); the toroidal (axial) flux check; and a
+   three-level reference-field h scan achieving the nominal order-1 curl rate. The
+   existing four-order p-scan and the independent analytic oracles are retained
+   unchanged. The h-rate table is regenerated, checked into `tests/verification/`,
+   and referenced in `docs/verification.md`.
+3. **Harmonic/flux compatibility explicit.** The implementation MUST state whether
+   the periodic-cylinder harmonic flux class contributes to this field's
+   reconstruction and demonstrate that the reconstruction does not discard net flux;
+   a wrong-flux negative control or equivalent mutation check is required.
+4. **The noncommuting path claims no rate.** Wherever `GridFunction.Set` remains in
+   use (e.g. non-rate-bearing utilities), no algebraic h-convergence rate is claimed
+   for fields loaded through it; the measured NGSolve behavior is recorded in
+   `docs/dev_notes.md`.
+5. **Tiering.** Test placement follows ADR 0007: the milestone's fast suite carries a
+   live sentinel of the reconstruction on its production path, with any wider ladder
+   in the slow or exhaustive tiers.
