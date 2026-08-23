@@ -90,3 +90,34 @@ def make_tetrahedral_de_rham_sequence(mesh: Any, *, order: int) -> DeRhamSequenc
         hdiv=ng.HDiv(mesh, order=hdiv_order),
         l2=ng.L2(mesh, order=l2_order),
     )
+
+
+def make_periodic_tetrahedral_de_rham_sequence(mesh: Any, *, order: int) -> DeRhamSequence:
+    r"""Build the curved periodic discrete complex required by milestone 6.2.
+
+    The space pairing is unchanged from ``make_tetrahedral_de_rham_sequence``:
+    ``H1(p+1) -> HCurl(p) -> HDiv(p-1) -> L2(p-2)``. NGSolve's periodic wrapper
+    identifies the translated end-face trace DOFs for the first three spaces; the
+    discontinuous terminal L2 space has no trace DOFs to identify. The mapped
+    HCurl-to-HDiv composition preserves ``div(curl(A_h))=0`` for note equation (M1).
+    """
+    sequence = make_tetrahedral_de_rham_sequence(mesh, order=order)
+    try:
+        identifications = mesh.ngmesh.GetIdentifications()
+    except AttributeError as error:
+        raise TypeError("mesh must be an NGSolve mesh with periodic identifications") from error
+    if not identifications:
+        raise ValueError("mesh has no periodic identification")
+    import ngsolve as ng
+
+    return DeRhamSequence(
+        base_order=sequence.base_order,
+        h1_order=sequence.h1_order,
+        hcurl_order=sequence.hcurl_order,
+        hdiv_order=sequence.hdiv_order,
+        l2_order=sequence.l2_order,
+        h1=ng.Periodic(sequence.h1),
+        hcurl=ng.Periodic(sequence.hcurl),
+        hdiv=ng.Periodic(sequence.hdiv),
+        l2=sequence.l2,
+    )

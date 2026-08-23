@@ -11,6 +11,114 @@
 > numbers remain valid. Milestone 3.5 migrated the public contract and layer-cake
 > oracle to p₀(s) and the factor V_Ω∫₀¹·ds.
 
+## Milestone 6.2 — curved periodic cylinder and Reiman--Greenside (M1) field
+
+ADR 0009 selects an OCC circular cylinder with one translated axial identification and
+an isoparametric geometry order comparable to the FE order. The straight centerline and
+period (2\pi R_0) are exact; the wall approximation is measured by four dimensionless
+errors: RMS radius, end-face area, volume, and the relative wall-normal flux of the
+analytic circular tangent ((-y,x,0)). A minimum/maximum mapped-Jacobian ratio separately
+rejects element maps whose integral geometry errors look small despite near singularity.
+The complete machine-readable scan is
+`tests/verification/periodic_cylinder_geometry.csv`.
+
+| Refinements | Geometry order | Tetrahedra | RMS radius error | Area error | Volume error | Boundary-flux error | min/max det J |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 0 | 1 | 800 | 1.532e-2 | 3.323e-2 | 2.736e-2 | 1.096e-1 | 9.678e-2 |
+| 0 | 2 | 800 | 1.097e-4 | 2.657e-4 | 1.867e-4 | 1.037e-3 | 9.733e-2 |
+| 0 | 4 | 800 | 9.437e-7 | 8.199e-7 | 4.119e-7 | 2.177e-5 | 9.693e-2 |
+| 1 | 1 | 6400 | 4.868e-3 | 8.371e-3 | 7.983e-3 | 6.262e-2 | 9.678e-2 |
+| 1 | 2 | 6400 | 1.504e-5 | 1.660e-5 | 1.868e-5 | 2.390e-4 | 9.678e-2 |
+| 1 | 4 | 6400 | 6.534e-8 | 1.314e-8 | 1.720e-8 | 2.326e-6 | 9.678e-2 |
+
+Every metric decreases with both geometry order (1→2→4) and one uniform refinement.
+The conservative maximum geometry-error budgets are (2.177\times10^{-5}) for the
+coarse order-4 mesh and (2.326\times10^{-6}) after one refinement. Every mapped-
+Jacobian ratio clears the 0.02 quality gate. Milestone 6.3 must
+therefore use an assertion tolerance at least ten times the selected mesh's live
+`maximum_relative_error`, or refine/raise geometry order, to satisfy ADR 0009's 10%
+rule.
+
+The periodic de Rham factory wraps the established tetrahedral pairing
+(H^1(p+1)\to H(\mathrm{curl},p)\to H(\mathrm{div},p-1)\to L^2(p-2)).
+Both sparse-Cholesky and UMFPACK mass solves operate through the high-order periodic H¹
+wrapper and reproduce the identified-plane trace. The former H¹ secant-rate table was
+deleted when the mapped-Jacobian gate rejected its coarse mesh; §16.2 requires scalar
+periodicity, high-order compatibility, and selected-solver support, all retained by the
+live wrapper test, while the milestone's convergence claim belongs to (M1) below.
+Periodic H(curl) and H(div) mass projections reproduce all three physical constant
+flux components to below (8\times10^{-14}) at the validated high orders and match
+their traces on the identified planes. On the geometry-order-3 map, HDiv order 4 is
+needed for exact representation of the axial physical constant; lower Piola orders
+converge but are not falsely treated as exact.
+
+The production analytic module transcribes
+
+\[
+\Psi_p=t_0\Psi_t+t_1\Psi_t^2-\epsilon_1r^2\cos(2\Theta-\Phi)
+-\epsilon_2r^3\cos(3\Theta-\Phi),\qquad
+\mathbf A=\Psi_t\nabla\Theta-\Psi_p\nabla\Phi,
+\]
+
+as smooth Cartesian polynomials times `sin(Phi)`/`cos(Phi)`, including at the axis.
+**ADR 0010 (Option 2, accepted 2026-08-23)** replaces the noncommuting
+`GridFunction.Set` path with two reused compatible blocks. First, a periodic H(div)
+mixed projection minimizes the analytic-field L² error subject to the paired weak
+divergence constraint; a single global normalization then imposes the requested axial
+flux without changing discrete divergence. Second, the milestone-4.2 Coulomb-gauge
+curl--curl operator reconstructs \(A_h\) from right-hand side
+\((B_{\rm target},\nabla\times v)\), augmented by a mean constraint for the periodic
+H¹ multiplier and the milestone-4.3 normalized axial harmonic constraint for the
+one-dimensional kernel of curl. The resulting paired H(div) field satisfies
+\(B_h=\nabla\times A_h\), discrete divergence, gauge, harmonic-class, and axial-flux
+constraints at roundoff.
+
+The order-1 reference field on four curved meshes that all clear the mapped-Jacobian
+gate has the following macOS live h scan:
+
+| maxh | Tetrahedra | h_eff | relative B error | min/max det J |
+| ---: | ---: | ---: | ---: | ---: |
+| 0.45 | 800 | 2.911e-1 | 1.158e-1 | 9.693e-2 |
+| 0.40 | 1071 | 2.641e-1 | 1.060e-1 | 6.268e-2 |
+| 0.35 | 1881 | 2.189e-1 | 8.175e-2 | 1.186e-1 |
+| 0.30 | 2504 | 1.990e-1 | 7.550e-2 | 9.826e-2 |
+
+The least-squares log(error)-vs-log(h_eff) slope is 1.175 on macOS and 1.160 on Linux,
+clearing the nominal order-1 curl gate of 0.9. The
+platform-pinned table is `tests/verification/reiman_greenside_m1_h_rates.csv`.
+The order scan for
+\((t_0,t_1,\epsilon_1,\epsilon_2,R_0)=(0.29,0.38,10^{-3},0,1)\) is recorded in
+`tests/verification/reiman_greenside_m1.csv`:
+
+| Base order | HCurl DOFs | HDiv DOFs | curl-projection defect | relative div(B) | relative analytic-B error |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 2674 | 1851 | 5.44e-16 | 3.94e-15 | 1.154e-1 |
+| 2 | 9564 | 5553 | 9.92e-16 | 6.99e-15 | 1.840e-2 |
+| 3 | 23356 | 15906 | 1.89e-15 | 3.80e-14 | 2.156e-3 |
+| 4 | 46450 | 34510 | 3.19e-15 | 1.00e-13 | 8.514e-5 |
+
+The analytic-field error decreases by factors 6.3--25.3 with each order increase.
+Across both platform tables and all four orders, sampled \(|B_h|\) lies in
+[0.842, 1.331], within 1.35 times the analytic [1, 1.2053] range. At order 4 the
+\(B_z=1\) L² defect is 1.031e-4 and the
+(10^{-8}) smooth B-floor arithmetic guard is 1.11e-16. The axial target and
+reconstructed fluxes equal \(\pi\) within 1.4e-13. The computed transform is
+\(\iota(r)=0.29+0.38r^2\), giving resonance
+radii 0.74339194 (1/2) and 0.33769082 (1/3).
+
+The public diagnostics wrapper passes both the analytic model and periodic H(div)
+field through the milestone-6.1 tracer. On the driven field at radius 0.35, the
+order-4 interpolated three-turn transform agrees with the analytic trace within the
+asserted (8\times10^{-4}) tolerance. A deliberately wrong configured wrap length is rejected
+against the mesh's measured axial extent before tracing.
+
+Mutation checks deleted the complete \(\epsilon_1\) contribution from the Cartesian
+magnetic field while leaving it in \(\Psi_p\) and \(A\): the independent polar oracle
+and numerical-curl test failed by (6.70\times10^{-4}) and (1.18\times10^{-2}),
+respectively. Reversing the sign of the HDiv curl projection made the live
+curl-projection defect exactly 2.0 instead of roundoff. Both mutations therefore fail
+on physics identities rather than table formatting or an import path.
+
 ## Milestone 6.1 — Poincare sections and field-line tracing
 
 The production tracer parameterizes a field line by the periodic cylinder angle
@@ -24,7 +132,7 @@ The production tracer parameterizes a field line by the periodic cylinder angle
 with SciPy `solve_ivp`. DOP853 reaches roundoff-level errors at the recorded default
 tolerances; no integrator-method comparison was performed. The requested Poincare planes
 are supplied directly as `t_eval`, so they need no event interpolation. The same public tracer accepts an ordinary analytic
-field callback or the private NGSolve adapter for an H(div) GridFunction, keeping
+field callback or the public solver-field wrapper for an H(div) GridFunction, keeping
 NGSolve types out of the diagnostics API.
 
 On the integrable Reiman--Greenside field (epsilon_1=epsilon_2=0), 32 turns from radii

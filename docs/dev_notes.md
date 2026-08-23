@@ -1,5 +1,20 @@
 # NGSolve API notes
 
+- Milestone 6.2 (Netgen/NGSolve 6.2.2606): build a periodic OCC cylinder by naming the
+  lateral face and classifying the two end faces by their axial centers, then call
+  `lower.Identify(upper, name, IdentificationType.PERIODIC,
+  Translation((0, 0, length)))` before `OCCGeometry.GenerateMesh`. `mesh.Curve(order)`
+  and uniform `mesh.Refine()` preserve the identification. `ngsolve.Periodic(base)`
+  retains the base space's `ndof`; the identified slave DOFs are instead removed by
+  `FreeDofs()`, and both sparse-Cholesky and UMFPACK inverses consume that wrapper.
+  Physical constant vectors are not automatically low-order functions of a curved
+  Piola-mapped HDiv space: on the measured geometry-order-3 cylinder, x/y constants
+  become exact at HDiv order 2, while the axial constant requires HDiv order 4 (L2
+  errors below 8e-14 there). Treat lower-order constant-flux defects as approximation
+  error, not a periodic-identification failure. A generic constant vector
+  `CoefficientFunction` still has no `derivname`; transcribe its zero divergence from
+  component `.Diff` calls when an analytic diagnostic needs it.
+
 > Entries for milestones 3.3–3.4 mention `PrescribedCurrentProfile` and the former
 > `u=F(p)+ũ` shift. After the 2026-08-15 model revision those entries remain accurate
 > descriptions of NGSolve expression behavior, but not of the production current-profile
@@ -309,3 +324,44 @@
   assembled right-hand side has norm at least one and absolute below that scale; the
   shaped benchmark's quoted M1/M3/M3b/M4a numbers and `1e-8` gate use this exact
   normalization.
+
+- Milestone 6.2 HCurl interpolation (NGSolve 6.2.2606, macOS and Linux): the default
+  `GridFunction.Set` into periodic (curved or affine) HCurl is a local L2 projection,
+  not a commuting interpolation. `A_h` converges at its nominal rate but
+  `curl(A_h)` does not: the order-1 Reiman--Greenside reference field measured a B
+  rate of about 0.6 on three levels (Linux 0.607/0.615), unchanged by geometry order
+  1 versus 4. `Set(..., dual=True, bonus_intorder=8)` improves the measured
+  coarse-to-refined rates to 0.952/1.350/2.170 at orders 1/2/3 — still below the
+  nominal curl rates at orders 2–3, so quadrature is not the limiter.
+  `ng.Interpolate(A, HCurl)` returns an elementwise coefficient function that does
+  not expose `curl`, so it cannot feed the paired HDiv projection. Consequence
+  (ADR 0010): never claim an algebraic h rate for a field loaded through `Set`;
+  rate-bearing fields go through the constrained mixed reconstruction.
+
+- Milestone 6.2 periodic curl reconstruction (NGSolve 6.2.2606): periodic
+  `FESpace([HDiv, L2])` with the ADR-0005 divergence coupling and periodic
+  `FESpace([HCurl, H1, NumberSpace, NumberSpace])` with the milestone-4.2 Coulomb
+  block are invertible with UMFPACK. `sparsecholesky` is not a valid inverse for these
+  indefinite saddle systems (it returned NaNs). The two scalar rows remove the
+  periodic H¹ constant and the normalized milestone-4.3 axial harmonic from
+  `ker(curl)`; the harmonic row regularizes the potential and does not carry magnetic
+  flux. Imposing cut flux as an L²-projection boundary multiplier was unstable, so the
+  accepted path globally normalizes the divergence-constrained target by its measured
+  cut flux. Scaling preserves the paired divergence constraint and the subsequent curl
+  reconstruction reproduces both target and flux at roundoff.
+
+- Milestone 6.2 curved-cylinder element quality (Netgen/NGSolve 6.2.2606): integral
+  wall/area/volume/flux metrics do not detect nearly singular high-order element maps.
+  On Linux, `maxh=0.6` and `0.5` followed by `Curve(4)` gave minimum mapped Jacobian
+  determinants about 6e-5 and Piola-mapped H(div) magnitudes above 2.7e2; the accepted
+  globally normalized reconstruction can therefore reproduce the same >8e3 excursion
+  seen on one macOS coarse p row. `maxh=0.45` is the coarsest cross-platform family
+  verified here: its minimum/maximum mapped-Jacobian ratio is about 0.097 and its full
+  p=1--4 magnetic-magnitude ladder remains within 0.843--1.329 on macOS. Measure and
+  gate the mapped-Jacobian ratio whenever selecting a curved periodic-cylinder mesh;
+  do not infer element quality from integral geometry errors.
+
+- Milestone 6.2 curved-cylinder ordering (NGSolve 6.2.2606): call `Refine()` before
+  `Curve(order)`. On the same 3560-tetrahedron Linux mesh, refine-then-curve gave
+  relative volume error 7.10e-8 while curve-then-refine left the children effectively
+  order one at 1.28e-2. This ordering is load-bearing for the ADR-0009 scan.

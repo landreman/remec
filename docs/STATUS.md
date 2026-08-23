@@ -735,19 +735,66 @@ numbering.
   the geometry's actual z-extent.
   <br>Placed first so that 6.3 has an independent measurement of where the island is,
   rather than inferring island position from the pressure solution it is trying to test.
-- [ ] **6.2** `PeriodicCylinder3D` + Reiman–Greenside analytic field — `DESIGN.md` §16.2, §8.6 · note: §6 (M1)
-  <br>Acceptance: periodic straight-cylinder geometry (Ω={r<a}, z∈[0,2πR₀) identified) with
-  named boundaries, affine tetrahedra, one Netgen periodic identification; periodic H¹,
-  H(curl), and H(div) spaces tested for scalar and vector periodicity, all mean-flux
-  components, and high-order compatibility, with per-solver periodic-wrapper support
-  checked rather than assumed. Analytic field module implementing
+- [x] **6.2** `PeriodicCylinder3D` + Reiman–Greenside analytic field — `DESIGN.md` §16.2, §8.6 · note: §6 (M1)
+  <br>Acceptance (per ADR 0009, Option 2): periodic straight-cylinder geometry (Ω={r<a},
+  z∈[0,2πR₀) identified) from exact CAD, with named boundaries, tetrahedra curved to a
+  geometry order comparable to the FE order, one Netgen periodic identification, and a
+  checked-in geometry-order scan (wall radius, cross-section area, volume, boundary flux)
+  bounding the wall geometry error at ≤10% of each asserted accuracy tolerance; periodic
+  H¹, H(curl), and H(div) spaces tested on the curved mesh for scalar and vector
+  periodicity, all mean-flux components, and high-order compatibility, with per-solver
+  periodic-wrapper support checked rather than assumed. Analytic field module implementing
   **B** = ∇Ψ_t×∇Θ + ∇Φ×∇Ψ_p with the §8.6 Ψ_p, plus the closed-form vector potential
-  **A** = Ψ_t∇Θ − Ψ_p∇Φ; tests MUST verify discrete ∇·**B** at roundoff, curl(**A**)=**B**,
+  **A** = Ψ_t∇Θ − Ψ_p∇Φ; tests MUST verify, on the curved mesh, discrete ∇·**B** at
+  roundoff, curl(**A**)=**B**,
   B_z≡1 with |**B**| bounded away from zero (B_floor inactive), ι(r)=t₀+t₁r², and the
   computed resonance radii (0.74339 for ι=1/2 and 0.33769 for ι=1/3 at t₀=0.29, t₁=0.38).
   <br>Design input: the domain is topologically a solid torus, so it exercises the same
-  nontrivial harmonic field and toroidal flux as §16.4 with zero geometry-approximation
-  error. Milestone 4.3's harmonic-flux machinery should be reused here, not re-derived.
+  nontrivial harmonic field and toroidal flux as §16.4 with a measured (not zero)
+  geometry-approximation error; axial periodicity and the centerline are exact.
+  Milestone 4.3's harmonic-flux machinery should be reused here, not re-derived.
+  <br>ADR 0009 accepted (Option 2, 2026-08-23): curved circular wall with a measured
+  geometry-error budget; if the curved de Rham/periodic demonstrations fail, the fallback
+  is ADR 0009 Option 3 via an ADR amendment, not a silent switch.
+  <br>Measured (local macOS / CPython 3.12.2 / NGSolve 6.2.2606): geometry orders
+  1→2→4 reduce the clean coarse-mesh maximum error from 1.096e-1 → 1.037e-3 → 2.177e-5;
+  one refinement reduces the order-4 budget to 2.326e-6. All minimum/maximum mapped-
+  Jacobian ratios exceed 0.062 on macOS (gate 0.02). Periodic H¹ direct solves pass
+  with sparse-Cholesky and UMFPACK; high-order periodic H(curl)/H(div) reproduce all
+  three physical constant fluxes below 8e-14. ADR 0010's four-clean-mesh order-1
+  reference-field h scan has least-squares slopes 1.175 on macOS and 1.160 on Linux
+  (gate 0.9).
+  Across base orders 1→4, the reconstructed relative analytic-B errors are
+  1.154e-1, 1.840e-2, 2.156e-3, and 8.514e-5. The former periodic-H¹ secant table was
+  deleted because its apparent fourth-order rate depended on the rejected ill-conditioned
+  mesh; high-order periodic trace and selected-solver coverage remain live. The maximum
+  curl-projection defect is 3.19e-15 and maximum relative discrete divergence is 1.00e-13.
+  Across both platforms and all four p rows, sampled |B_h| is 0.842–1.331; at order 4 the B_z L² defect is
+  1.031e-4, axial target/reconstructed flux equals π within 1.4e-13, and the B_floor
+  arithmetic guard is 1.11e-16. Local `make check` passes 351 tests in 92.86 s; the
+  milestone's clean-mesh fast setup takes 14.83 s and its split vector-factorization
+  setup at most 10.23 s. Four touched slow tests pass in 100.10 s; the shared p-ladder
+  setup takes 80.44 s and the fitted h-ladder setup 17.04 s. The full Linux developer
+  suite passes on Python 3.10 and 3.14 in workflow
+  [32642962183](https://github.com/landreman/remec/actions/runs/32642962183). See
+  `tests/verification/periodic_cylinder_geometry.csv`,
+  `tests/verification/reiman_greenside_m1.csv`, and `docs/verification.md`.
+  <br>ADR 0010 accepted (Option 2, 2026-08-23): the noncommuting `GridFunction.Set`
+  field construction is replaced by a constrained mixed reconstruction — canonical
+  periodic-HDiv target for **B**, then the §7.3 gauge-fixed curl-constrained solve for
+  A_h, reusing the milestone 4.2/4.3 machinery with harmonic-flux compatibility made
+  explicit. Required gates: roundoff `B_h=curl(A_h)` and `div(B_h)`, axial flux, and a
+  regenerated three-level reference-field h scan at the nominal order-1 curl rate,
+  alongside the retained four-order p-scan. The human explicitly accepted this slice
+  of solver work moving forward from 6.4, since the same operator serves the Picard
+  magnetic update and the §17 import pipeline. No h rate is claimed for any remaining
+  `Set` path (see `docs/dev_notes.md`).
+  <br>Next: milestone 6.3 must compute the selected mesh's live
+  `maximum_relative_error` and enforce ADR 0009's geometry ≤ 0.1×physics-tolerance rule;
+  the current coarse/refined order-4 budgets are 2.177e-5/2.326e-6 and the selected
+  mesh must also clear the mapped-Jacobian ratio gate. Use the public
+  `make_hdiv_field_evaluator` wrap-length gate and the production
+  `ReimanGreensideField`, rather than copying milestone 6.1's private oracle.
 - [ ] **6.3** Frozen-field 3D island benchmark: (M4a)–(M4b) at large anisotropy — `DESIGN.md` §8.6, §12.3, §22 · note: §4.3, §8
   <br>**Phase gate.** Acceptance: solve *only* (M4a)–(M4b) — no (M1), no (M2)–(M3b), no
   Picard — on the 6.2 field with a single m=2 island chain (ε₂=0), and produce all of:
