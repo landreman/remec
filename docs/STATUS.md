@@ -761,7 +761,8 @@ numbering.
   one refinement reduces the order-4 budget to 6.407e-6. Periodic H¹ direct solves pass
   with sparse-Cholesky and UMFPACK; high-order periodic H(curl)/H(div) reproduce all
   three physical constant fluxes below 8e-14. ADR 0010's three-level order-1
-  reference-field h scan measures rates 3.424 and 1.221 (finest-pair gate 0.9).
+  reference-field h scan measures finest-pair rates 1.221 on macOS and 1.204 on Linux
+  (gate 0.9).
   Across base orders 1→4, the reconstructed relative analytic-B errors are
   1.712e-1, 3.317e-2, 5.680e-3, and 2.986e-4; the separate
   periodic H¹(3) manufactured h scan measures L² rates 4.022 on macOS and 3.747 on

@@ -77,7 +77,8 @@ The order-1 reference field on three curved meshes has the live h scan:
 | 0.45 | 800 | 2.911e-1 | 1.158e-1 | 3.424 |
 | 0.35 | 1881 | 2.189e-1 | 8.175e-2 | 1.221 |
 
-The finest-pair rate clears the nominal order-1 curl gate of 0.9. The
+The finest-pair rate is 1.221 on macOS and 1.204 on Linux, clearing the nominal
+order-1 curl gate of 0.9. The
 platform-pinned table is `tests/verification/reiman_greenside_m1_h_rates.csv`.
 The order scan for
 \((t_0,t_1,\epsilon_1,\epsilon_2,R_0)=(0.29,0.38,10^{-3},0,1)\) is recorded in
