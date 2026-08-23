@@ -735,7 +735,7 @@ numbering.
   the geometry's actual z-extent.
   <br>Placed first so that 6.3 has an independent measurement of where the island is,
   rather than inferring island position from the pressure solution it is trying to test.
-- [x] **6.2** `PeriodicCylinder3D` + Reiman–Greenside analytic field — `DESIGN.md` §16.2, §8.6 · note: §6 (M1)
+- [~] **6.2** `PeriodicCylinder3D` + Reiman–Greenside analytic field — `DESIGN.md` §16.2, §8.6 · note: §6 (M1)
   <br>Acceptance (per ADR 0009, Option 2): periodic straight-cylinder geometry (Ω={r<a},
   z∈[0,2πR₀) identified) from exact CAD, with named boundaries, tetrahedra curved to a
   geometry order comparable to the FE order, one Netgen periodic identification, and a
@@ -757,24 +757,22 @@ numbering.
   geometry-error budget; if the curved de Rham/periodic demonstrations fail, the fallback
   is ADR 0009 Option 3 via an ADR amendment, not a silent switch.
   <br>Measured (local macOS / CPython 3.12.2 / NGSolve 6.2.2606): geometry orders
-  1→2→4 reduce the coarse-mesh maximum error from 1.235e-1 → 1.550e-3 → 4.468e-5;
-  one refinement reduces the order-4 budget to 6.407e-6. Periodic H¹ direct solves pass
+  1→2→4 reduce the clean coarse-mesh maximum error from 1.096e-1 → 1.037e-3 → 2.177e-5;
+  one refinement reduces the order-4 budget to 2.326e-6. All minimum/maximum mapped-
+  Jacobian ratios exceed 0.062 on macOS (gate 0.02). Periodic H¹ direct solves pass
   with sparse-Cholesky and UMFPACK; high-order periodic H(curl)/H(div) reproduce all
-  three physical constant fluxes below 8e-14. ADR 0010's three-level order-1
-  reference-field h scan measures finest-pair rates 1.221 on macOS and 1.204 on Linux
+  three physical constant fluxes below 8e-14. ADR 0010's four-clean-mesh order-1
+  reference-field h scan has least-squares slopes 1.175 on macOS and 1.160 on Linux
   (gate 0.9).
   Across base orders 1→4, the reconstructed relative analytic-B errors are
-  1.712e-1, 3.317e-2, 5.680e-3, and 2.986e-4; the separate
-  periodic H¹(3) manufactured h scan measures L² rates 4.022 on macOS and 3.747 on
-  Linux (gate 3.5). The maximum curl-projection defect is 6.97e-14 and maximum relative
-  discrete divergence is 4.10e-13. At order 4, sampled |B_h| is 0.711–1.475, the
-  B_z L² defect is 3.249e-4, axial target/reconstructed flux equals π within 1.4e-13,
-  and B_floor activity is 1.56e-16; the production H(div) tracer differs
-  from the analytic driven-field transform by 3.039e-4. Local `make check`: 352
-  tests in 84.62 s; the milestone's fast h-rate test took 11.0 s. All three touched
-  slow tests pass in 60.27 s, with the shared p-ladder setup taking 49.50 s. The full
-  Linux developer suite passes on Python 3.10 and 3.14 in workflow
-  [32640191971](https://github.com/landreman/remec/actions/runs/32640191971). See
+  1.154e-1, 1.840e-2, 2.156e-3, and 8.514e-5. The former periodic-H¹ secant table was
+  deleted because its apparent fourth-order rate depended on the rejected ill-conditioned
+  mesh; high-order periodic trace and selected-solver coverage remain live. The maximum
+  curl-projection defect is 3.19e-15 and maximum relative discrete divergence is 1.00e-13.
+  Across all four p rows, sampled |B_h| is 0.843–1.329; at order 4 the B_z L² defect is
+  1.031e-4, axial target/reconstructed flux equals π within 1.4e-13, and the B_floor
+  arithmetic guard is 1.11e-16. Four touched slow tests pass in 94.23 s; the shared
+  p-ladder setup takes 75.33 s and the fitted h-ladder setup 16.26 s. See
   `tests/verification/periodic_cylinder_geometry.csv`,
   `tests/verification/reiman_greenside_m1.csv`, and `docs/verification.md`.
   <br>ADR 0010 accepted (Option 2, 2026-08-23): the noncommuting `GridFunction.Set`
@@ -789,7 +787,8 @@ numbering.
   `Set` path (see `docs/dev_notes.md`).
   <br>Next: milestone 6.3 must compute the selected mesh's live
   `maximum_relative_error` and enforce ADR 0009's geometry ≤ 0.1×physics-tolerance rule;
-  the current coarse/refined order-4 budgets are 4.468e-5/6.407e-6. Use the public
+  the current coarse/refined order-4 budgets are 2.177e-5/2.326e-6 and the selected
+  mesh must also clear the mapped-Jacobian ratio gate. Use the public
   `make_hdiv_field_evaluator` wrap-length gate and the production
   `ReimanGreensideField`, rather than copying milestone 6.1's private oracle.
 - [ ] **6.3** Frozen-field 3D island benchmark: (M4a)–(M4b) at large anisotropy — `DESIGN.md` §8.6, §12.3, §22 · note: §4.3, §8

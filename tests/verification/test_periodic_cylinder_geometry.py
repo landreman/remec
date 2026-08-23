@@ -126,34 +126,57 @@ def test_selected_direct_solvers_support_periodic_h1_wrapper(
     assert lower == pytest.approx(upper, abs=2.0e-12)
 
 
-@pytest.mark.parametrize("space_name", ["hcurl", "hdiv"])
 @pytest.mark.parametrize("component", [0, 1, 2])
 def test_periodic_vector_spaces_preserve_all_mean_flux_components(
-    curved_periodic_mesh: object, space_name: str, component: int
+    vector_projection_rows: tuple[str, dict[int, tuple[float, np.ndarray, np.ndarray]]],
+    component: int,
 ) -> None:
     """Periodic H(curl)/H(div) preserve x, y, and z constant fluxes at high order."""
+    _, rows = vector_projection_rows
+    error, lower, upper = rows[component]
+    assert error < 1.0e-11
+    np.testing.assert_allclose(lower, upper, atol=2.0e-11)
+
+
+@pytest.fixture(scope="module", params=("hcurl", "hdiv"))
+def vector_projection_rows(
+    curved_periodic_mesh: object, request: pytest.FixtureRequest
+) -> tuple[str, dict[int, tuple[float, np.ndarray, np.ndarray]]]:
+    """Share one high-order vector mass factorization across three flux components."""
     # Route the physical-constant check through the production pairing. Geometry
     # order 3 needs HDiv(4), hence the validated base-order-5 complex; lower paired
     # orders are covered by the convergent (M1) scan, not treated as exact.
     sequence = make_periodic_tetrahedral_de_rham_sequence(curved_periodic_mesh, order=5)
+    space_name = str(request.param)
     space = getattr(sequence, space_name)
-    values = [0.0, 0.0, 0.0]
-    values[component] = 1.0
-    source = ng.CoefficientFunction(tuple(values))
-    result = _mass_project(space, source, inverse="sparsecholesky")
-    error = float(
-        ng.sqrt(
-            ng.Integrate(
-                ng.InnerProduct(result - source, result - source),
-                curved_periodic_mesh,
-                order=10,
+    trial, test = space.TnT()
+    mass = ng.BilinearForm(space)
+    mass += ng.InnerProduct(trial, test) * ng.dx
+    mass.Assemble()
+    inverse = mass.mat.Inverse(space.FreeDofs(), inverse="sparsecholesky")
+    rows: dict[int, tuple[float, np.ndarray, np.ndarray]] = {}
+    for component in (0, 1, 2):
+        values = [0.0, 0.0, 0.0]
+        values[component] = 1.0
+        source = ng.CoefficientFunction(tuple(values))
+        load = ng.LinearForm(space)
+        load += ng.InnerProduct(source, test) * ng.dx
+        load.Assemble()
+        result = ng.GridFunction(space)
+        result.vec.data = inverse * load.vec
+        error = float(
+            ng.sqrt(
+                ng.Integrate(
+                    ng.InnerProduct(result - source, result - source),
+                    curved_periodic_mesh,
+                    order=10,
+                )
             )
         )
-    )
-    assert error < 1.0e-11
-    lower = np.asarray(result(curved_periodic_mesh(0.2, -0.1, 0.0)), dtype=float)
-    upper = np.asarray(result(curved_periodic_mesh(0.2, -0.1, 2.0 * np.pi)), dtype=float)
-    np.testing.assert_allclose(lower, upper, atol=2.0e-11)
+        lower = np.asarray(result(curved_periodic_mesh(0.2, -0.1, 0.0)), dtype=float)
+        upper = np.asarray(result(curved_periodic_mesh(0.2, -0.1, 2.0 * np.pi)), dtype=float)
+        rows[component] = (error, lower, upper)
+    return space_name, rows
 
 
 def test_periodic_cylinder_reuses_normalized_m1_harmonic_flux() -> None:
