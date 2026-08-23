@@ -11,7 +11,7 @@
   straight-cylinder period, wrap `z` into that period before constructing the mesh
   point; evaluation at the duplicated upper plane is otherwise backend/boundary
   dependent. An affine mapping of `MakeStructured3DMesh` to
-  `[-1,1] x [-1,1] x [0,2*pi]` retains exact linear H(div) fields on both 6- and
+  `[-1,1] x [-1,1] x [0,2*pi*R0]` retains exact linear H(div) fields on both 6- and
   48-tetrahedron tests.
 
 - Milestone 5.5 (NGSolve 6.2.2606): for a reduced axisymmetric volume map,

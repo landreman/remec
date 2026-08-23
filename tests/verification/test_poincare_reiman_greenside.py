@@ -141,6 +141,19 @@ def test_tracer_locates_o_x_points_and_conserved_k_width(
     )
     traced_width = radial_excursion(near_separatrix)[0]
     assert 0.97 * invariant_width < traced_width < invariant_width
+    seed_level = field.invariant(
+        inner_separatrix_radius + 0.01 * exact_width,
+        o_point.theta,
+    )
+    traced_levels = [
+        field.invariant(radius, theta)
+        for radius, theta in zip(
+            near_separatrix.radii[0],
+            near_separatrix.theta_unwrapped[0],
+            strict=True,
+        )
+    ]
+    assert max(abs(level - seed_level) for level in traced_levels) < 1.0e-12
 
 
 @pytest.mark.parametrize(

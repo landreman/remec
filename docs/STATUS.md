@@ -720,9 +720,9 @@ numbering.
   ι=R₀0.37/B_z at roundoff, and have divergence-squared below 1.03e-28. For
   ε₁=1e-4, 3.1623e-4, and 1e-3, the conserved-K widths are
   0.04588315, 0.08159306, and 0.14509525; maximum closed-form disagreement is 9.52e-15,
-  maximum O/X radial error is 4.53e-14, maximum periodic-map residual is 1.07e-13,
-  and 80-turn driven traces recover 98.03%–98.15% of the separatrix width from below
-  for both R₀=1 and 2.5.
+  maximum O/X radial error is 4.53e-14, and 80-turn driven traces recover
+  98.03%–98.15% of the separatrix width from below for both R₀=1 and 2.5 while
+  conserving K to 9.0e-16 (gate 1e-12).
   Trace schema-1 round-trip, unknown-version rejection, and Poincare/isobar plotting
   entry points pass. See `tests/verification/poincare_reiman_greenside.csv` and
   `docs/verification.md`. ADR 0008 approved SciPy as a base diagnostics dependency.
@@ -731,6 +731,8 @@ numbering.
   evaluator, then pass its analytic and interpolated fields through this tracer. Keep
   `Phi` monotone with nonzero B_z; fields requiring a different
   section parameterization need a separate tracer mode rather than silent fallback.
+  Use a z-dependent H(div) field to gate the configured periodic-wrap length against
+  the geometry's actual z-extent.
   <br>Placed first so that 6.3 has an independent measurement of where the island is,
   rather than inferring island position from the pressure solution it is trying to test.
 - [ ] **6.2** `PeriodicCylinder3D` + Reiman–Greenside analytic field — `DESIGN.md` §16.2, §8.6 · note: §6 (M1)

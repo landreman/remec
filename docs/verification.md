@@ -52,17 +52,19 @@ closed form `4*sqrt(epsilon_1/(2*t1))` is used only as the oracle:
 | 1.0000e-3 | 0.7469235147 | 0.7398435112 | 0.1450952500 | 0.1450952500 |
 
 These epsilon values span one decade. Across the table, the maximum O/X radial error is
-4.53e-14, maximum periodic-map residual is 1.07e-13, and maximum absolute width error
-is 9.52e-15. The machine-readable values are in
+4.53e-14 and the maximum absolute width error is 9.52e-15. The machine-readable values are in
 `tests/verification/poincare_reiman_greenside.csv` and are recomputed live by
 `test_poincare_reiman_greenside.py`.
 
 The O/X radii pin the tracer against independent exact locations; because K is
 stationary at the X-point, the invariant-width row primarily verifies the numerical
 root implementation against the independent closed form. A separate driven-field
-check therefore seeds a traced line one percent inside the inner separatrix root. Over
-80 turns its peak-to-peak radius reaches 98.03%--98.15% of the invariant width from
-below for both `R0=1` and `R0=2.5`, directly tying the section data to the separatrix.
+check therefore seeds a traced line one percent of the island width inside the inner
+separatrix root. Over 80 turns its peak-to-peak radius reaches 98.03%--98.15% of the
+invariant width from below for both `R0=1` and `R0=2.5`, directly tying the section data
+to the separatrix. The same section points conserve K to at most 9.0e-16 (gate 1e-12),
+providing a two-sided tracer-accuracy check that rejects both weakened and strengthened
+radial drift.
 
 Trace persistence uses an explicit schema-1 compressed NumPy record and rejects unknown
 versions. Plotting entry points consume a caller-supplied Matplotlib-compatible axes,

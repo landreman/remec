@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
@@ -11,11 +12,30 @@ import pytest
 from remec.diagnostics.poincare import (
     PoincareTrace,
     PoincareTraceVersionError,
+    find_periodic_point,
     load_poincare_trace,
     plot_isobar_overlay,
     plot_poincare,
     save_poincare_trace,
 )
+
+
+def _cylindrical_field(
+    x: float,
+    y: float,
+    *,
+    radial: float,
+    poloidal_rate: float,
+) -> tuple[float, float, float]:
+    radius = float(np.hypot(x, y))
+    cosine = x / radius
+    sine = y / radius
+    poloidal = poloidal_rate * radius
+    return (
+        radial * cosine - poloidal * sine,
+        radial * sine + poloidal * cosine,
+        1.0,
+    )
 
 
 def _trace() -> PoincareTrace:
@@ -99,3 +119,45 @@ def test_plotting_entry_points_use_caller_supplied_axes() -> None:
     assert overlay_axes.scatter_call is not None
     assert overlay_axes.contour_call is not None
     assert overlay_axes.contour_call[1] == {"levels": 4, "colors": "blue"}
+
+
+def test_periodic_point_rejects_non_area_preserving_return_map() -> None:
+    def field(x: float, y: float, _z: float) -> tuple[float, float, float]:
+        radius = float(np.hypot(x, y))
+        return _cylindrical_field(
+            x,
+            y,
+            radial=0.02 * (radius - 0.4),
+            poloidal_rate=0.5,
+        )
+
+    with pytest.raises(RuntimeError, match=r"det\(M\)"):
+        find_periodic_point(
+            field,
+            (0.4, 0.0),
+            period_turns=2,
+            poloidal_winding=1,
+        )
+
+
+def test_periodic_point_rejects_nonconverged_residual(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def field(x: float, y: float, _z: float) -> tuple[float, float, float]:
+        return _cylindrical_field(x, y, radial=0.01, poloidal_rate=0.5)
+
+    monkeypatch.setattr(
+        "scipy.optimize.root",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            x=np.array([0.4, 0.0]),
+            message="stagnated",
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="periodic-point residual"):
+        find_periodic_point(
+            field,
+            (0.4, 0.0),
+            period_turns=2,
+            poloidal_winding=1,
+        )
