@@ -5,7 +5,7 @@ from __future__ import annotations
 import resource
 import sys
 from dataclasses import dataclass
-from math import isfinite, pi, sqrt
+from math import cos, isfinite, pi, sqrt
 from time import perf_counter
 from typing import Any, cast
 
@@ -413,12 +413,17 @@ def run_frozen_field_island(
         t1=model.t1,
         major_radius=model.major_radius,
     )
+    chord_buffer = (resonance + 0.5 * critical_width) * (1.0 / cos(pi / config.angular_cells) - 1.0)
     bundle = cylinder.build_graded_mesh(
         (
             GradedAnnulus(
                 radius=resonance,
-                half_width=0.6 * max(island_width, critical_width),
+                half_width=max(
+                    0.6 * max(island_width, critical_width),
+                    0.5 * critical_width + chord_buffer + 1.0e-12,
+                ),
                 maximum_radial_width=critical_width / config.min_layer_cells,
+                measurement_half_width=0.5 * critical_width,
             ),
         ),
         angular_cells=config.angular_cells,
@@ -518,15 +523,7 @@ def run_frozen_field_island(
         bundle._mesh, integrable_model, config, profile
     )
     pollution_ratio = numerical_perpendicular / config.epsilon_kappa
-    critical_lower = resonance - 0.5 * critical_width
-    critical_upper = resonance + 0.5 * critical_width
-    resonant_radial_width = max(
-        upper - lower
-        for lower, upper in zip(
-            bundle.radial_coordinates[:-1], bundle.radial_coordinates[1:], strict=True
-        )
-        if lower < critical_upper and upper > critical_lower
-    )
+    resonant_radial_width = bundle.maximum_target_radial_projection
 
     diagnostics: dict[str, float | int | str | bool] = {
         "equations": "M4a-M4b",

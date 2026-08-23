@@ -3,17 +3,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from itertools import pairwise
 from math import isfinite, pi
 from typing import Any
 
 
 @dataclass(frozen=True, slots=True)
 class GradedAnnulus:
-    """One unperturbed cylindrical annulus targeted by ADR 0011 radial packing."""
+    """One annulus with an ADR-0011 cap on intersecting-cell radial projection."""
 
     radius: float
     half_width: float
     maximum_radial_width: float
+    measurement_half_width: float | None = None
 
     def __post_init__(self) -> None:
         if not isfinite(self.radius) or self.radius <= 0.0:
@@ -22,6 +24,13 @@ class GradedAnnulus:
             raise ValueError("annulus half_width must be finite and positive")
         if not isfinite(self.maximum_radial_width) or self.maximum_radial_width <= 0.0:
             raise ValueError("annulus maximum_radial_width must be finite and positive")
+        if self.measurement_half_width is not None and (
+            not isfinite(self.measurement_half_width)
+            or not 0.0 < self.measurement_half_width <= self.half_width
+        ):
+            raise ValueError(
+                "measurement_half_width must be positive and no larger than half_width"
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,6 +71,7 @@ class _PeriodicCylinderMeshBundle:
     element_types: tuple[str, ...] = ()
     maximum_aspect_ratio: float = 1.0
     maximum_target_aspect_ratio: float = 1.0
+    maximum_target_radial_projection: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -257,11 +267,28 @@ class PeriodicCylinder3D:
         for target in target_annuli:
             lower = target.radius - target.half_width
             upper = target.radius + target.half_width
-            intervals = ceil((upper - lower) / target.maximum_radial_width)
+            chord_depth = upper * (1.0 - cos(pi / angular_cells))
+            maximum_ring_width = target.maximum_radial_width - chord_depth
+            if maximum_ring_width <= 0.0:
+                raise ValueError(
+                    "angular_cells is too small for the requested intersecting-cell "
+                    "radial projection"
+                )
+            intervals = ceil((upper - lower) / maximum_ring_width)
             radial_points.update(
                 lower + (upper - lower) * index / intervals for index in range(intervals + 1)
             )
         radial_coordinates = tuple(sorted(radial_points))
+        maximum_target_radial_projection = max(
+            upper - lower * cos(pi / angular_cells)
+            for lower, upper in pairwise(radial_coordinates)
+            if any(
+                lower * cos(pi / angular_cells)
+                < target.radius + (target.measurement_half_width or target.half_width)
+                and upper > target.radius - (target.measurement_half_width or target.half_width)
+                for target in target_annuli
+            )
+        )
 
         solid = Cylinder(Pnt(0.0, 0.0, 0.0), Z, self.radius, self.periodic_length)
         geometry = OCCGeometry(solid)
@@ -525,6 +552,7 @@ class PeriodicCylinder3D:
             element_types=element_types,
             maximum_aspect_ratio=maximum_aspect_ratio,
             maximum_target_aspect_ratio=maximum_target_aspect_ratio,
+            maximum_target_radial_projection=maximum_target_radial_projection,
         )
 
     def boundary_regions(self) -> dict[str, str]:
