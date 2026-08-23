@@ -852,13 +852,21 @@ numbering.
   direct solver is used below its threshold and native preconditioned CG above it, both
   recorded in the cost table. See ADR 0011 for the six binding directives. The
   resolution criterion is not relaxed; the milestone is unblocked.
-  <br>Blocked again on proposed ADR 0012: the generic M4b mollifier uses
-  `|det J|^(1/3)` as its spatial width, which lets the deliberately coarse tangential
-  directions on ADR 0011 cells smear across many resolved radial layers. A live p=2,
-  24-by-4 probe at epsilon_kappa=1e-6 measures a raw O-ray `|dchi/dr|` ratio of 0.55894
-  relative to the integrable control while the determinant-width M4b diagnostic reports
-  zero flattening. ADR 0012 requests the missing anisotropic-width definition; no
-  flattening tolerance or resolution gate has been relaxed.
+  <br>ADR 0012 Option 1 accepted (2026-08-23): M4b now uses the rotation-invariant
+  level-set-normal metric width `h_n=1/||J^-1 n||` on anisotropic cells, with the old
+  determinant width retained and counted only where the level-set normal is undefined.
+  The globally ordered Freudenthal split also closes the H(div) divergence theorem below
+  2e-10; its local-order test-first predecessor was nonconforming and gave a 75% false
+  power defect. The five-row p=2 table spans 1,944--44,928 tetrahedra and 3,305--64,481
+  H1 DOFs, records direct and CG-H1AMG paths (finest: 136 iterations), has pollution
+  ratios 4.269e-5--1.510e-3, at least 6.484 radial widths, and global-power errors below
+  1.12e-13. At epsilon_kappa=1e-3 the 97%-gradient flattening width is zero; at 1e-4 the
+  last two refinements both measure 0.167129 versus exact w_island=0.145095. Integrable,
+  axisymmetric-b, isotropic-K, and sub-w_c controls all measure zero. The finest co-area
+  spike/volume-plateau ratios are 1.226/1.281 with zero critical-safeguard activations.
+  `frozen_field_island_benchmark.py` exclusively regenerates the cost/aspect CSVs and
+  Poincare/isobar overlay. Local `make check` and the touched slow aspect scan are green;
+  the required complete branch `exhaustive.yml` run is pending before `[x]`.
 - [ ] **6.4** Periodic-cylinder end-to-end coupled benchmark — `DESIGN.md` §16.2 · note: §6, §9
   <br>Acceptance: full (M1)–(M4b) Picard on the 6.2 geometry, initialized from the 6.3
   frozen state and the closed-form **A**; all §5 invariants active. This was the old 6.1;

@@ -378,3 +378,30 @@
   `Curve(order)`. On the same 3560-tetrahedron Linux mesh, refine-then-curve gave
   relative volume error 7.10e-8 while curve-then-refine left the children effectively
   order one at 1.28e-2. This ordering is load-bearing for the ADR-0009 scan.
+
+- Milestone 6.3 extrude-then-split topology (Netgen/NGSolve 6.2.2606): applying the
+  usual three-tetrahedron prism split to each disk triangle in its local vertex order
+  does **not** give a conforming mesh; neighboring prisms can choose opposite diagonals
+  on their shared vertical quadrilateral. Netgen accepts that topology, H1 solves look
+  plausible, and integral OCC geometry metrics remain accurate, but a projected H(div)
+  field violated the physical divergence theorem by 13.7 in absolute flux (75% in the
+  M4 power diagnostic). Sort every disk triangle by one global vertex rank before the
+  Freudenthal split and use the same global diagonal on wall quads. The resulting live
+  H(div) volume/boundary identity closes below 2e-10 in the sentinel and M4 global power
+  closes near 1e-14. Always put a divergence-theorem test on a manual tetrahedral split;
+  element-type and positive-Jacobian checks cannot detect this defect.
+
+- Milestone 6.3 rank-one pollution solve (NGSolve 6.2.2606): `h1amg` cannot be built
+  for the kappa-perp=0 diagnostic operator because its element blocks retain the exact
+  parallel-operator nullspace (`Inverse matrix: Matrix singular`). The physical finite-
+  kappa M4a operator uses native H1-AMG above its configured direct threshold; the
+  separate pollution diagnostic uses UMFPACK below its own threshold and the `local`
+  preconditioner above it. This is a property of the deliberately rank-one diagnostic,
+  not evidence against H1-AMG for the uniformly elliptic production operator.
+
+- ADR 0012 normal metric (NGSolve 6.2.2606): evaluating
+  `specialcf.JacobianMatrix(dim)` on `MapToAllElements` returns a flattened
+  `(samples, dim*dim)` array in the same element/quadrature ordering as coefficient
+  evaluation. Reshape it to `(samples, dim, dim)` before computing
+  `h_n=1/||J^{-1} n||`. The production extractor retains determinant widths only at
+  counted samples where the level-set gradient is too small to define `n`.
