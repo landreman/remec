@@ -14,6 +14,8 @@ dependencies = [
     "ngsolve>=6.2.2606,<6.3",
     # NumPy 2.5 stubs require a Python 3.12 type-check target; remec supports 3.10.
     "numpy>=1.24,<2.5",
+    # The wide range lets pip choose Python-3.10 and Python-3.14 compatible minors.
+    "scipy>=1.11,<2",
 ]
 
 [project.optional-dependencies]

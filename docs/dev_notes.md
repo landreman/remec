@@ -5,6 +5,15 @@
 > descriptions of NGSolve expression behavior, but not of the production current-profile
 > closure. Follow `DESIGN.md` §9.2 and `STATUS.md` milestones 3.5–3.6.
 
+- Milestone 6.1 (NGSolve 6.2.2606): a three-component H(div) `GridFunction` can be
+  evaluated as `field(mesh(x, y, z))` and converted directly to a NumPy length-three
+  array for SciPy's scalar ODE callback. For repeated Poincare sections on a fundamental
+  straight-cylinder period, wrap `z` into that period before constructing the mesh
+  point; evaluation at the duplicated upper plane is otherwise backend/boundary
+  dependent. An affine mapping of `MakeStructured3DMesh` to
+  `[-1,1] x [-1,1] x [0,2*pi*R0]` retains exact linear H(div) fields on both 6- and
+  48-tetrahedron tests.
+
 - Milestone 5.5 (NGSolve 6.2.2606): for a reduced axisymmetric volume map,
   `extract_ngsolve_quadrature` supplies the R--Z area weights and deterministic mapped-
   point ordering; multiply those weights by `2*pi*R` before building
