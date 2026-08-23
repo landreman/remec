@@ -1,6 +1,6 @@
 # ADR 0009: Periodic-cylinder geometry contract
 
-**Status:** Proposed
+**Status:** Accepted (Option 2) — human sign-off 2026-08-23
 
 ## Context
 
@@ -81,4 +81,27 @@ remain below a stated fraction of every milestone-6.3 accuracy gate; if the meas
 cost is unacceptable, Option 3 is the appropriate fallback with an explicit geometry
 error budget, not a claim of zero error.
 
-DECISION: pending human sign-off
+## Decision
+
+DECISION: Option 2 accepted with human sign-off (2026-08-23). The periodic circular
+cylinder is generated from exact CAD and the mesh is curved to a geometry order
+comparable to the FE order. Amendments to `DESIGN.md` Sections 8.6, 16.2, and 25 and
+the `docs/STATUS.md` milestone-6.2 row are made in the same commit as this decision.
+Binding conditions:
+
+1. **Geometry-error budget.** Milestone 6.2 MUST include a geometry-order scan
+   measuring wall-radius, cross-section area, volume, and boundary-flux errors of the
+   curved mesh, and every milestone-6.3 accuracy assertion MUST be accompanied by
+   evidence that the measured geometry error on the mesh used is at most **10% of that
+   assertion's tolerance**. The scan is a checked-in verification artifact, not a
+   one-off manual run.
+2. **Periodic-wrapper demonstration.** The 6.2 periodic H1, H(curl), and H(div)
+   compatibility tests (scalar/vector periodicity, all mean-flux components,
+   high-order compatibility, per-solver wrapper support) MUST run on the curved
+   periodic mesh, not only on affine meshes.
+3. **De Rham properties demonstrated, not assumed.** The discrete div **B** at
+   roundoff and curl **A** = **B** acceptance tests MUST pass on the curved mesh. If
+   the Piola-mapped complex fails to deliver them there, that failure is the explicit
+   trigger for the Option 3 fallback (affine mesh with vertices on the circle and a
+   measured, budgeted geometry error) — via an amendment to this ADR, not a silent
+   switch.

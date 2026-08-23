@@ -736,21 +736,26 @@ numbering.
   <br>Placed first so that 6.3 has an independent measurement of where the island is,
   rather than inferring island position from the pressure solution it is trying to test.
 - [~] **6.2** `PeriodicCylinder3D` + Reiman–Greenside analytic field — `DESIGN.md` §16.2, §8.6 · note: §6 (M1)
-  <br>Acceptance: periodic straight-cylinder geometry (Ω={r<a}, z∈[0,2πR₀) identified) with
-  named boundaries, affine tetrahedra, one Netgen periodic identification; periodic H¹,
-  H(curl), and H(div) spaces tested for scalar and vector periodicity, all mean-flux
-  components, and high-order compatibility, with per-solver periodic-wrapper support
-  checked rather than assumed. Analytic field module implementing
+  <br>Acceptance (per ADR 0009, Option 2): periodic straight-cylinder geometry (Ω={r<a},
+  z∈[0,2πR₀) identified) from exact CAD, with named boundaries, tetrahedra curved to a
+  geometry order comparable to the FE order, one Netgen periodic identification, and a
+  checked-in geometry-order scan (wall radius, cross-section area, volume, boundary flux)
+  bounding the wall geometry error at ≤10% of each asserted accuracy tolerance; periodic
+  H¹, H(curl), and H(div) spaces tested on the curved mesh for scalar and vector
+  periodicity, all mean-flux components, and high-order compatibility, with per-solver
+  periodic-wrapper support checked rather than assumed. Analytic field module implementing
   **B** = ∇Ψ_t×∇Θ + ∇Φ×∇Ψ_p with the §8.6 Ψ_p, plus the closed-form vector potential
-  **A** = Ψ_t∇Θ − Ψ_p∇Φ; tests MUST verify discrete ∇·**B** at roundoff, curl(**A**)=**B**,
+  **A** = Ψ_t∇Θ − Ψ_p∇Φ; tests MUST verify, on the curved mesh, discrete ∇·**B** at
+  roundoff, curl(**A**)=**B**,
   B_z≡1 with |**B**| bounded away from zero (B_floor inactive), ι(r)=t₀+t₁r², and the
   computed resonance radii (0.74339 for ι=1/2 and 0.33769 for ι=1/3 at t₀=0.29, t₁=0.38).
   <br>Design input: the domain is topologically a solid torus, so it exercises the same
-  nontrivial harmonic field and toroidal flux as §16.4 with zero geometry-approximation
-  error. Milestone 4.3's harmonic-flux machinery should be reused here, not re-derived.
-  <br>Blocked: ADR 0009 requires human sign-off because a finite affine tetrahedral mesh
-  cannot exactly represent the required circular wall `{r<a}`; the current design and
-  acceptance text simultaneously require both and claim zero geometry-approximation error.
+  nontrivial harmonic field and toroidal flux as §16.4 with a measured (not zero)
+  geometry-approximation error; axial periodicity and the centerline are exact.
+  Milestone 4.3's harmonic-flux machinery should be reused here, not re-derived.
+  <br>ADR 0009 accepted (Option 2, 2026-08-23): curved circular wall with a measured
+  geometry-error budget; if the curved de Rham/periodic demonstrations fail, the fallback
+  is ADR 0009 Option 3 via an ADR amendment, not a silent switch.
 - [ ] **6.3** Frozen-field 3D island benchmark: (M4a)–(M4b) at large anisotropy — `DESIGN.md` §8.6, §12.3, §22 · note: §4.3, §8
   <br>**Phase gate.** Acceptance: solve *only* (M4a)–(M4b) — no (M1), no (M2)–(M3b), no
   Picard — on the 6.2 field with a single m=2 island chain (ε₂=0), and produce all of:

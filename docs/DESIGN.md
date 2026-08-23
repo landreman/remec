@@ -498,9 +498,13 @@ Properties the implementation MUST verify rather than assume:
 **The domain.** A periodic straight cylinder Ω = {r < a} with z ∈ [0, 2πR₀) identified and
 Φ = z/R₀ (`PeriodicCylinder3D`, Section 16.2). The choice is deliberate: the domain is
 topologically a solid torus, so it carries the same nontrivial first cohomology, harmonic
-field, and toroidal flux as the eventual Section 16.4 geometry, yet its mesh is affine and
-its geometry exact — no geometry-approximation error is entangled with the anisotropy
-measurement. Choose a so that no *driven* resonance sits on the wall (at the reference
+field, and toroidal flux as the eventual Section 16.4 geometry, while keeping the axial
+periodic identification and the straight centerline exact. The circular wall r = a is
+represented by a curved (isoparametric) mesh of geometry order comparable to the FE
+order (ADR 0009): its geometry-approximation error is nonzero but measured, and MUST be
+shown to be at most 10% of every accuracy tolerance asserted by the anisotropy
+benchmark on the mesh used, so that no anisotropy result can be entangled with an
+unquantified geometry error. Choose a so that no *driven* resonance sits on the wall (at the reference
 values ι = 2/3 occurs at r = 0.99561; the m = 2 drive does not resonate there, but any
 study that turns on ε₂ or changes t₀, t₁ MUST re-check this). Boundary conditions are the
 Section 4 v1 set restricted to (M4a)–(M4b): χ = 0 on r = a, periodic in z.
@@ -987,17 +991,24 @@ all three mean-flux components, and high-order compatibility — and do not assu
 helper/preconditioner supports periodic wrappers; test each selected solver.
 
 `PeriodicCylinder3D` is the first genuinely three-dimensional *production* domain:
-Ω = {r < a} with z ∈ [0, 2πR₀) identified, meshed with affine tetrahedra and one Netgen
-periodic identification of the two end faces. Named boundaries: `wall` (r = a) and the
-identified pair. It is topologically a solid torus, so it carries the same nontrivial
-first cohomology, harmonic field, and toroidal flux as Sec. 16.4, while remaining exactly
-representable — its geometry-approximation error is zero. That is why the Sec. 8.6
-frozen-field anisotropy-cost benchmark and the first coupled 3D run both use it before
-the curved solid torus: a cost or accuracy result measured here cannot be blamed on
-geometry error. Its periodic H¹, H(curl), and H(div) spaces MUST be tested to the same
-standard as the periodic box — scalar and vector periodicity, all mean-flux components,
-high-order compatibility, and per-solver periodic-wrapper support — before any solve
-depends on them.
+Ω = {r < a} with z ∈ [0, 2πR₀) identified, generated from exact CAD (OCC cylinder),
+meshed with tetrahedra curved to a geometry order comparable to the FE order, with one
+Netgen periodic identification of the two end faces (ADR 0009). Named boundaries:
+`wall` (r = a) and the identified pair. It is topologically a solid torus, so it
+carries the same nontrivial first cohomology, harmonic field, and toroidal flux as
+Sec. 16.4. The axial periodic identification and the straight centerline are exact; the
+circular wall carries a finite-order geometry-approximation error that MUST be measured
+by a geometry-order scan (wall radius, cross-section area, volume, and boundary flux
+under refinement and geometry order) checked into the verification suite. That is why
+the Sec. 8.6 frozen-field anisotropy-cost benchmark and the first coupled 3D run both
+use it before the shaped solid torus: any result measured here comes with a quantified
+geometry-error bound, required to be at most 10% of each asserted accuracy tolerance,
+rather than an unquantified one. Its periodic H¹, H(curl), and H(div) spaces MUST be
+tested to the same standard as the periodic box — scalar and vector periodicity, all
+mean-flux components, high-order compatibility, and per-solver periodic-wrapper
+support — on the curved periodic mesh itself, and the discrete de Rham identities the
+Sec. 8.6 field tests assert (∇·**B** at roundoff, curl **A** = **B**) MUST be
+demonstrated on that curved mesh before any solve depends on them.
 
 ### 16.3 Axisymmetric R–Z
 
@@ -1483,9 +1494,11 @@ traced ι(r) MUST match t₀ + t₁r² and the residual island width MUST fall t
 tolerance; on the ε₁ ≠ 0 field the tracer MUST locate the m = 2 O- and X-points and
 measure an island width agreeing with the resonant-Hamiltonian estimate 4√(ε₁/(2t₁)).
 6.2 `PeriodicCylinder3D` geometry plus the Reiman–Greenside analytic field module
-(Secs. 16.2 and 8.6): periodic scalar and vector spaces with all mean-flux components,
-exact ∇·**B** = 0 and the closed-form vector potential **A** = Ψ_t∇Θ − Ψ_p∇Φ, ι profile
-and resonance locations, and B-floor inactivity.
+(Secs. 16.2 and 8.6, ADR 0009): curved periodic circular cylinder with a checked-in
+geometry-order scan bounding the wall geometry error; periodic scalar and vector spaces
+with all mean-flux components tested on the curved mesh, discrete ∇·**B** at roundoff
+and the closed-form vector potential **A** = Ψ_t∇Θ − Ψ_p∇Φ demonstrated on the curved
+mesh, ι profile and resonance locations, and B-floor inactivity.
 6.3 frozen-field 3D island benchmark — the Phase 6 numerical gate. Solve (M4a)–(M4b)
 alone on that field at large anisotropy per Sec. 8.6: the cost/resolution table, pressure
 flattening inside the island, both branches of max(w_island, w_c), the ε₁ = 0 and
