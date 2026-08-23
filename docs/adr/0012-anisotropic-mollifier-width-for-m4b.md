@@ -107,4 +107,4 @@ rotation invariant, expose the chosen width and critical-point fallback in diagn
 and regenerate every affected verification table through committed scripts. Reject
 Options 4 and 5 because they respectively undo ADR 0011 and tune the asserted result.
 
-DECISION: pending human sign-off
+DECISION: Option 1 approved by the user on 2026-08-23.
