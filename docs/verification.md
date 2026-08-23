@@ -74,7 +74,7 @@ one-dimensional kernel of curl. The resulting paired H(div) field satisfies
 constraints at roundoff.
 
 The order-1 reference field on four curved meshes that all clear the mapped-Jacobian
-gate has the live h scan:
+gate has the following macOS live h scan:
 
 | maxh | Tetrahedra | h_eff | relative B error | min/max det J |
 | ---: | ---: | ---: | ---: | ---: |
@@ -98,8 +98,9 @@ The order scan for
 | 4 | 46450 | 34510 | 3.19e-15 | 1.00e-13 | 8.514e-5 |
 
 The analytic-field error decreases by factors 6.3--25.3 with each order increase.
-Across all four orders, sampled \(|B_h|\) lies in [0.843, 1.329], within 1.35 times
-the analytic [1, 1.2053] range. At order 4 the \(B_z=1\) L² defect is 1.031e-4 and the
+Across both platform tables and all four orders, sampled \(|B_h|\) lies in
+[0.842, 1.331], within 1.35 times the analytic [1, 1.2053] range. At order 4 the
+\(B_z=1\) L² defect is 1.031e-4 and the
 (10^{-8}) smooth B-floor arithmetic guard is 1.11e-16. The axial target and
 reconstructed fluxes equal \(\pi\) within 1.4e-13. The computed transform is
 \(\iota(r)=0.29+0.38r^2\), giving resonance

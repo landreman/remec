@@ -769,7 +769,7 @@ numbering.
   deleted because its apparent fourth-order rate depended on the rejected ill-conditioned
   mesh; high-order periodic trace and selected-solver coverage remain live. The maximum
   curl-projection defect is 3.19e-15 and maximum relative discrete divergence is 1.00e-13.
-  Across all four p rows, sampled |B_h| is 0.843–1.329; at order 4 the B_z L² defect is
+  Across both platforms and all four p rows, sampled |B_h| is 0.842–1.331; at order 4 the B_z L² defect is
   1.031e-4, axial target/reconstructed flux equals π within 1.4e-13, and the B_floor
   arithmetic guard is 1.11e-16. Local `make check` passes 351 tests in 92.86 s; the
   milestone's clean-mesh fast setup takes 14.83 s and its split vector-factorization

@@ -108,6 +108,17 @@ def _build_h_row(max_element_size: float) -> _HRow:
     )
 
 
+def _fit_h_rate(rows: tuple[_HRow, ...]) -> float:
+    """Fit the (M1) reconstruction rate against effective element size."""
+    return float(
+        np.polyfit(
+            np.log([row.h_eff for row in rows]),
+            np.log([row.relative_b_error for row in rows]),
+            1,
+        )[0]
+    )
+
+
 @pytest.fixture(scope="module")
 def m1_h_fast_rows() -> tuple[_HRow, ...]:
     """Keep a three-clean-mesh production sentinel in every fast run."""
@@ -180,11 +191,12 @@ def test_wrong_axial_flux_control_is_detected() -> None:
 def test_reference_field_reconstruction_decreases_on_clean_meshes(
     m1_h_fast_rows: tuple[_HRow, ...],
 ) -> None:
-    """The fast ADR-0010 sentinel excludes ill-conditioned curved meshes."""
+    """The fast ADR-0010 sentinel reaches the nominal rate on clean meshes."""
     assert all(row.minimum_mapped_jacobian_ratio > 0.02 for row in m1_h_fast_rows)
     assert all(
         coarse.relative_b_error > fine.relative_b_error for coarse, fine in pairwise(m1_h_fast_rows)
     )
+    assert _fit_h_rate(m1_h_fast_rows) > 0.9
 
 
 @pytest.mark.slow
@@ -192,13 +204,7 @@ def test_reference_field_reconstruction_has_nominal_order_one_h_fit(
     m1_h_rows: tuple[_HRow, ...],
 ) -> None:
     """A four-clean-mesh fit reaches the nominal order-1 (M1) curl rate."""
-    fit_rate = float(
-        np.polyfit(
-            np.log([row.h_eff for row in m1_h_rows]),
-            np.log([row.relative_b_error for row in m1_h_rows]),
-            1,
-        )[0]
-    )
+    fit_rate = _fit_h_rate(m1_h_rows)
     assert fit_rate > 0.9, (m1_h_rows, fit_rate)
 
     with _H_TABLE_PATH.open(newline="", encoding="utf-8") as stream:
