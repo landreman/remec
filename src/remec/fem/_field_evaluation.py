@@ -31,6 +31,19 @@ def make_hdiv_field_evaluator(
         not isfinite(periodic_z_length) or periodic_z_length <= 0.0
     ):
         raise ValueError("periodic_z_length must be positive and finite")
+    if periodic_z_length is not None:
+        try:
+            points = mesh.ngmesh.Points()
+            axial_coordinates = [float(points[index][2]) for index in range(1, len(points) + 1)]
+        except (AttributeError, IndexError, TypeError) as error:
+            raise TypeError("mesh must expose its three-dimensional point coordinates") from error
+        actual_axial_extent = max(axial_coordinates) - min(axial_coordinates)
+        tolerance = 1.0e-12 * max(actual_axial_extent, periodic_z_length, 1.0)
+        if abs(periodic_z_length - actual_axial_extent) > tolerance:
+            raise ValueError(
+                "periodic_z_length does not match the mesh axial extent: "
+                f"configured {periodic_z_length:.16g}, actual {actual_axial_extent:.16g}"
+            )
 
     def evaluate(x: float, y: float, z: float) -> NDArray[np.float64]:
         evaluation_z = z

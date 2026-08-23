@@ -183,6 +183,70 @@ def build_analytic_torus_harmonic_field(
     )
 
 
+def build_periodic_cylinder_harmonic_field(
+    mesh: Any,
+    cylinder: Any,
+    *,
+    test_order: int = 2,
+) -> HarmonicFluxField:
+    r"""Construct the normalized axial harmonic field for note equation ``(M1)``.
+
+    On ``{r<a} x S1``, ``B_H = e_z/(pi*a^2)`` is curl-free,
+    divergence-free, tangent to the circular wall, and carries unit positive flux
+    through an axial cut. This uses the same ``HarmonicFluxField`` diagnostics as the
+    analytic solid-torus machinery from milestone 4.3.
+    """
+    from remec.geometry.periodic_cylinder import PeriodicCylinder3D
+
+    if not isinstance(cylinder, PeriodicCylinder3D):
+        raise TypeError("cylinder must be a PeriodicCylinder3D")
+    if getattr(mesh, "dim", None) != 3:
+        raise ValueError("mesh must be three-dimensional")
+    if isinstance(test_order, bool) or not isinstance(test_order, int):
+        raise TypeError("test_order must be an integer")
+    if test_order < 1:
+        raise ValueError("test_order must be positive")
+    import ngsolve as ng
+
+    normalization = 1.0 / (pi * cylinder.radius**2)
+    field = ng.CoefficientFunction((0.0, 0.0, normalization))
+    integration_order = 2 * max(test_order, cylinder.geometry_order) + 8
+    field_norm, weak_curl_norm, weak_divergence_norm = _weak_magnetic_residuals(
+        mesh,
+        field,
+        test_order=test_order,
+        integration_order=integration_order,
+    )
+    scale = max(field_norm, np.finfo(float).tiny)
+    boundary_normal_norm = float(
+        ng.sqrt(
+            ng.Integrate(
+                (field * ng.specialcf.normal(3)) ** 2,
+                mesh,
+                ng.BND,
+                definedon=mesh.Boundaries("wall"),
+                order=integration_order,
+            )
+        )
+    )
+    magnitude = ng.sqrt(ng.InnerProduct(field, field))
+    sampled_minimum, sampled_maximum = _quadrature_extrema(
+        mesh,
+        magnitude,
+        integration_order=integration_order,
+    )
+    return HarmonicFluxField(
+        field=field,
+        normalization=normalization,
+        major_radius=cylinder.major_radius,
+        weak_curl_relative_residual=weak_curl_norm / scale,
+        weak_divergence_relative_residual=weak_divergence_norm / scale,
+        boundary_normal_relative_norm=boundary_normal_norm / scale,
+        sampled_magnetic_magnitude_minimum=sampled_minimum,
+        sampled_magnetic_magnitude_maximum=sampled_maximum,
+    )
+
+
 def poloidal_cut_flux(
     cut_mesh_bundle: _TorusMeshBundle,
     field: Any,

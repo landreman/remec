@@ -1,5 +1,6 @@
 """Physics diagnostics and persisted diagnostic records."""
 
+from remec.diagnostics.field_evaluation import make_hdiv_field_evaluator
 from remec.diagnostics.poincare import (
     PeriodicPoint,
     PoincareTrace,
@@ -21,6 +22,7 @@ __all__ = [
     "PoincareTraceVersionError",
     "find_periodic_point",
     "load_poincare_trace",
+    "make_hdiv_field_evaluator",
     "plot_isobar_overlay",
     "plot_poincare",
     "radial_excursion",
