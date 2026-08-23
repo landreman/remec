@@ -39,8 +39,8 @@ rule.
 The periodic de Rham factory wraps the established tetrahedral pairing
 (H^1(p+1)\to H(\mathrm{curl},p)\to H(\mathrm{div},p-1)\to L^2(p-2)).
 Both sparse-Cholesky and UMFPACK mass solves operate through the periodic H¹ wrapper.
-The manufactured periodic scalar (q=\sin(z/R_0)) in H¹(3) converges from 479 to
-3832 tetrahedra at L² rate 4.022 (fourth-order gate 3.5); its platform-pinned table is
+The manufactured periodic scalar (q=\sin(z/R_0)) in H¹(3) converges at L² rates
+4.022 on macOS and 3.747 on Linux (fourth-order gate 3.5); its platform-pinned table is
 `tests/verification/periodic_cylinder_h1_rates.csv`.
 Periodic H(curl) and H(div) mass projections reproduce all three physical constant
 flux components to below (8\times10^{-14}) at the validated high orders and match
