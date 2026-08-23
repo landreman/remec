@@ -735,7 +735,7 @@ numbering.
   the geometry's actual z-extent.
   <br>Placed first so that 6.3 has an independent measurement of where the island is,
   rather than inferring island position from the pressure solution it is trying to test.
-- [~] **6.2** `PeriodicCylinder3D` + Reiman–Greenside analytic field — `DESIGN.md` §16.2, §8.6 · note: §6 (M1)
+- [x] **6.2** `PeriodicCylinder3D` + Reiman–Greenside analytic field — `DESIGN.md` §16.2, §8.6 · note: §6 (M1)
   <br>Acceptance (per ADR 0009, Option 2): periodic straight-cylinder geometry (Ω={r<a},
   z∈[0,2πR₀) identified) from exact CAD, with named boundaries, tetrahedra curved to a
   geometry order comparable to the FE order, one Netgen periodic identification, and a
@@ -771,8 +771,12 @@ numbering.
   curl-projection defect is 3.19e-15 and maximum relative discrete divergence is 1.00e-13.
   Across all four p rows, sampled |B_h| is 0.843–1.329; at order 4 the B_z L² defect is
   1.031e-4, axial target/reconstructed flux equals π within 1.4e-13, and the B_floor
-  arithmetic guard is 1.11e-16. Four touched slow tests pass in 94.23 s; the shared
-  p-ladder setup takes 75.33 s and the fitted h-ladder setup 16.26 s. See
+  arithmetic guard is 1.11e-16. Local `make check` passes 351 tests in 92.86 s; the
+  milestone's clean-mesh fast setup takes 14.83 s and its split vector-factorization
+  setup at most 10.23 s. Four touched slow tests pass in 100.10 s; the shared p-ladder
+  setup takes 80.44 s and the fitted h-ladder setup 17.04 s. The full Linux developer
+  suite passes on Python 3.10 and 3.14 in workflow
+  [32642962183](https://github.com/landreman/remec/actions/runs/32642962183). See
   `tests/verification/periodic_cylinder_geometry.csv`,
   `tests/verification/reiman_greenside_m1.csv`, and `docs/verification.md`.
   <br>ADR 0010 accepted (Option 2, 2026-08-23): the noncommuting `GridFunction.Set`
