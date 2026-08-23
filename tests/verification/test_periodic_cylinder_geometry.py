@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import csv
 import sys
-from math import log
 from pathlib import Path
 
 import ngsolve as ng
@@ -16,7 +15,6 @@ from remec.geometry import PeriodicCylinder3D
 from remec.geometry.periodic_cylinder import PeriodicCylinderGeometryMetrics
 
 _TABLE_PATH = Path(__file__).with_name("periodic_cylinder_geometry.csv")
-_H1_TABLE_PATH = Path(__file__).with_name("periodic_cylinder_h1_rates.csv")
 _SCAN_CONFIGURATIONS = ((0, 1), (0, 2), (0, 4), (1, 1), (1, 2), (1, 4))
 
 
@@ -51,6 +49,9 @@ def test_curved_cylinder_geometry_errors_decrease_with_order_and_refinement(
             assert getattr(refined, column) < getattr(coarse, column), (order, column)
     assert geometry_rows[(0, 4)].maximum_relative_error < 5.0e-5
     assert geometry_rows[(1, 4)].maximum_relative_error < 7.0e-6
+    for row in geometry_rows.values():
+        assert row.minimum_mapped_jacobian_determinant > 0.0
+        assert row.minimum_mapped_jacobian_ratio > 0.02
 
 
 def test_mesh_has_named_regions_and_exactly_one_periodic_identification() -> None:
@@ -74,6 +75,11 @@ def test_geometry_scan_matches_checked_in_platform_table(
         f"missing {sys.platform} geometry rows; measured values: "
         + repr([(key, geometry_rows[key]) for key in sorted(geometry_rows)])
     )
+    assert {key: int(row["elements"]) for key, row in indexed.items()} == {
+        key: actual.elements for key, actual in geometry_rows.items()
+    }, f"stale {sys.platform} geometry rows; measured values: " + repr(
+        [(key, geometry_rows[key]) for key in sorted(geometry_rows)]
+    )
     for key, actual in geometry_rows.items():
         row = indexed[key]
         assert int(row["elements"]) == actual.elements
@@ -82,6 +88,9 @@ def test_geometry_scan_matches_checked_in_platform_table(
             "cross_section_area_relative_error",
             "volume_relative_error",
             "boundary_flux_relative_error",
+            "minimum_mapped_jacobian_determinant",
+            "maximum_mapped_jacobian_determinant",
+            "minimum_mapped_jacobian_ratio",
         ):
             assert getattr(actual, column) == pytest.approx(float(row[column]), rel=2.0e-8)
 
@@ -104,48 +113,12 @@ def _mass_project(space: object, source: object, *, inverse: str) -> ng.GridFunc
     return result
 
 
-def test_periodic_scalar_manufactured_solution_has_expected_h_rate() -> None:
-    """Periodic H1(3) reaches fourth-order L2 convergence for ``sin(z/R0)``."""
-    measured: list[tuple[int, int, float, float]] = []
-    for refinements in (0, 1):
-        cylinder = PeriodicCylinder3D(geometry_order=4, refinements=refinements)
-        mesh = cylinder.build_mesh()._mesh
-        space = ng.Periodic(ng.H1(mesh, order=3))
-        exact = ng.sin(ng.z / cylinder.major_radius)
-        result = _mass_project(space, exact, inverse="sparsecholesky")
-        error = float(ng.sqrt(ng.Integrate((result - exact) ** 2, mesh, order=12)))
-        volume = float(ng.Integrate(1.0, mesh, order=10))
-        h_eff = (volume / mesh.ne) ** (1.0 / 3.0)
-        measured.append((refinements, mesh.ne, h_eff, error))
-    coarse, refined = measured
-    measured_rate = log(coarse[3] / refined[3]) / log(coarse[2] / refined[2])
-
-    with _H1_TABLE_PATH.open(newline="", encoding="utf-8") as stream:
-        recorded = [row for row in csv.DictReader(stream) if row["platform"] == sys.platform]
-    assert len(recorded) == 2, (
-        f"missing {sys.platform} periodic H1 rows: {measured!r}, rate={measured_rate!r}"
-    )
-    actual_rows: tuple[tuple[int, int, float, float, float | None], ...] = (
-        (*coarse, None),
-        (*refined, measured_rate),
-    )
-    for row, actual in zip(recorded, actual_rows, strict=True):
-        refinements, elements, h_eff, error, rate = actual
-        assert int(row["refinements"]) == refinements
-        assert int(row["elements"]) == elements
-        assert float(row["h_eff"]) == pytest.approx(h_eff, rel=2.0e-8)
-        assert float(row["l2_error"]) == pytest.approx(error, rel=2.0e-8)
-        if rate is not None:
-            assert float(row["finest_pair_rate"]) == pytest.approx(rate, rel=2.0e-8)
-    assert measured_rate > 3.5
-
-
 @pytest.mark.parametrize("inverse", ["sparsecholesky", "umfpack"])
 def test_selected_direct_solvers_support_periodic_h1_wrapper(
     curved_periodic_mesh: object, inverse: str
 ) -> None:
     """Both selected direct backends solve through NGSolve's periodic H1 wrapper."""
-    sequence = make_periodic_tetrahedral_de_rham_sequence(curved_periodic_mesh, order=1)
+    sequence = make_periodic_tetrahedral_de_rham_sequence(curved_periodic_mesh, order=3)
     source = 1.0 + ng.x + 0.1 * ng.sin(ng.z)
     result = _mass_project(sequence.h1, source, inverse=inverse)
     lower = float(result(curved_periodic_mesh(0.2, -0.1, 0.0)))

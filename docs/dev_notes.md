@@ -344,11 +344,22 @@
   block are invertible with UMFPACK. `sparsecholesky` is not a valid inverse for these
   indefinite saddle systems (it returned NaNs). The two scalar rows remove the
   periodic H¹ constant and the normalized milestone-4.3 axial harmonic from
-  `ker(curl)`. Imposing cut flux as an L²-projection boundary multiplier is unstable:
-  it concentrated flux in trace modes and produced sampled HDiv magnitudes above
-  8e3. Instead, globally normalize the divergence-constrained target by its measured
-  cut flux; scaling preserves the paired divergence constraint and the subsequent
-  curl reconstruction reproduces both target and flux at roundoff.
+  `ker(curl)`; the harmonic row regularizes the potential and does not carry magnetic
+  flux. Imposing cut flux as an L²-projection boundary multiplier was unstable, so the
+  accepted path globally normalizes the divergence-constrained target by its measured
+  cut flux. Scaling preserves the paired divergence constraint and the subsequent curl
+  reconstruction reproduces both target and flux at roundoff.
+
+- Milestone 6.2 curved-cylinder element quality (Netgen/NGSolve 6.2.2606): integral
+  wall/area/volume/flux metrics do not detect nearly singular high-order element maps.
+  On Linux, `maxh=0.6` and `0.5` followed by `Curve(4)` gave minimum mapped Jacobian
+  determinants about 6e-5 and Piola-mapped H(div) magnitudes above 2.7e2; the accepted
+  globally normalized reconstruction can therefore reproduce the same >8e3 excursion
+  seen on one macOS coarse p row. `maxh=0.45` is the coarsest cross-platform family
+  verified here: its minimum/maximum mapped-Jacobian ratio is about 0.097 and its full
+  p=1--4 magnetic-magnitude ladder remains within 0.843--1.329 on macOS. Measure and
+  gate the mapped-Jacobian ratio whenever selecting a curved periodic-cylinder mesh;
+  do not infer element quality from integral geometry errors.
 
 - Milestone 6.2 curved-cylinder ordering (NGSolve 6.2.2606): call `Refine()` before
   `Curve(order)`. On the same 3560-tetrahedron Linux mesh, refine-then-curve gave

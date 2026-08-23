@@ -18,6 +18,9 @@ class PeriodicCylinderGeometryMetrics:
     cross_section_area_relative_error: float
     volume_relative_error: float
     boundary_flux_relative_error: float
+    minimum_mapped_jacobian_determinant: float
+    maximum_mapped_jacobian_determinant: float
+    minimum_mapped_jacobian_ratio: float
 
     @property
     def maximum_relative_error(self) -> float:
@@ -46,7 +49,10 @@ class PeriodicCylinder3D:
 
     radius: float = 1.0
     major_radius: float = 1.0
-    max_element_size: float = 1.4
+    # Netgen's coarser maxh families can contain nearly singular tetrahedra after
+    # Curve(4), despite small integral geometry errors. 0.45 is the coarsest
+    # cross-platform family validated by the mapped-Jacobian gate below.
+    max_element_size: float = 0.45
     geometry_order: int = 3
     refinements: int = 0
 
@@ -160,6 +166,7 @@ class PeriodicCylinder3D:
         if not isinstance(mesh_bundle, _PeriodicCylinderMeshBundle):
             raise TypeError("mesh_bundle must be built by PeriodicCylinder3D")
         import ngsolve as ng
+        import numpy as np
 
         mesh = mesh_bundle._mesh
         quadrature_order = 2 * self.geometry_order + 10
@@ -206,6 +213,18 @@ class PeriodicCylinder3D:
                 )
             )
         )
+        element_types = {element.type for element in mesh.Elements(ng.VOL)}
+        integration_rules = {
+            element_type: ng.IntegrationRule(element_type, quadrature_order)
+            for element_type in element_types
+        }
+        mapped_points = mesh.MapToAllElements(integration_rules, ng.VOL)
+        mapped_jacobian_determinants = np.asarray(
+            ng.Det(ng.specialcf.JacobianMatrix(3))(mapped_points),
+            dtype=float,
+        ).reshape(-1)
+        minimum_mapped_jacobian_determinant = float(np.min(mapped_jacobian_determinants))
+        maximum_mapped_jacobian_determinant = float(np.max(mapped_jacobian_determinants))
         return PeriodicCylinderGeometryMetrics(
             geometry_order=self.geometry_order,
             refinements=self.refinements,
@@ -214,6 +233,11 @@ class PeriodicCylinder3D:
             cross_section_area_relative_error=abs(measured_area - exact_area) / exact_area,
             volume_relative_error=abs(measured_volume - exact_volume) / exact_volume,
             boundary_flux_relative_error=boundary_flux_error,
+            minimum_mapped_jacobian_determinant=minimum_mapped_jacobian_determinant,
+            maximum_mapped_jacobian_determinant=maximum_mapped_jacobian_determinant,
+            minimum_mapped_jacobian_ratio=(
+                minimum_mapped_jacobian_determinant / maximum_mapped_jacobian_determinant
+            ),
         )
 
     def metadata(self) -> dict[str, object]:

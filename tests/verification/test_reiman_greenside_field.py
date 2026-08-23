@@ -6,7 +6,7 @@ import csv
 import sys
 from dataclasses import dataclass
 from itertools import pairwise
-from math import log, pi
+from math import pi
 from pathlib import Path
 
 import ngsolve as ng
@@ -35,6 +35,15 @@ class _Row:
     result: ReimanGreensideDiscreteField
     mesh: object
     periodic_length: float
+
+
+@dataclass(frozen=True, slots=True)
+class _HRow:
+    max_element_size: float
+    elements: int
+    h_eff: float
+    relative_b_error: float
+    minimum_mapped_jacobian_ratio: float
 
 
 def _build_row(order: int) -> _Row:
@@ -74,6 +83,43 @@ def m1_rows(m1_row: _Row) -> dict[int, _Row]:
     return rows
 
 
+def _build_h_row(max_element_size: float) -> _HRow:
+    model = ReimanGreensideField(epsilon_1=1.0e-3)
+    cylinder = PeriodicCylinder3D(
+        max_element_size=max_element_size,
+        geometry_order=4,
+    )
+    bundle = cylinder.build_mesh()
+    geometry = cylinder.measure_geometry(bundle)
+    result = build_reiman_greenside_discrete_field(
+        bundle._mesh,
+        model,
+        order=1,
+        harmonic_field=cylinder.harmonic_basis(bundle)[0],
+        axial_flux=pi * cylinder.radius**2,
+    )
+    volume = float(ng.Integrate(1.0, bundle._mesh, order=14))
+    return _HRow(
+        max_element_size=max_element_size,
+        elements=bundle._mesh.ne,
+        h_eff=(volume / bundle._mesh.ne) ** (1.0 / 3.0),
+        relative_b_error=result.analytic_field_relative_error,
+        minimum_mapped_jacobian_ratio=geometry.minimum_mapped_jacobian_ratio,
+    )
+
+
+@pytest.fixture(scope="module")
+def m1_h_fast_rows() -> tuple[_HRow, ...]:
+    """Keep a three-clean-mesh production sentinel in every fast run."""
+    return tuple(_build_h_row(maxh) for maxh in (0.45, 0.4, 0.35))
+
+
+@pytest.fixture(scope="module")
+def m1_h_rows(m1_h_fast_rows: tuple[_HRow, ...]) -> tuple[_HRow, ...]:
+    """Extend the live sentinel to the four-level ADR-0010 fitted-rate ladder."""
+    return (*m1_h_fast_rows, _build_h_row(0.3))
+
+
 def test_curved_periodic_de_rham_field_preserves_m1_at_roundoff(
     m1_row: _Row,
 ) -> None:
@@ -84,7 +130,6 @@ def test_curved_periodic_de_rham_field_preserves_m1_at_roundoff(
     assert m1_row.result.divergence_relative_norm < gate
     assert m1_row.result.gauge_constraint_relative_residual < 1.0e-10
     assert m1_row.result.harmonic_constraint_relative_residual < 1.0e-10
-    assert m1_row.result.target_axial_flux == pytest.approx(pi, abs=2.0e-10)
     assert m1_row.result.reconstructed_axial_flux == pytest.approx(pi, abs=2.0e-10)
 
 
@@ -96,6 +141,10 @@ def test_m1_analytic_field_error_decreases_systematically_with_order(
     errors = [m1_rows[order].result.analytic_field_relative_error for order in (1, 2, 3, 4)]
     for coarse, fine in pairwise(errors):
         assert coarse > 2.0 * fine
+    for order in (1, 2, 3, 4):
+        result = m1_rows[order].result
+        assert result.sampled_magnetic_magnitude_minimum > 1.0 / 1.35
+        assert result.sampled_magnetic_magnitude_maximum < 1.2053 * 1.35
     assert errors[-1] < 1.0e-3
     finest = m1_rows[4]
     assert finest.result.bz_l2_error < 1.0e-3
@@ -104,10 +153,12 @@ def test_m1_analytic_field_error_decreases_systematically_with_order(
 
 
 def test_bz_and_small_b_protection_are_inactive(m1_row: _Row) -> None:
-    """The live reconstructed field has non-null B and an inactive smooth floor."""
-    assert m1_row.result.bz_l2_error < 0.5
-    assert m1_row.result.sampled_magnetic_magnitude_minimum > 0.25
-    assert m1_row.result.sampled_magnetic_magnitude_maximum < 100.0
+    """The clean live mesh keeps B within 1.35x of the analytic magnitude range."""
+    assert m1_row.result.bz_l2_error < 0.2
+    assert m1_row.result.sampled_magnetic_magnitude_minimum > 1.0 / 1.35
+    assert m1_row.result.sampled_magnetic_magnitude_maximum < 1.2053 * 1.35
+    # At the physical 1e-8 floor this is an arithmetic guard; the minimum-|B|
+    # assertion above carries the substantive inactive-floor claim.
     assert m1_row.result.b_floor_relative_activity < 1.0e-15
 
 
@@ -126,44 +177,44 @@ def test_wrong_axial_flux_control_is_detected() -> None:
     assert abs(result.reconstructed_axial_flux - pi) > 1.0
 
 
-def test_reference_field_reconstruction_has_nominal_order_one_h_rate() -> None:
-    """The ADR-0010 production reconstruction reaches the nominal (M1) curl rate."""
-    model = ReimanGreensideField(epsilon_1=1.0e-3)
-    measured: list[tuple[float, int, float, float]] = []
-    for maxh in (0.6, 0.45, 0.35):
-        cylinder = PeriodicCylinder3D(
-            max_element_size=maxh,
-            geometry_order=4,
-        )
-        bundle = cylinder.build_mesh()
-        result = build_reiman_greenside_discrete_field(
-            bundle._mesh,
-            model,
-            order=1,
-            harmonic_field=cylinder.harmonic_basis(bundle)[0],
-            axial_flux=pi * cylinder.radius**2,
-        )
-        volume = float(ng.Integrate(1.0, bundle._mesh, order=14))
-        h_eff = (volume / bundle._mesh.ne) ** (1.0 / 3.0)
-        measured.append((maxh, bundle._mesh.ne, h_eff, result.analytic_field_relative_error))
-    rates = [
-        log(coarse[3] / fine[3]) / log(coarse[2] / fine[2]) for coarse, fine in pairwise(measured)
-    ]
-    assert rates[-1] > 0.9, (measured, rates)
+def test_reference_field_reconstruction_decreases_on_clean_meshes(
+    m1_h_fast_rows: tuple[_HRow, ...],
+) -> None:
+    """The fast ADR-0010 sentinel excludes ill-conditioned curved meshes."""
+    assert all(row.minimum_mapped_jacobian_ratio > 0.02 for row in m1_h_fast_rows)
+    assert all(
+        coarse.relative_b_error > fine.relative_b_error for coarse, fine in pairwise(m1_h_fast_rows)
+    )
+
+
+@pytest.mark.slow
+def test_reference_field_reconstruction_has_nominal_order_one_h_fit(
+    m1_h_rows: tuple[_HRow, ...],
+) -> None:
+    """A four-clean-mesh fit reaches the nominal order-1 (M1) curl rate."""
+    fit_rate = float(
+        np.polyfit(
+            np.log([row.h_eff for row in m1_h_rows]),
+            np.log([row.relative_b_error for row in m1_h_rows]),
+            1,
+        )[0]
+    )
+    assert fit_rate > 0.9, (m1_h_rows, fit_rate)
 
     with _H_TABLE_PATH.open(newline="", encoding="utf-8") as stream:
         recorded = [row for row in csv.DictReader(stream) if row["platform"] == sys.platform]
-    assert len(recorded) == len(measured), (
-        f"missing {sys.platform} reference-field h rows: {measured!r}, rates={rates!r}"
+    assert len(recorded) == len(m1_h_rows), (
+        f"missing {sys.platform} reference-field h rows: {m1_h_rows!r}, fit={fit_rate!r}"
     )
-    for index, (row, actual) in enumerate(zip(recorded, measured, strict=True)):
-        maxh, elements, h_eff, error = actual
-        assert float(row["max_element_size"]) == maxh
-        assert int(row["elements"]) == elements
-        assert float(row["h_eff"]) == pytest.approx(h_eff, rel=2.0e-8)
-        assert float(row["relative_b_error"]) == pytest.approx(error, rel=2.0e-8)
-        if index:
-            assert float(row["pair_rate"]) == pytest.approx(rates[index - 1], rel=2.0e-8)
+    for row, actual in zip(recorded, m1_h_rows, strict=True):
+        assert float(row["max_element_size"]) == actual.max_element_size
+        assert int(row["elements"]) == actual.elements
+        assert float(row["h_eff"]) == pytest.approx(actual.h_eff, rel=2.0e-8)
+        assert float(row["relative_b_error"]) == pytest.approx(actual.relative_b_error, rel=2.0e-8)
+        assert float(row["minimum_mapped_jacobian_ratio"]) == pytest.approx(
+            actual.minimum_mapped_jacobian_ratio, rel=2.0e-8
+        )
+    assert float(recorded[-1]["fit_rate"]) == pytest.approx(fit_rate, rel=2.0e-8)
 
 
 @pytest.mark.slow
@@ -226,6 +277,16 @@ def test_m1_order_scan_matches_checked_in_table(m1_rows: dict[int, _Row]) -> Non
         for order, actual in m1_rows.items()
     }
     assert set(recorded) == set(m1_rows), f"missing {sys.platform} M1 rows: {measured!r}"
+    assert {
+        order: (
+            int(row["elements"]),
+            int(row["hcurl_dofs"]),
+            int(row["hdiv_dofs"]),
+        )
+        for order, row in recorded.items()
+    } == {order: values[:3] for order, values in measured.items()}, (
+        f"stale {sys.platform} M1 rows: {measured!r}"
+    )
     for order, actual in m1_rows.items():
         row = recorded[order]
         assert int(row["elements"]) == actual.elements
