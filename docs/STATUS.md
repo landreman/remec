@@ -735,7 +735,7 @@ numbering.
   the geometry's actual z-extent.
   <br>Placed first so that 6.3 has an independent measurement of where the island is,
   rather than inferring island position from the pressure solution it is trying to test.
-- [~] **6.2** `PeriodicCylinder3D` + Reiman–Greenside analytic field — `DESIGN.md` §16.2, §8.6 · note: §6 (M1)
+- [x] **6.2** `PeriodicCylinder3D` + Reiman–Greenside analytic field — `DESIGN.md` §16.2, §8.6 · note: §6 (M1)
   <br>Acceptance (per ADR 0009, Option 2): periodic straight-cylinder geometry (Ω={r<a},
   z∈[0,2πR₀) identified) from exact CAD, with named boundaries, tetrahedra curved to a
   geometry order comparable to the FE order, one Netgen periodic identification, and a
@@ -770,8 +770,11 @@ numbering.
   discrete divergence is 4.10e-13. At order 4, sampled |B_h| is 0.711–1.475, the
   B_z L² defect is 3.249e-4, axial target/reconstructed flux equals π within 1.4e-13,
   and B_floor activity is 1.56e-16; the production H(div) tracer differs
-  from the analytic driven-field transform by 3.039e-4. Final local `make check`: 353
-  tests in 103.89 s; slowest test 19.92 s. See
+  from the analytic driven-field transform by 3.039e-4. Local `make check`: 352
+  tests in 84.62 s; the milestone's fast h-rate test took 11.0 s. All three touched
+  slow tests pass in 60.27 s, with the shared p-ladder setup taking 49.50 s. The full
+  Linux developer suite passes on Python 3.10 and 3.14 in workflow
+  [32640191971](https://github.com/landreman/remec/actions/runs/32640191971). See
   `tests/verification/periodic_cylinder_geometry.csv`,
   `tests/verification/reiman_greenside_m1.csv`, and `docs/verification.md`.
   <br>ADR 0010 accepted (Option 2, 2026-08-23): the noncommuting `GridFunction.Set`
