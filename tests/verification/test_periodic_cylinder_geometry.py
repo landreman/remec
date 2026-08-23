@@ -105,12 +105,12 @@ def _mass_project(space: object, source: object, *, inverse: str) -> ng.GridFunc
 
 
 def test_periodic_scalar_manufactured_solution_has_expected_h_rate() -> None:
-    """Periodic H1(2) reaches third-order L2 convergence for ``sin(z/R0)``."""
+    """Periodic H1(3) reaches fourth-order L2 convergence for ``sin(z/R0)``."""
     measured: list[tuple[int, int, float, float]] = []
     for refinements in (0, 1):
-        cylinder = PeriodicCylinder3D(geometry_order=2, refinements=refinements)
+        cylinder = PeriodicCylinder3D(geometry_order=4, refinements=refinements)
         mesh = cylinder.build_mesh()._mesh
-        space = ng.Periodic(ng.H1(mesh, order=2))
+        space = ng.Periodic(ng.H1(mesh, order=3))
         exact = ng.sin(ng.z / cylinder.major_radius)
         result = _mass_project(space, exact, inverse="sparsecholesky")
         error = float(ng.sqrt(ng.Integrate((result - exact) ** 2, mesh, order=12)))
@@ -119,11 +119,12 @@ def test_periodic_scalar_manufactured_solution_has_expected_h_rate() -> None:
         measured.append((refinements, mesh.ne, h_eff, error))
     coarse, refined = measured
     measured_rate = log(coarse[3] / refined[3]) / log(coarse[2] / refined[2])
-    assert measured_rate > 2.8
 
     with _H1_TABLE_PATH.open(newline="", encoding="utf-8") as stream:
         recorded = [row for row in csv.DictReader(stream) if row["platform"] == sys.platform]
-    assert len(recorded) == 2, f"missing {sys.platform} periodic H1 rows: {measured!r}"
+    assert len(recorded) == 2, (
+        f"missing {sys.platform} periodic H1 rows: {measured!r}, rate={measured_rate!r}"
+    )
     actual_rows: tuple[tuple[int, int, float, float, float | None], ...] = (
         (*coarse, None),
         (*refined, measured_rate),
@@ -136,6 +137,7 @@ def test_periodic_scalar_manufactured_solution_has_expected_h_rate() -> None:
         assert float(row["l2_error"]) == pytest.approx(error, rel=2.0e-8)
         if rate is not None:
             assert float(row["finest_pair_rate"]) == pytest.approx(rate, rel=2.0e-8)
+    assert measured_rate > 3.5
 
 
 @pytest.mark.parametrize("inverse", ["sparsecholesky", "umfpack"])
