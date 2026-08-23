@@ -57,27 +57,44 @@ The production analytic module transcribes
 \]
 
 as smooth Cartesian polynomials times `sin(Phi)`/`cos(Phi)`, including at the axis.
-The discrete field interpolates \(A_h\) in periodic H(curl) and mass-projects
-\(\nabla\times A_h\) into paired periodic H(div). **ADR 0010 (accepted 2026-08-23):**
-this `GridFunction.Set`-based loading is a noncommuting local L2 projection whose
-curl converges at only ~0.6 at order 1, so no h rate is claimed for it; the
-production construction is being replaced by the ADR 0010 constrained mixed
-reconstruction, whose three-level h-rate table will be regenerated here. The p-scan
-below and the de Rham/roundoff identities remain valid evidence. The order scan for
+**ADR 0010 (Option 2, accepted 2026-08-23)** replaces the noncommuting
+`GridFunction.Set` path with two reused compatible blocks. First, a periodic H(div)
+mixed projection minimizes the analytic-field L² error subject to the paired weak
+divergence constraint; a single global normalization then imposes the requested axial
+flux without changing discrete divergence. Second, the milestone-4.2 Coulomb-gauge
+curl--curl operator reconstructs \(A_h\) from right-hand side
+\((B_{\rm target},\nabla\times v)\), augmented by a mean constraint for the periodic
+H¹ multiplier and the milestone-4.3 normalized axial harmonic constraint for the
+one-dimensional kernel of curl. The resulting paired H(div) field satisfies
+\(B_h=\nabla\times A_h\), discrete divergence, gauge, harmonic-class, and axial-flux
+constraints at roundoff.
+
+The order-1 reference field on three curved meshes has the live h scan:
+
+| maxh | Tetrahedra | h_eff | relative B error | Pair rate |
+| ---: | ---: | ---: | ---: | ---: |
+| 0.60 | 555 | 3.289e-1 | 1.757e-1 | — |
+| 0.45 | 800 | 2.911e-1 | 1.158e-1 | 3.424 |
+| 0.35 | 1881 | 2.189e-1 | 8.175e-2 | 1.221 |
+
+The finest-pair rate clears the nominal order-1 curl gate of 0.9. The
+platform-pinned table is `tests/verification/reiman_greenside_m1_h_rates.csv`.
+The order scan for
 \((t_0,t_1,\epsilon_1,\epsilon_2,R_0)=(0.29,0.38,10^{-3},0,1)\) is recorded in
 `tests/verification/reiman_greenside_m1.csv`:
 
 | Base order | HCurl DOFs | HDiv DOFs | curl-projection defect | relative div(B) | relative analytic-B error |
 | ---: | ---: | ---: | ---: | ---: | ---: |
-| 1 | 1708 | 1141 | 7.64e-16 | 3.82e-15 | 1.980e-1 |
-| 2 | 5985 | 3423 | 4.61e-14 | 1.11e-14 | 4.013e-2 |
-| 3 | 14460 | 9720 | 2.58e-15 | 8.41e-14 | 8.660e-3 |
-| 4 | 28570 | 20990 | 7.29e-15 | 4.52e-13 | 4.633e-4 |
+| 1 | 1708 | 1141 | 9.13e-16 | 4.72e-15 | 1.712e-1 |
+| 2 | 5985 | 3423 | 6.97e-14 | 1.27e-14 | 3.317e-2 |
+| 3 | 14460 | 9720 | 3.85e-15 | 1.16e-13 | 5.680e-3 |
+| 4 | 28570 | 20990 | 7.06e-15 | 4.10e-13 | 2.986e-4 |
 
-The analytic-field error decreases by factors 4.6--18.7 with each order increase.
-Across the order scan, sampled \(|B|\) lies in [1.00000007, 1.20520], \(B_z=1\)
-exactly, and the (10^{-8}) smooth B-floor activity is zero at floating-point
-resolution. The computed transform is \(\iota(r)=0.29+0.38r^2\), giving resonance
+The analytic-field error decreases by factors 5.2--19.0 with each order increase.
+At order 4, sampled \(|B_h|\) lies in [0.711, 1.475], the \(B_z=1\) L² defect is
+3.249e-4, and the (10^{-8}) smooth B-floor activity is 1.56e-16. The axial target and
+reconstructed fluxes equal \(\pi\) within 1.4e-13. The computed transform is
+\(\iota(r)=0.29+0.38r^2\), giving resonance
 radii 0.74339194 (1/2) and 0.33769082 (1/3).
 
 The public diagnostics wrapper passes both the analytic model and periodic H(div)

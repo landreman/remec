@@ -760,12 +760,15 @@ numbering.
   1→2→4 reduce the coarse-mesh maximum error from 1.235e-1 → 1.550e-3 → 4.468e-5;
   one refinement reduces the order-4 budget to 6.407e-6. Periodic H¹ direct solves pass
   with sparse-Cholesky and UMFPACK; high-order periodic H(curl)/H(div) reproduce all
-  three physical constant fluxes below 8e-14. Across base orders 1→4, the relative
-  analytic-B errors are 1.980e-1, 4.013e-2, 8.660e-3, and 4.633e-4; the separate
+  three physical constant fluxes below 8e-14. ADR 0010's three-level order-1
+  reference-field h scan measures rates 3.424 and 1.221 (finest-pair gate 0.9).
+  Across base orders 1→4, the reconstructed relative analytic-B errors are
+  1.712e-1, 3.317e-2, 5.680e-3, and 2.986e-4; the separate
   periodic H¹(3) manufactured h scan measures L² rates 4.022 on macOS and 3.747 on
-  Linux (gate 3.5). The maximum curl-projection defect is 4.62e-14 and maximum relative
-  discrete divergence is 4.52e-13. Sampled |B| is
-  1.00000007–1.20520 with B_floor activity zero; the production H(div) tracer differs
+  Linux (gate 3.5). The maximum curl-projection defect is 6.97e-14 and maximum relative
+  discrete divergence is 4.10e-13. At order 4, sampled |B_h| is 0.711–1.475, the
+  B_z L² defect is 3.249e-4, axial target/reconstructed flux equals π within 1.4e-13,
+  and B_floor activity is 1.56e-16; the production H(div) tracer differs
   from the analytic driven-field transform by 3.039e-4. Final local `make check`: 353
   tests in 103.89 s; slowest test 19.92 s. See
   `tests/verification/periodic_cylinder_geometry.csv`,

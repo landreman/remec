@@ -337,3 +337,20 @@
   not expose `curl`, so it cannot feed the paired HDiv projection. Consequence
   (ADR 0010): never claim an algebraic h rate for a field loaded through `Set`;
   rate-bearing fields go through the constrained mixed reconstruction.
+
+- Milestone 6.2 periodic curl reconstruction (NGSolve 6.2.2606): periodic
+  `FESpace([HDiv, L2])` with the ADR-0005 divergence coupling and periodic
+  `FESpace([HCurl, H1, NumberSpace, NumberSpace])` with the milestone-4.2 Coulomb
+  block are invertible with UMFPACK. `sparsecholesky` is not a valid inverse for these
+  indefinite saddle systems (it returned NaNs). The two scalar rows remove the
+  periodic H¹ constant and the normalized milestone-4.3 axial harmonic from
+  `ker(curl)`. Imposing cut flux as an L²-projection boundary multiplier is unstable:
+  it concentrated flux in trace modes and produced sampled HDiv magnitudes above
+  8e3. Instead, globally normalize the divergence-constrained target by its measured
+  cut flux; scaling preserves the paired divergence constraint and the subsequent
+  curl reconstruction reproduces both target and flux at roundoff.
+
+- Milestone 6.2 curved-cylinder ordering (NGSolve 6.2.2606): call `Refine()` before
+  `Curve(order)`. On the same 3560-tetrahedron Linux mesh, refine-then-curve gave
+  relative volume error 7.10e-8 while curve-then-refine left the children effectively
+  order one at 1.28e-2. This ordering is load-bearing for the ADR-0009 scan.
