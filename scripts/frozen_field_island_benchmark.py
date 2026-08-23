@@ -170,14 +170,23 @@ def regenerate_cost_ladder(selected_indices: tuple[int, ...] | None = None) -> N
                 rows[key] = dict(existing)
     for index, (epsilon_kappa, angular_cells, axial_cells) in enumerate(LADDER_CONFIGS):
         if selected_indices is None or index in selected_indices:
+            print(
+                f"cost row {index}: epsilon_kappa={epsilon_kappa:.0e}, "
+                f"mesh={angular_cells}x{axial_cells}",
+                flush=True,
+            )
             context = mp.get_context("spawn")
             queue = context.Queue()
             process = context.Process(target=_solve_cost_row, args=(index, queue))
             process.start()
-            diagnostics = queue.get()
-            process.join()
+            process.join(timeout=1800.0)
+            if process.is_alive():
+                process.terminate()
+                process.join()
+                raise RuntimeError(f"cost-row process {index} exceeded 30 minutes")
             if process.exitcode != 0:
                 raise RuntimeError(f"cost-row process {index} exited with {process.exitcode}")
+            diagnostics = queue.get(timeout=5.0)
             row: dict[str, object] = {
                 "source_commit": source_commit,
                 "epsilon_kappa": f"{epsilon_kappa:.16e}",
