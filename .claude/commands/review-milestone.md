@@ -60,9 +60,17 @@ intermediate ladder is meaningful. Applying either marker to a failing test or u
 to remove the only live acceptance evidence is blocking.
 
 If exhaustive behavior changed, verify that the PR names a successful manually
-dispatched `nightly.yml` run for the branch. Do not require the author to run
+dispatched `exhaustive.yml` run for the branch, and that the run was complete rather than
+filtered by `pytest_args` — the job summary says which. Do not require the author to run
 `make test-exhaustive` locally. Check that independent exhaustive rows can be sharded and
-that no cached/checkpointed final result supplies an asserted diagnostic. Likewise check
+that no cached/checkpointed final result supplies an asserted diagnostic.
+
+`tests/unit/test_verification_tiers.py` already proves that each exhaustive family has
+*a* fast sentinel. It cannot prove the sentinel is worth anything, so that is the part to
+review hardest: does the sentinel go through the same production path, apply the same
+scientific gates, and actually fail under a mutation of the physics the exhaustive rows
+claim to verify? A sentinel that only checks a schema, a smoke path, or a residual is the
+failure mode this tier structure is most exposed to, and it is blocking. Likewise check
 that speeding a test up did not quietly cost coverage: a resolution reduction that
 removes a refinement level from a rate fit, drops a mutation check, or widens an accuracy
 tolerance is a finding, and a deleted test needs a stated reason (a code change, an ADR,

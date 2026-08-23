@@ -1277,19 +1277,28 @@ execution MUST instead carry `@pytest.mark.exhaustive`. Merely exceeding a budge
 not justify either marker: first lower resolution while preserving the claim, share
 solves, compile repeated coefficient expressions, and remove redundant diagnostics.
 
-Every exhaustive family MUST have a fast live sentinel using the same production path
-and scientific gates, including at least one control or mutation-sensitive assertion.
-Where a meaningful intermediate ladder exists, it SHOULD also have a developer-slow
-sentinel. Independent exhaustive rows MUST be separate pytest nodes or modules so the
-scheduled workflow can shard them when serial wall-clock or memory becomes a bottleneck.
-A regression should therefore be detected in the PR that causes it whenever a reduced
-case can detect it; exhaustive CI establishes the full parameter-range claim.
+Every exhaustive test MUST declare its family with `@pytest.mark.sentinel("<family>")`,
+and every such family MUST have a fast live sentinel using the same production path and
+scientific gates, including at least one control or mutation-sensitive assertion. Where a
+meaningful intermediate ladder exists, it SHOULD also have a developer-slow sentinel; a
+developer-slow sentinel never substitutes for the fast one, because `slow` is not run on
+every change. The structural part of this rule is enforced by
+`tests/unit/test_verification_tiers.py`, a fast test that fails when an exhaustive test
+names no family or a named family has no fast sentinel; the scientific part — same path,
+same gates, real mutation sensitivity — remains a blocking review obligation. Independent
+exhaustive rows MUST be separate pytest nodes or modules so the scheduled workflow can
+shard them when serial wall-clock or memory becomes a bottleneck. A regression should
+therefore be detected in the PR that causes it whenever a reduced case can detect it;
+exhaustive CI establishes the full parameter-range claim.
 
 Agents run `make test` throughout development and every touched `slow` test before
 submission. They do not routinely run exhaustive tests locally. A milestone that adds
 an exhaustive test or changes its solver path, inputs, controls, regeneration code, or
-asserted artifact MUST pass a manually dispatched exhaustive workflow on that branch
-before it is marked complete. Intermediate commits need not wait for that workflow.
+asserted artifact MUST pass a complete manually dispatched run of
+`.github/workflows/exhaustive.yml` on that branch before it is marked complete. That
+workflow accepts a `pytest_args` input for iterating on one family and records in its job
+summary whether the run was complete or filtered; only a complete run satisfies this
+requirement. Intermediate commits need not wait for the workflow.
 
 Checked-in tables remain evidence, not substitutes for live tests. A large table MAY be
 generated only by its committed script; PR CI SHOULD cheaply validate its schema,
@@ -1326,15 +1335,23 @@ test; checkpoint round-trip; wheel build + `pip install dist/*.whl` smoke test.
 The test step is the fast subset (neither `slow` nor `exhaustive`) and is held to the
 §22.1 budget.
 
-**Scheduled CI:** nightly runs `make test-full` on the oldest and newest supported Python
-versions, preserving compatibility coverage for the bounded fast and developer-slow
-suite. A separate canonical Python/NGSolve job runs `make test-exhaustive` once: full
-anisotropy/order/resolution ladders, large three-dimensional and end-to-end physics
-regressions, thread-scaling and memory benchmarks, optional ngsxfem tests, and
-PETSc-branch tests when that branch exists. The exhaustive job has an infrastructure
-timeout rather than a normative laptop budget and SHOULD be sharded by independent
-parameter rows when needed. It is also manually dispatchable against a milestone branch;
-that branch run is required by §22.1 when exhaustive behavior changes.
+**Scheduled CI:** `.github/workflows/nightly.yml` runs `make test-full` on the oldest and
+newest supported Python versions, preserving compatibility coverage for the bounded fast
+and developer-slow suite. `.github/workflows/exhaustive.yml` runs `make test-exhaustive`
+once on a canonical Python/NGSolve environment: full anisotropy/order/resolution ladders,
+large three-dimensional and end-to-end physics regressions, thread-scaling and memory
+benchmarks, optional ngsxfem tests, and PETSc-branch tests when that branch exists. Both
+workflows install the optional extras; a tier whose tests `importorskip` away is not
+covering what it claims. The exhaustive job has an infrastructure timeout rather than a
+normative laptop budget and SHOULD be sharded by independent parameter rows when needed.
+It is also manually dispatchable against a milestone branch; that branch run is required
+by §22.1 when exhaustive behavior changes.
+
+Because the exhaustive tier is memory-bound rather than CPU-bound — the §21 direct solver
+holds one full 3D factorization per pytest-xdist worker — the Make targets expose
+`PYTEST_WORKERS` and `EXHAUSTIVE_WORKERS` instead of relying on the fixed `-n 3` in
+`pyproject.toml`, and the exhaustive tier defaults to fewer workers. Worker count is a
+resourcing knob, never a way to reach a budget.
 
 **Packaging:** `pyproject.toml` declares `ngsolve` as a binary-wheel dependency within a
 tested version range; optional extras `remec[io]`, `remec[xfem]`, `remec[vmec]`,

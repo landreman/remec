@@ -1,0 +1,52 @@
+name: Exhaustive verification
+
+# The remote-only tier of ADR 0007. Separate from nightly.yml so that a milestone agent
+# can dispatch it against a feature branch without also re-running the Python
+# compatibility matrix, and so that its cadence and sharding can change independently.
+
+on:
+  schedule:
+    - cron: "41 7 * * *"
+  workflow_dispatch:
+    inputs:
+      pytest_args:
+        description: >
+          Extra pytest arguments, e.g. "-k reiman" to re-run one family while iterating.
+          Leave empty for the complete run. Only a complete run satisfies the §22.1
+          milestone-completion requirement.
+        required: false
+        default: ""
+
+concurrency:
+  group: exhaustive-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  exhaustive-verification:
+    name: Exhaustive numerical verification / canonical Python
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e ".[dev]"
+      # The exhaustive tier claims to cover the optional ngsxfem tests (DESIGN.md §23);
+      # without this extra they would `importorskip` away silently.
+      - run: python -m pip install -e ".[cutcell]"
+      - name: Record the selection used by this run
+        env:
+          EXTRA_ARGS: ${{ inputs.pytest_args }}
+        run: |
+          if [ -z "$EXTRA_ARGS" ]; then
+            echo "Complete exhaustive run (no extra selection)." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "PARTIAL run, extra pytest arguments: \`$EXTRA_ARGS\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "A partial run does not satisfy DESIGN.md §22.1." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Run the exhaustive suite
+        env:
+          EXTRA_ARGS: ${{ inputs.pytest_args }}
+        run: make test-exhaustive PYTEST_ARGS="$EXTRA_ARGS"

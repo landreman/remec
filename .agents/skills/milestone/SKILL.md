@@ -75,9 +75,22 @@ tail into the PR body.
 
 Do not run `make test-exhaustive` locally as part of the ordinary loop. If the milestone
 adds an `exhaustive` test or changes its solver path, input grid, controls, regeneration
-script, or asserted table, push the branch and manually dispatch `nightly.yml` against
-that branch. Continue with documentation and other non-dependent work while it runs. Do
-not mark the milestone complete until the exhaustive job is green.
+script, or asserted table, push the branch and manually dispatch `exhaustive.yml` against
+that branch:
+
+```bash
+gh workflow run exhaustive.yml --ref "$(git branch --show-current)"
+```
+
+Continue with documentation and other non-dependent work while it runs; check back with
+`gh run list --workflow exhaustive.yml --branch "$(git branch --show-current)"`. Do not
+mark the milestone complete until a complete exhaustive run is green. The workflow's
+optional `pytest_args` input is for iterating on one family while developing; a filtered
+run is labelled as partial in the job summary and does not satisfy the requirement.
+
+Any new `exhaustive` test also needs `@pytest.mark.sentinel("<family>")` and a fast
+sentinel in the same family, or `tests/unit/test_verification_tiers.py` fails in
+`make test` — by design.
 
 ## 6. Run GitHub Actions CI
 

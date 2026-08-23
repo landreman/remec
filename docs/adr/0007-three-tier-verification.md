@@ -73,26 +73,50 @@ Choose Option 2. Verification has these tiers:
 An exhaustive test is legitimate only when:
 
 - the parameter range or resolution is necessary for a documented numerical claim;
-- the same family has a fast live sentinel and, where a useful intermediate form
-  exists, a developer-slow sentinel using the same production path and scientific
-  gates;
+- the test declares its family with `@pytest.mark.sentinel("<family>")`, and that family
+  has a fast live sentinel — and, where a useful intermediate form exists, a
+  developer-slow sentinel — using the same production path and scientific gates;
 - at least one live sentinel is mutation-sensitive to the physics the exhaustive rows
   claim to verify;
 - independent rows are separate pytest nodes or modules so CI can shard them when the
   suite grows; and
 - any checked-in table is produced only by its committed regeneration script.
 
+The structural half of the sentinel rule is enforced mechanically, not by review alone.
+`tests/unit/test_verification_tiers.py` runs in the fast tier and fails if an
+`exhaustive` test declares no family, or if a declared family has no test outside both
+slower tiers. A `slow` sentinel deliberately does not satisfy that requirement: `slow`
+is not run on every change, which is the property the sentinel exists to supply. The
+scientific half — same production path, same gates, genuine mutation sensitivity —
+cannot be checked statically and remains a blocking reviewer obligation
+(`.claude/commands/review-milestone.md` item 6).
+
 Agents do not routinely run exhaustive tests locally. If a milestone adds an exhaustive
 test or changes its solver path, inputs, controls, regeneration code, or asserted
-artifact, the agent pushes the branch, manually dispatches the exhaustive workflow for
-that branch, and records the successful run in the PR body. The milestone is not
-complete until it passes. Intermediate commits do not wait for that workflow.
+artifact, the agent pushes the branch, manually dispatches
+`.github/workflows/exhaustive.yml` for that branch, and records the successful run in
+the PR body. That run must be a complete one: the workflow accepts a `pytest_args`
+input for iterating on a single family, and writes to the job summary whether the run
+was complete or filtered, so a partial run cannot be presented as the required
+evidence. The milestone is not complete until a complete run passes. Intermediate
+commits do not wait for the workflow.
 
-The nightly compatibility job runs the bounded developer suite on the oldest and
-newest supported Python versions. The exhaustive numerical job runs once on a canonical
-Python/NGSolve environment. This separates interpreter compatibility from numerical
-parameter coverage. The exhaustive job should be split across independent CI matrix
-shards when one serial job becomes the bottleneck.
+The two tiers live in separate workflow files. `nightly.yml` runs the bounded developer
+suite on the oldest and newest supported Python versions; `exhaustive.yml` runs the
+numerical ladders once on a canonical Python/NGSolve environment. This separates
+interpreter compatibility from numerical parameter coverage, lets the two cadences and
+timeouts move independently, and means a branch dispatch of the exhaustive tier does not
+also re-run the compatibility matrix. Both jobs install the optional extras, because a
+tier whose tests `importorskip` away is not covering what it claims. The exhaustive job
+should be split across independent CI matrix shards when one serial job becomes the
+bottleneck.
+
+The exhaustive tier is memory-bound rather than CPU-bound: the Section 21 direct solver
+holds a full three-dimensional factorization per pytest-xdist worker, so the fixed
+`-n 3` that suits the bounded tiers can exhaust a runner. The Make targets therefore
+expose `PYTEST_WORKERS` and `EXHAUSTIVE_WORKERS`, and the exhaustive tier defaults to
+fewer workers. Worker count is a resourcing knob only; it may never be used to reach a
+budget that should have been met by a cheaper formulation.
 
 Meshes, analytic topology data, and restart states may be versioned inputs or initial
 guesses when their configuration and schema metadata are checked. Cached or checked-in

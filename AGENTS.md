@@ -39,6 +39,7 @@ python -m pip install -e ".[dev]"
 make test          # fast subset, the PR-CI gate; prints the 15 slowest tests
 make test-full     # complete developer suite: fast + slow, not exhaustive
 make test-exhaustive  # every test; normally run by scheduled/manual CI
+                   # PYTEST_WORKERS / EXHAUSTIVE_WORKERS set the xdist worker count
 make lint          # ruff format --check && ruff check && mypy src/remec
 make check         # lint + test; this is the gate
 ```
@@ -107,19 +108,29 @@ low resolution in PR CI and a wider developer-slow scan.
 
 **Marking `exhaustive`.** A scientifically necessary parameter ladder or benchmark that
 is unsuitable for routine local execution gets `@pytest.mark.exhaustive`, following ADR
-0007. Every exhaustive family MUST retain a fast live sentinel on the same production
-path and gates, including a mutation-sensitive control; add a developer-slow sentinel
-too when a meaningful intermediate ladder exists. Split independent rows into separate
+0007. It MUST also carry `@pytest.mark.sentinel("<family>")`, and that family MUST retain
+a fast live sentinel on the same production path and gates, including a
+mutation-sensitive control. Add a developer-slow sentinel too when a meaningful
+intermediate ladder exists — but note that a `slow` sentinel never substitutes for the
+fast one, since `slow` is not run on every change. Split independent rows into separate
 pytest nodes or modules so remote CI can shard them. The marker is not a way to hide a
 failure or an avoidably expensive implementation.
+
+`tests/unit/test_verification_tiers.py` enforces the structural half of that rule in the
+fast tier: it fails if an exhaustive test names no family, or if a named family has no
+fast sentinel. It cannot check that the sentinel exercises the same physics — that is
+yours to get right and the reviewer's to challenge.
 
 **While working a milestone.** Run `make test` plus every `slow` test that touches the
 code you changed (`pytest -m slow <path or -k>`), and say in the PR body which slow tests
 you ran. Do not routinely run exhaustive tests locally. If the change adds an exhaustive
 test or affects its solver path, inputs, controls, regeneration code, or asserted
-artifact, push the branch and manually dispatch `.github/workflows/nightly.yml` for that
-branch. Continue non-dependent work while it runs, but do not mark the milestone complete
-or open its review-ready PR until it passes; record the run URL in the PR body.
+artifact, push the branch and manually dispatch `.github/workflows/exhaustive.yml` for
+that branch. Continue non-dependent work while it runs, but do not mark the milestone
+complete or open its review-ready PR until it passes; record the run URL in the PR body.
+That workflow takes an optional `pytest_args` input so you can iterate on one family
+(`-k reiman`) — useful while developing, but only a complete run, which the job summary
+identifies as such, counts as the required evidence.
 
 If `make test` is over budget after adding your tests, you may mark an unrelated
 slow-but-passing test `slow` to fit only when it still has a meaningful fast sentinel.

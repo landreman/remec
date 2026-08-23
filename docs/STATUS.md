@@ -44,10 +44,13 @@ edit.
 
 > **2026-08-22 verification-tier decision (ADR 0007).** The fast and bounded
 > developer-slow budgets remain unchanged. Large 3D parameter ladders now have a remote
-> `exhaustive` tier: they run on one canonical numerical environment through scheduled or
-> manually dispatched CI, while fast and developer-slow sentinels preserve local
-> regression detection. Exhaustive CI is required before completing a milestone that
-> affects it; it is not required before every intermediate commit.
+> `exhaustive` tier: they run on one canonical numerical environment through
+> `.github/workflows/exhaustive.yml`, scheduled or dispatched against a branch, while
+> fast and developer-slow sentinels preserve local regression detection. A complete
+> exhaustive run is required before completing a milestone that affects it; it is not
+> required before every intermediate commit. Every `exhaustive` test must declare
+> `@pytest.mark.sentinel("<family>")` and that family must keep a fast sentinel —
+> enforced in the fast tier by `tests/unit/test_verification_tiers.py`.
 
 A milestone may only start when every milestone in the previous phase is `[x]` on the
 target integration branch (`DESIGN.md` §25). A `[x]` on an unmerged PR does not satisfy
@@ -750,7 +753,8 @@ numbering.
   full ladder is remote `exhaustive` verification. The largest rows MAY come from a
   committed regeneration script and be pinned, provided that script is the table's only
   source. The exhaustive test still computes every asserted diagnostic from the current
-  solver, and its successful branch workflow run is required before 6.3 is complete.
+  solver, carries `@pytest.mark.sentinel(...)` naming its family, and a complete
+  `exhaustive.yml` branch run is required before 6.3 is complete.
   <br>Reference numbers to check the setup against before trusting any solve
   (t₀=0.29, t₁=0.38, m=2, R₀=1, a=1): r_s=0.74339; w_island = 4√(ε₁/(2t₁)) = 4.58831√ε₁
   exactly, so ε₁=10⁻³ gives w_island=0.145095; w_c≈0.94074·ε_κ^{1/4}, so w_c≈0.297 at
@@ -822,9 +826,10 @@ numbering.
 
 ADR 0007 defines three tiers. `make test` < 2 min and any fast test < ~20 s;
 `make test-full` (all non-exhaustive tests) < 5 min and any `slow` test < ~90 s —
-reference laptop, macOS/CPython 3.12, `-n 3 --dist=loadscope`. Remote
-`make test-exhaustive` has no normative laptop cap and currently has a five-hour CI
-infrastructure timeout. Every milestone re-checks the bounded budgets as item 7 of the
+reference laptop, macOS/CPython 3.12, `-n 3 --dist=loadscope` (`PYTEST_WORKERS`
+overrides the worker count). Remote `make test-exhaustive` has no normative laptop cap,
+defaults to `EXHAUSTIVE_WORKERS=2` because 3D direct solves are memory-bound, and
+currently has a five-hour CI infrastructure timeout. Every milestone re-checks the bounded budgets as item 7 of the
 definition of done and records the new `make test` wall-clock here. A milestone that
 affects exhaustive verification also records its successful branch workflow run before
 completion.
@@ -879,6 +884,21 @@ test was reclassified, so the latter two sets are currently identical; the full
 developer run therefore exercises the same nodes as `make test-exhaustive` until Phase 6
 adds the first `exhaustive` ladder. Ruff format/check, mypy, TOML parsing, workflow YAML
 parsing, and all selector collection checks pass.
+
+Amended 2026-08-22 (same branch), tightening ADR 0007 before Phase 6 depends on it: the
+exhaustive job moved out of `nightly.yml` into its own `.github/workflows/exhaustive.yml`
+so a branch dispatch does not also re-run the Python compatibility matrix and so the two
+cadences can diverge; both workflows now install the `cutcell` extra, without which the
+optional ngsxfem tests `importorskip` away while the tier claims to cover them; the Make
+targets expose `PYTEST_WORKERS`/`EXHAUSTIVE_WORKERS` with the exhaustive tier defaulting
+to 2, because 3D direct solves are memory-bound per xdist worker rather than CPU-bound;
+and the sentinel rule became machine-checkable through a new `sentinel` marker plus
+`tests/unit/test_verification_tiers.py`, a 0.2 s fast test verified against the real tree
+to fail both when an exhaustive test declares no family and when a family's only sentinel
+is `slow`. Re-measured after the amendment: `make test` passes 295 fast tests in 57.24 s
+with a 13.79 s slowest test; `make test-full` passes all 315 developer-runnable tests in
+197.51 s. Both budgets hold. Selector collection is 295 fast / 315 developer / 315
+exhaustive; `EXHAUSTIVE_WORKERS` and `PYTEST_ARGS` plumbing was exercised end to end.
 
 ## Release gates
 

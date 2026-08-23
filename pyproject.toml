@@ -34,6 +34,7 @@ addopts = ["-n", "3", "--dist=loadscope"]
 markers = [
     "slow: bounded developer-runnable verification (about 90 seconds per test)",
     "exhaustive: remote-only large parameter ladder or benchmark",
+    "sentinel(family): names the ADR 0007 verification family this test belongs to",
 ]
 
 [tool.ruff]
