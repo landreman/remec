@@ -735,7 +735,7 @@ numbering.
   the geometry's actual z-extent.
   <br>Placed first so that 6.3 has an independent measurement of where the island is,
   rather than inferring island position from the pressure solution it is trying to test.
-- [ ] **6.2** `PeriodicCylinder3D` + Reiman–Greenside analytic field — `DESIGN.md` §16.2, §8.6 · note: §6 (M1)
+- [~] **6.2** `PeriodicCylinder3D` + Reiman–Greenside analytic field — `DESIGN.md` §16.2, §8.6 · note: §6 (M1)
   <br>Acceptance: periodic straight-cylinder geometry (Ω={r<a}, z∈[0,2πR₀) identified) with
   named boundaries, affine tetrahedra, one Netgen periodic identification; periodic H¹,
   H(curl), and H(div) spaces tested for scalar and vector periodicity, all mean-flux
@@ -748,6 +748,9 @@ numbering.
   <br>Design input: the domain is topologically a solid torus, so it exercises the same
   nontrivial harmonic field and toroidal flux as §16.4 with zero geometry-approximation
   error. Milestone 4.3's harmonic-flux machinery should be reused here, not re-derived.
+  <br>Blocked: ADR 0009 requires human sign-off because a finite affine tetrahedral mesh
+  cannot exactly represent the required circular wall `{r<a}`; the current design and
+  acceptance text simultaneously require both and claim zero geometry-approximation error.
 - [ ] **6.3** Frozen-field 3D island benchmark: (M4a)–(M4b) at large anisotropy — `DESIGN.md` §8.6, §12.3, §22 · note: §4.3, §8
   <br>**Phase gate.** Acceptance: solve *only* (M4a)–(M4b) — no (M1), no (M2)–(M3b), no
   Picard — on the 6.2 field with a single m=2 island chain (ε₂=0), and produce all of:
