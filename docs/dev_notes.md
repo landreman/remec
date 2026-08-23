@@ -1,5 +1,17 @@
 # NGSolve API notes
 
+- Milestone 6.3 prototype (NGSolve 6.2.2606): for a periodic H1 GridFunction with an
+  essential `wall` trace, both the field and `grad(field)` evaluate as zero in a direct
+  boundary integral, so `Integrate((-K*grad(field))*normal, BND, definedon=wall)` cannot
+  measure the (M4a) boundary heat flux. Recover the raw heat flux into a periodic H(div)
+  field with the paired L2 constraint `div(q_h)=S_ref`; its normal trace gives the global
+  power balance at roundoff and its relative correction must be reported. Local OCC-mesh
+  refinement uses `mesh.SetRefinementFlag(ng.ElementId(ng.VOL, element.nr), flag)` before
+  `mesh.Refine()` and before `mesh.Curve(order)`. Marking a resonant annulus on the coarse
+  isotropic tetrahedral cylinder still refines most elements because their radial spans
+  intersect the annulus; measured counts 800 -> 6,387 -> 49,372 -> 325,651 demonstrate
+  why ADR 0011 proposes a radially graded, field-elongated mesh instead.
+
 - Milestone 6.2 (Netgen/NGSolve 6.2.2606): build a periodic OCC cylinder by naming the
   lateral face and classifying the two end faces by their axial centers, then call
   `lower.Identify(upper, name, IdentificationType.PERIODIC,

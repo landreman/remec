@@ -795,7 +795,7 @@ numbering.
   mesh must also clear the mapped-Jacobian ratio gate. Use the public
   `make_hdiv_field_evaluator` wrap-length gate and the production
   `ReimanGreensideField`, rather than copying milestone 6.1's private oracle.
-- [ ] **6.3** Frozen-field 3D island benchmark: (M4a)–(M4b) at large anisotropy — `DESIGN.md` §8.6, §12.3, §22 · note: §4.3, §8
+- [~] **6.3** Frozen-field 3D island benchmark: (M4a)–(M4b) at large anisotropy — `DESIGN.md` §8.6, §12.3, §22 · note: §4.3, §8
   <br>**Phase gate.** Acceptance: solve *only* (M4a)–(M4b) — no (M1), no (M2)–(M3b), no
   Picard — on the 6.2 field with a single m=2 island chain (ε₂=0), and produce all of:
   (a) a machine-readable cost table over an ε_κ ladder recording elements, H¹ DOFs, order,
@@ -835,6 +835,15 @@ numbering.
   default, record it — it is a §8.5 preconditioner input and possibly an ADR. It is never
   grounds for lowering the anisotropy target, relaxing the pollution gate, or reducing
   `min_layer_cells`.
+  <br>Blocked on proposed ADR 0011 (decision pending): the test-first exact-CAD prototype
+  measures only 0.591 local element widths across w_c on the 800-element p=1 fast row.
+  A p=2, maxh=0.30 row clears the pollution gate at epsilon_kappa=1e-4
+  (kappa_perp,num/kappa_perp=0.0499) but spans only 0.263 widths; one uniform refinement
+  reaches 20,032 elements, pollution ratio 0.00295, and only 0.504 widths, with no
+  resolved flattening. Annular isotropic marking grows 800 elements to 6,387 -> 49,372
+  -> 325,651 in three passes and still trends to multi-million elements before the
+  required six radial widths. ADR 0011 recommends a radially graded, field-elongated
+  periodic-cylinder mesh plus the planned iterative path; the criterion is not relaxed.
 - [ ] **6.4** Periodic-cylinder end-to-end coupled benchmark — `DESIGN.md` §16.2 · note: §6, §9
   <br>Acceptance: full (M1)–(M4b) Picard on the 6.2 geometry, initialized from the 6.3
   frozen state and the closed-form **A**; all §5 invariants active. This was the old 6.1;
