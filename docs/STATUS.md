@@ -852,6 +852,13 @@ numbering.
   direct solver is used below its threshold and native preconditioned CG above it, both
   recorded in the cost table. See ADR 0011 for the six binding directives. The
   resolution criterion is not relaxed; the milestone is unblocked.
+  <br>Blocked again on proposed ADR 0012: the generic M4b mollifier uses
+  `|det J|^(1/3)` as its spatial width, which lets the deliberately coarse tangential
+  directions on ADR 0011 cells smear across many resolved radial layers. A live p=2,
+  24-by-4 probe at epsilon_kappa=1e-6 measures a raw O-ray `|dchi/dr|` ratio of 0.55894
+  relative to the integrable control while the determinant-width M4b diagnostic reports
+  zero flattening. ADR 0012 requests the missing anisotropic-width definition; no
+  flattening tolerance or resolution gate has been relaxed.
 - [ ] **6.4** Periodic-cylinder end-to-end coupled benchmark — `DESIGN.md` §16.2 · note: §6, §9
   <br>Acceptance: full (M1)–(M4b) Picard on the 6.2 geometry, initialized from the 6.3
   frozen state and the closed-form **A**; all §5 invariants active. This was the old 6.1;
