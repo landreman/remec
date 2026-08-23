@@ -795,7 +795,7 @@ numbering.
   mesh must also clear the mapped-Jacobian ratio gate. Use the public
   `make_hdiv_field_evaluator` wrap-length gate and the production
   `ReimanGreensideField`, rather than copying milestone 6.1's private oracle.
-- [~] **6.3** Frozen-field 3D island benchmark: (M4a)–(M4b) at large anisotropy — `DESIGN.md` §8.6, §12.3, §22 · note: §4.3, §8
+- [x] **6.3** Frozen-field 3D island benchmark: (M4a)–(M4b) at large anisotropy — `DESIGN.md` §8.6, §12.3, §22 · note: §4.3, §8
   <br>**Phase gate.** Acceptance: solve *only* (M4a)–(M4b) — no (M1), no (M2)–(M3b), no
   Picard — on the 6.2 field with a single m=2 island chain (ε₂=0), and produce all of:
   (a) a machine-readable cost table over an ε_κ ladder recording elements, H¹ DOFs, order,
@@ -865,11 +865,12 @@ numbering.
   axisymmetric-b, isotropic-K, and sub-w_c controls all measure zero. The finest co-area
   spike/volume-plateau ratios are 1.226/1.281 with zero critical-safeguard activations.
   `frozen_field_island_benchmark.py` exclusively regenerates the cost/aspect CSVs and
-  Poincare/isobar overlay. Local `make check` is green (366 fast tests in 110.52 s) and
-  the touched slow aspect scan is green (55.69 s); its coarse H1-AMG row takes 43
+  Poincare/isobar overlay. Local `make check` is green (366 fast tests in 102.14 s) and
+  the touched slow aspect scan is green (52.93 s); its coarse H1-AMG row takes 43
   iterations on macOS and 44 with the canonical Linux wheel, while the exact
   within-platform refinement trend remains decreasing;
-  the required complete branch `exhaustive.yml` run is pending before `[x]`. To retain
+  complete branch `exhaustive.yml` run
+  https://github.com/landreman/remec/actions/runs/32664081198 passed all 392 tests. To retain
   the two-minute fast budget, the existing M3 gradient-comparison fast sentinel now
   computes only its central `D_u=0.02` pair (same 24-by-16 resolution and recorded
   assertions); its setup fell from 26.1 s to 7.1 s, while the unchanged three-row ladder
