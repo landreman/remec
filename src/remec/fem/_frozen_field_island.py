@@ -7,7 +7,7 @@ import sys
 from dataclasses import dataclass
 from math import isfinite, pi, sqrt
 from time import perf_counter
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -335,12 +335,16 @@ def _ray_pressure(
     row: _M4Row, config: FrozenFieldIslandConfig, *, angle: float
 ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
     """Sample transplanted ``(M4b)`` pressure along one ``Phi=0`` radial ray."""
-    radii = np.linspace(0.0, 0.995, config.ray_samples)
+    radii = cast(NDArray[np.float64], np.linspace(0.0, 0.995, config.ray_samples, dtype=np.float64))
     x = radii * np.cos(angle)
     y = radii * np.sin(angle)
     chi = np.asarray(row.field(row.mesh(x, y, np.zeros_like(radii))), dtype=float).reshape(-1)
-    pressure = np.asarray(
-        row.pressure_profile.value(row.volume_map.evaluate_volume_coordinate(chi)), dtype=float
+    pressure = cast(
+        NDArray[np.float64],
+        np.asarray(
+            row.pressure_profile.value(row.volume_map.evaluate_volume_coordinate(chi)),
+            dtype=np.float64,
+        ),
     )
     return radii, pressure
 
