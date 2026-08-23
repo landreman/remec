@@ -42,6 +42,13 @@ edit.
 > example is 6.8. **Renumbering:** an existing reference to the "milestone 6.2" §7.2
 > tangency correction now means **6.5**.
 
+> **2026-08-22 verification-tier decision (ADR 0007).** The fast and bounded
+> developer-slow budgets remain unchanged. Large 3D parameter ladders now have a remote
+> `exhaustive` tier: they run on one canonical numerical environment through scheduled or
+> manually dispatched CI, while fast and developer-slow sentinels preserve local
+> regression detection. Exhaustive CI is required before completing a milestone that
+> affects it; it is not required before every intermediate commit.
+
 A milestone may only start when every milestone in the previous phase is `[x]` on the
 target integration branch (`DESIGN.md` §25). A `[x]` on an unmerged PR does not satisfy
 that dependency. Phase 7 may run in parallel with Phase 8.
@@ -738,10 +745,12 @@ numbering.
   integrable control at the same mesh/order/ε_κ, the sub-w_c island, replacing **b** in K
   by the axisymmetric part of the same field, and an isotropic K MUST each remove the
   flattening. State in the PR body which of these mutations were run.
-  <br>Test placement: full ladder nightly; the largest rows MAY come from a committed
-  regeneration script and be pinned, provided that script is the table's only source and
-  the not-slow subset still re-runs the smallest rows live together with at least one
-  control. Budgets in `DESIGN.md` §22.1 apply unchanged.
+  <br>Test placement (ADR 0007): the smallest row and at least one falsifiability control
+  run in the fast PR suite; a bounded intermediate ladder SHOULD be developer-slow; the
+  full ladder is remote `exhaustive` verification. The largest rows MAY come from a
+  committed regeneration script and be pinned, provided that script is the table's only
+  source. The exhaustive test still computes every asserted diagnostic from the current
+  solver, and its successful branch workflow run is required before 6.3 is complete.
   <br>Reference numbers to check the setup against before trusting any solve
   (t₀=0.29, t₁=0.38, m=2, R₀=1, a=1): r_s=0.74339; w_island = 4√(ε₁/(2t₁)) = 4.58831√ε₁
   exactly, so ε₁=10⁻³ gives w_island=0.145095; w_c≈0.94074·ε_κ^{1/4}, so w_c≈0.297 at
@@ -811,10 +820,14 @@ numbering.
 
 ## Test-time budget (cross-cutting; `DESIGN.md` §22.1)
 
-`make test` < 2 min, `make test-full` < 5 min, any not-slow test < ~20 s, any `slow`
-test < ~90 s — reference laptop, macOS/CPython 3.12, `-n 3 --dist=loadscope`. Every
-milestone re-checks this as item 7 of the definition of done and records the new
-`make test` wall-clock here.
+ADR 0007 defines three tiers. `make test` < 2 min and any fast test < ~20 s;
+`make test-full` (all non-exhaustive tests) < 5 min and any `slow` test < ~90 s —
+reference laptop, macOS/CPython 3.12, `-n 3 --dist=loadscope`. Remote
+`make test-exhaustive` has no normative laptop cap and currently has a five-hour CI
+infrastructure timeout. Every milestone re-checks the bounded budgets as item 7 of the
+definition of done and records the new `make test` wall-clock here. A milestone that
+affects exhaustive verification also records its successful branch workflow run before
+completion.
 
 Measured 2026-08-16 on `milestone/4.4-constrained-current-projection`: the curved-torus
 projection is part of the ordinary PR-CI suite and passes in 17.49 s. `make test`
@@ -858,6 +871,15 @@ other rows rebuild their meshes, and no checkpoint supplies a diagnostic or asse
 value. No tolerance or recorded rate moved; every individual test and both suite
 budgets now pass.
 
+Measured 2026-08-22 on `test_times` after implementing ADR 0007: `make test` passes all
+289 fast tests in 57.55 s; its slowest test is 13.88 s. `make test-full` passes all 309
+developer-runnable tests in 214.43 s; its slowest tests are 54.45 s and 54.26 s. The
+three selectors collect 289 fast / 309 developer / 309 exhaustive tests. No existing
+test was reclassified, so the latter two sets are currently identical; the full
+developer run therefore exercises the same nodes as `make test-exhaustive` until Phase 6
+adds the first `exhaustive` ladder. Ruff format/check, mypy, TOML parsing, workflow YAML
+parsing, and all selector collection checks pass.
+
 ## Release gates
 
 - **0.1** — Phases 0–5 complete, including corrected normalized p₀(s)/I₀(s) and
@@ -873,3 +895,4 @@ budgets now pass.
 | 0004 | 4.4 | What terminal space/constraint makes curved HDiv current strongly divergence-free? | Option 4 superseded by ADR 0005 |
 | 0005 | 4.4 | Does the paired ordinary-L2 constraint coerce curved HDiv divergence pointwise to zero? | Option 1 approved |
 | 0006 | 5.5 | Should axisymmetric Ampère use a free-I flux constraint or mixed u--J closure? | Approved 2026-08-22: Option 1 (free-I trace + bordered Ψ_t constraint), with binding numeric escalation criteria to Option 2 |
+| 0007 | Cross-cutting, especially 6.3+ | How can long 3D verification coexist with fast development iteration? | Approved 2026-08-22: fast, developer-slow, and remote-exhaustive tiers |

@@ -163,6 +163,7 @@ and compared against the standard formulation.
 | D18 | M3 regularization gradient runtime-selectable: ∇⊥ (default) or full ∇ (isotropic variant), applied consistently across (M2)/(M3)/(M3b); comparison study required (Sec. 9.4, milestone 3.7) | Note §5.5: variants agree to O(ε_J); full ∇ gives a fixed SPD **B**-independent Laplacian (assembly/preconditioner reuse, monotone stencils, no ∂op/∂**B** Newton block, damps parallel grid noise); ∇⊥ is the derived kinetic closure and preserves u = J∥/B exactly | Measured evidence of a clear winner → change the default via ADR |
 | D19 | User pressure and toroidal-current profiles share the normalized-volume coordinate s ∈ [0,1]; no dimensional-volume profile API and no implicit unit detection | Geometry-independent inputs, stable endpoints, direct correspondence between p₀(s) and I₀(s), and unambiguous restart/import semantics | none |
 | D20 | Mean current is imposed by the constrained closure: unknown G(s), flux −D_u∇ᵣũ, and shellwise (M3b) constraints; the old prescribed F(p) split is prohibited as an input closure | Note §5.4 proves the old substitution cancels from physical u at finite D_u; the bordered system restores the classical current freedom without violating ∇·J = 0 | A different current observable is requested (for example ⟨J∥B⟩); add it behind a separately verified constraint type, never by reviving F(p) |
+| D21 | Three verification tiers: fast PR, bounded developer-slow, and remote exhaustive (ADR 0007) | Preserve short edit/test loops while running scientifically necessary 3D parameter ladders before milestone completion | Remote queue latency dominates milestone completion, or fast sentinels fail to predict exhaustive regressions |
 
 ---
 
@@ -553,11 +554,14 @@ flattening (item 4); (c) replacing **b** in K by the axisymmetric part of the sa
 leaving everything else unchanged, removes the flattening; (d) an isotropic K removes it.
 A run that produces a flat spot for an isotropic K is measuring its own mesh.
 
-**Test placement and regeneration.** The full ladder is nightly. The largest rows MAY be
-produced by a committed regeneration script and pinned in the checked-in table, provided
-that script is the table's only source (never a hand edit; Section 22.1), and provided the
-not-slow subset still re-runs the smallest rows live, including at least one control from
-the falsifiability list.
+**Test placement and regeneration.** The smallest live row and at least one control from
+the falsifiability list are fast PR tests. A bounded intermediate ladder SHOULD remain in
+the developer-slow tier where it supplies a meaningful pre-submission check. The full
+ladder is remote `exhaustive` verification. Its largest rows MAY be produced by a
+committed regeneration script and pinned in the checked-in table, provided that script is
+the table's only source (never a hand edit; Section 22.1). The exhaustive live test MUST
+still compute every diagnostic it asserts from the current solver; a cached solution may
+be an initial guess but never the source of an asserted value.
 
 **When the cost is prohibitive.** If the resolution demanded by criterion 2 cannot be
 reached with the Section 21 direct-solver default, that is a real result: it belongs in
@@ -1252,38 +1256,62 @@ finite-β code-to-code comparisons (HINT2/SPEC/PIES) where data are available (l
 
 ### 22.1 Test-time budget (normative)
 
-Verification only has value if it is run. The suite MUST therefore stay cheap enough to
-run on every change. Wall-clock budgets, measured on the reference development laptop
-(Apple-silicon macOS) with the parallel configuration declared in `pyproject.toml`
+Verification only has value if it is run at the cadence for which it was designed. The
+repository therefore has three tiers, as decided in ADR 0007. Wall-clock budgets for the
+first two tiers are measured on the reference development laptop (Apple-silicon macOS)
+with the parallel configuration declared in `pyproject.toml`
 (`-n 3 --dist=loadscope`):
 
-| Suite | Command | Budget |
+| Tier | Selection and command | Budget and cadence |
 |---|---|---|
-| PR subset (`not slow`) | `make test` | **< 2 minutes** |
-| Any single not-slow test | — | **< ~20 seconds** |
-| Full suite | `make test-full` | **< 5 minutes** |
+| Fast PR subset | neither `slow` nor `exhaustive`; `make test` | **< 2 minutes**, every change |
+| Any single fast test | — | **< ~20 seconds** |
+| Developer-complete | all non-`exhaustive`; `make test-full` | **< 5 minutes**, touched subsystems before submission |
 | Any single `slow` test | — | **< ~90 seconds** |
+| Remote exhaustive | all tests; `make test-exhaustive` | no normative laptop cap; scheduled/manual CI before milestone completion |
 
-Tests that cannot meet the not-slow caps MUST carry `@pytest.mark.slow` and therefore run
-only in `.github/workflows/nightly.yml`. The split between §22's PR-CI items and its
-nightly items is the same split: small manufactured cases, the small pollution test, and
-unit tests in PR CI; full order/resolution/anisotropy scans, larger M3 cases, and
-end-to-end physics regressions nightly. Where a nightly test has a meaningful reduced
-form, the reduced form SHOULD also exist in the not-slow subset, so a regression is seen
-in the PR that causes it rather than the following morning.
+A test that cannot meet the fast caps MUST carry `@pytest.mark.slow` if it remains
+bounded enough for an agent to run while developing the affected subsystem. A parameter
+ladder or benchmark that is scientifically necessary but unsuitable for routine local
+execution MUST instead carry `@pytest.mark.exhaustive`. Merely exceeding a budget does
+not justify either marker: first lower resolution while preserving the claim, share
+solves, compile repeated coefficient expressions, and remove redundant diagnostics.
+
+Every exhaustive family MUST have a fast live sentinel using the same production path
+and scientific gates, including at least one control or mutation-sensitive assertion.
+Where a meaningful intermediate ladder exists, it SHOULD also have a developer-slow
+sentinel. Independent exhaustive rows MUST be separate pytest nodes or modules so the
+scheduled workflow can shard them when serial wall-clock or memory becomes a bottleneck.
+A regression should therefore be detected in the PR that causes it whenever a reduced
+case can detect it; exhaustive CI establishes the full parameter-range claim.
+
+Agents run `make test` throughout development and every touched `slow` test before
+submission. They do not routinely run exhaustive tests locally. A milestone that adds
+an exhaustive test or changes its solver path, inputs, controls, regeneration code, or
+asserted artifact MUST pass a manually dispatched exhaustive workflow on that branch
+before it is marked complete. Intermediate commits need not wait for that workflow.
+
+Checked-in tables remain evidence, not substitutes for live tests. A large table MAY be
+generated only by its committed script; PR CI SHOULD cheaply validate its schema,
+configuration/provenance fields, required controls, and stated trends. Versioned meshes,
+analytic topology data, or restart states MAY be reused when their configuration and
+schema metadata are checked, but a cached or checked-in final solver result MUST NOT
+supply the diagnostic or value asserted by a live test.
 
 The budgets are enforced by review and by the slowest-test report that `make test` emits,
 not by wall-clock assertions inside tests: timing assertions are flaky across machines and
 CI runners, and a suite that fails for being slow on a loaded runner trains agents to
 ignore failures. What is *not* an acceptable way to meet a budget: reducing an expected
 convergence rate, loosening an accuracy tolerance, dropping a mutation-detection check
-(§22, the conspicuous-omission tests), or marking a *failing* test `slow` or `xfail`
-(§26). Reducing resolution, sharing solves across assertions, compiling coefficient
-expressions, and deleting tests that a design change has made irrelevant are acceptable
-and encouraged; `AGENTS.md` gives the working procedure.
+(§22, the conspicuous-omission tests), or marking a *failing* test `slow`, `exhaustive`,
+or `xfail` (§26). Reducing resolution, sharing solves across assertions, compiling
+coefficient expressions, and deleting tests that a design change has made irrelevant are
+acceptable and encouraged; `AGENTS.md` gives the working procedure.
 
 Because these budgets constrain what may be added, a milestone that genuinely needs more
-PR-CI time than the budget allows is an ADR (§26), not a silent overrun.
+fast or developer-slow time than the budget allows is an ADR (§26), not a silent
+overrun. The exhaustive tier is not permission to move a failing test, the only live
+acceptance test, or an avoidably expensive implementation out of sight.
 
 ---
 
@@ -1295,13 +1323,18 @@ installation; ruff format/lint; type checks on the pure-Python API where practic
 tests; small manufactured tests; the small pollution test; a small threaded-execution
 test; checkpoint round-trip; wheel build + `pip install dist/*.whl` smoke test.
 
-The test step is the `not slow` subset and is held to the §22.1 budget.
+The test step is the fast subset (neither `slow` nor `exhaustive`) and is held to the
+§22.1 budget.
 
-**Scheduled CI:** the `slow`-marked tests, run nightly by `make test-full`: anisotropy/
-order scans; full Sovinec measurements; larger M3 tests; axisymmetric end-to-end;
-thread-scaling sanity; memory benchmarks; optional ngsxfem tests; PETSc-branch tests when
-that branch exists. Nightly is the release valve for cost, which makes it the place where
-runtime accumulates unnoticed — hence the per-test and full-suite caps in §22.1.
+**Scheduled CI:** nightly runs `make test-full` on the oldest and newest supported Python
+versions, preserving compatibility coverage for the bounded fast and developer-slow
+suite. A separate canonical Python/NGSolve job runs `make test-exhaustive` once: full
+anisotropy/order/resolution ladders, large three-dimensional and end-to-end physics
+regressions, thread-scaling and memory benchmarks, optional ngsxfem tests, and
+PETSc-branch tests when that branch exists. The exhaustive job has an infrastructure
+timeout rather than a normative laptop budget and SHOULD be sharded by independent
+parameter rows when needed. It is also manually dispatchable against a milestone branch;
+that branch run is required by §22.1 when exhaustive behavior changes.
 
 **Packaging:** `pyproject.toml` declares `ngsolve` as a binary-wheel dependency within a
 tested version range; optional extras `remec[io]`, `remec[xfem]`, `remec[vmec]`,
@@ -1515,8 +1548,10 @@ explicit types on public APIs; keep NGSolve-specific code behind internal module
 report solver tolerances and residual definitions; add a regression test for every
 fixed numerical bug; distinguish algebraic convergence from discretization accuracy;
 preserve restart compatibility or increment the schema version; keep the suite inside the
-§22.1 time budget, marking a test `slow` when it cannot be made cheap and running the
-`slow` tests that touch the code they changed; prefer installed-NGSolve
+§22.1 tier budgets, marking bounded developer tests `slow` and remote-only parameter
+ladders `exhaustive` only after cheaper formulations are exhausted, running the `slow`
+tests that touch the code they changed, and dispatching exhaustive CI when required;
+prefer installed-NGSolve
 reality over this document's API assertions, recording discrepancies in
 `docs/dev_notes.md` (design-level changes require an ADR).
 

@@ -100,7 +100,11 @@ milestone's `STATUS.md` row to `[x]` in that same PR, and opens a PR. `[x]` mean
 milestone is complete in the submitted PR (or merged), so it is not changed again after
 merge. Or stops and drafts an ADR.
 
-**CI:** runs `make check` on Linux and macOS.
+**CI:** runs `make check` on Linux and macOS. Nightly runs the bounded developer suite
+on the oldest and newest Python versions and runs the remote-exhaustive suite once on a
+canonical numerical environment. A milestone agent manually dispatches that exhaustive
+job on its branch only when it changes exhaustive behavior, then continues other work
+while it runs; the green run is required before the milestone PR is review-ready.
 
 **Claude:** reviews the PR against `DESIGN.md` and the note, posts findings inline.
 
@@ -146,8 +150,10 @@ point if a term is missing.
 milestones side by side, and gives you a diff view for the ones you want to skim. You
 don't touch git.
 
-**Codex CLI** for anything you want to script — a nightly batch, a re-run of the full
-verification suite, `codex exec` in a loop.
+**Codex CLI** for anything you want to script — a nightly batch, a re-run of the bounded
+developer suite, `codex exec` in a loop. Prefer the manually dispatched GitHub workflow
+for `make test-exhaustive`; it lets the large 3D ladders run remotely while development
+continues.
 
 **IDE extension:** skip it. It's built around watching the agent work, which is the
 opposite of what you asked for. Install it if you want to hand-edit alongside, not as the

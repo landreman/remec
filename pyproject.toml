@@ -32,7 +32,8 @@ cutcell = [
 testpaths = ["tests"]
 addopts = ["-n", "3", "--dist=loadscope"]
 markers = [
-    "slow: long-running verification or benchmark test",
+    "slow: bounded developer-runnable verification (about 90 seconds per test)",
+    "exhaustive: remote-only large parameter ladder or benchmark",
 ]
 
 [tool.ruff]

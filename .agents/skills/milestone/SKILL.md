@@ -60,18 +60,24 @@ mutations you checked; this goes in the PR body.
 
 Re-run `make check` from a clean venv if you touched packaging.
 
-You do not need `make test-full` here. Run `make test`, plus the `slow` tests that touch
-what you changed:
+You do not need to run all of `make test-full` here. Run `make test`, plus the `slow`
+tests that touch what you changed:
 
 ```bash
 python -m pytest -m slow tests/path/touched_by_this_milestone.py
 ```
 
 Then check the budget (`DESIGN.md` §22.1, `AGENTS.md` "Test speed"): `make test` under
-2 minutes, no single not-slow test over ~20 s in the durations report it prints. If your
+2 minutes, no single fast test over ~20 s in the durations report it prints. If your
 new tests blow it, make them cheaper — lower resolution, shared fixtures, `_compiled()`
 coefficient expressions — before you consider marking anything `slow`. Copy the durations
 tail into the PR body.
+
+Do not run `make test-exhaustive` locally as part of the ordinary loop. If the milestone
+adds an `exhaustive` test or changes its solver path, input grid, controls, regeneration
+script, or asserted table, push the branch and manually dispatch `nightly.yml` against
+that branch. Continue with documentation and other non-dependent work while it runs. Do
+not mark the milestone complete until the exhaustive job is green.
 
 ## 6. Run GitHub Actions CI
 
@@ -101,7 +107,9 @@ PR body must contain, in this order:
 - Measured numbers
 - Mutations verified to turn the suite red
 - `make test` wall-clock and its slowest-test list; which `slow` tests you ran; any test
-  you newly marked `slow`, sped up, or deleted, and why
+  you newly marked `slow` or `exhaustive`, sped up, or deleted, and why
+- The successful exhaustive branch-workflow URL when the change affects exhaustive
+  verification, or "not applicable" with the reason
 - Open ADRs blocking merge, or "none"
 - Anything you were unsure about and want the reviewer to look at hardest
 

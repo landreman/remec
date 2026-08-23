@@ -36,8 +36,9 @@ python -m pip install -e ".[dev]"
 ## Commands
 
 ```bash
-make test          # not-slow subset, the PR-CI gate; prints the 15 slowest tests
-make test-full     # includes slow/nightly-marked tests
+make test          # fast subset, the PR-CI gate; prints the 15 slowest tests
+make test-full     # complete developer suite: fast + slow, not exhaustive
+make test-exhaustive  # every test; normally run by scheduled/manual CI
 make lint          # ruff format --check && ruff check && mypy src/remec
 make check         # lint + test; this is the gate
 ```
@@ -64,7 +65,10 @@ review-ready or submitted milestone as `[~]`.
    numbers, and note anything the next milestone should know. Use `[~]` only while the
    work is genuinely incomplete and not ready for review.
 6. Any NGSolve API surprise is appended to `docs/dev_notes.md`.
-7. The test-time budgets below still hold with the milestone's new tests in place.
+7. The fast and developer-slow test-time budgets below still hold with the milestone's
+   new tests in place.
+8. If the milestone adds or affects exhaustive verification, the exhaustive workflow
+   has passed on the submitted branch and its run is identified in the PR body.
 
 ## Test-first, and tests that can fail
 
@@ -86,27 +90,41 @@ xdist configuration in `pyproject.toml`):
 
 | What | Budget |
 |---|---|
-| `make test` (`-m "not slow"`) | **< 2 min** |
-| any single not-slow test | **< ~20 s** |
-| `make test-full` | **< 5 min** |
+| `make test` (neither `slow` nor `exhaustive`) | **< 2 min** |
+| any single fast test | **< ~20 s** |
+| `make test-full` (all non-`exhaustive` tests) | **< 5 min** |
 | any single `slow` test | **< ~90 s** |
+| `make test-exhaustive` | **remote; no normative laptop cap** |
 
 `make test` prints the 15 slowest tests on every run. Read that list; it is the only
 early warning you get. Nothing fails purely on wall-clock — wall-clock assertions are
 flaky across machines — so the budget is your responsibility, not CI's.
 
-**Marking `slow`.** A test that cannot be brought under the not-slow caps gets
-`@pytest.mark.slow` and runs only in `.github/workflows/nightly.yml` (`make test-full`).
-Prefer marking the *longest* tests, and prefer keeping a cheap version of the same check
-in the not-slow suite: a two-point rate check at low resolution in PR CI, the full
-resolution/anisotropy scan nightly.
+**Marking `slow`.** A test that cannot be brought under the fast caps but remains bounded
+enough to run while developing its subsystem gets `@pytest.mark.slow`. Prefer keeping a
+cheap version of the same check in the fast suite: for example, a two-point rate check at
+low resolution in PR CI and a wider developer-slow scan.
 
-**While working a milestone.** You need not run the whole slow suite. Run `make test`,
-plus every `slow` test that touches the code you changed (`pytest -m slow <path or -k>`),
-and say in the PR body which slow tests you ran. If `make test` is over budget after
-adding your tests, you may mark unrelated slow-but-passing tests `slow` to fit — but
-**never** mark a test `slow` to get a failure out of your way. Marking a failing test
-`slow` is the same offence as `xfail`-ing it (see STOP conditions).
+**Marking `exhaustive`.** A scientifically necessary parameter ladder or benchmark that
+is unsuitable for routine local execution gets `@pytest.mark.exhaustive`, following ADR
+0007. Every exhaustive family MUST retain a fast live sentinel on the same production
+path and gates, including a mutation-sensitive control; add a developer-slow sentinel
+too when a meaningful intermediate ladder exists. Split independent rows into separate
+pytest nodes or modules so remote CI can shard them. The marker is not a way to hide a
+failure or an avoidably expensive implementation.
+
+**While working a milestone.** Run `make test` plus every `slow` test that touches the
+code you changed (`pytest -m slow <path or -k>`), and say in the PR body which slow tests
+you ran. Do not routinely run exhaustive tests locally. If the change adds an exhaustive
+test or affects its solver path, inputs, controls, regeneration code, or asserted
+artifact, push the branch and manually dispatch `.github/workflows/nightly.yml` for that
+branch. Continue non-dependent work while it runs, but do not mark the milestone complete
+or open its review-ready PR until it passes; record the run URL in the PR body.
+
+If `make test` is over budget after adding your tests, you may mark an unrelated
+slow-but-passing test `slow` to fit only when it still has a meaningful fast sentinel.
+Never apply `slow` or `exhaustive` to get a failure out of the way. Moving a failing test
+to either tier is the same offence as `xfail`-ing it (see STOP conditions).
 
 **How to make a test fast**, in the order to try:
 
@@ -125,8 +143,9 @@ adding your tests, you may mark unrelated slow-but-passing tests `slow` to fit �
 
 **Deleting tests.** If a test has been made irrelevant by a code change, an ADR, or a
 change to the development plan, delete it and say so in the PR body. Dead tests cost
-time and mislead reviewers. If it is still meaningful but expensive, mark it `slow`
-instead.
+time and mislead reviewers. If it is still meaningful but expensive, keep the cheapest
+meaningful sentinel locally and place the wider form in the appropriate `slow` or
+`exhaustive` tier.
 
 **Retrofitting old tests.** If your milestone's own tests are lean and the suite is
 still over budget, speed up the slowest existing tests, worst first. When you reduce an
@@ -171,6 +190,8 @@ are not stop conditions. Fix them and record them in `docs/dev_notes.md`.
 - Open the PR with `gh pr create`. The PR body must contain: the milestone number, the
   equations and invariants touched, the acceptance criterion and how it is demonstrated,
   the measured numbers, mutations the tests were verified to catch, and any open ADR.
+  It must also report fast-suite timing, touched slow tests, and the successful branch
+  run URL for exhaustive CI when required.
 - Never merge your own PR. Never force-push to `main`.
 
 ## Reviewing (when acting as reviewer rather than implementer)

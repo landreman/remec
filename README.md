@@ -15,3 +15,8 @@ Create the environment and install the project with pip:
 python3 -m venv .venv  # Python 3.10 or newer
 .venv/bin/python -m pip install -e ".[dev]"
 ```
+
+Verification has three tiers (ADR 0007): `make test` is the fast PR gate,
+`make test-full` adds bounded developer-slow tests, and `make test-exhaustive` includes
+remote-only parameter ladders. Use the scheduled or manually dispatched
+`.github/workflows/nightly.yml` workflow for the exhaustive tier.

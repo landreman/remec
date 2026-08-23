@@ -50,14 +50,23 @@ Diff the tolerances, expected rates, `xfail`/`skip` markers, and CI matrix again
 reasonable the justification sounds.
 
 **6. Did the PR pay its test-time bill?**
-`DESIGN.md` §22.1 budgets `make test` at under 2 minutes and any single not-slow test at
-about 20 seconds. Check the durations report the PR body should quote. New `slow` markers
-are legitimate cost control — unless one was applied to a test that fails, or to the very
-test that demonstrates this milestone's acceptance criterion, either of which is
-blocking. Likewise check that speeding a test up did not quietly cost coverage: a
-resolution reduction that removes a refinement level from a rate fit, drops a mutation
-check, or widens an accuracy tolerance is a finding, and a deleted test needs a stated
-reason (a code change, an ADR, or a plan change that made it irrelevant).
+`DESIGN.md` §22.1 budgets `make test` at under 2 minutes, any single fast test at about
+20 seconds, `make test-full` at under 5 minutes, and any single `slow` test at about
+90 seconds. Check the durations report the PR body should quote. New `slow` and
+`exhaustive` markers are legitimate cost controls only under ADR 0007: the same family
+must retain a live fast sentinel on the production path and scientific gates, including
+a mutation-sensitive control, and should retain a developer-slow sentinel where an
+intermediate ladder is meaningful. Applying either marker to a failing test or using it
+to remove the only live acceptance evidence is blocking.
+
+If exhaustive behavior changed, verify that the PR names a successful manually
+dispatched `nightly.yml` run for the branch. Do not require the author to run
+`make test-exhaustive` locally. Check that independent exhaustive rows can be sharded and
+that no cached/checkpointed final result supplies an asserted diagnostic. Likewise check
+that speeding a test up did not quietly cost coverage: a resolution reduction that
+removes a refinement level from a rate fit, drops a mutation check, or widens an accuracy
+tolerance is a finding, and a deleted test needs a stated reason (a code change, an ADR,
+or a plan change that made it irrelevant).
 
 **7. Undocumented decisions.**
 Anywhere the implementer resolved an ambiguity in the note or the design document
