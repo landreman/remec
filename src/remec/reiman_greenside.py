@@ -1,4 +1,4 @@
-"""Reiman--Greenside analytic magnetic field (milestone 6.2 stub)."""
+"""Reiman--Greenside analytic magnetic field from DESIGN section 8.6."""
 
 from __future__ import annotations
 

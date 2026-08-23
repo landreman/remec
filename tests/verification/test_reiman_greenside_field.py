@@ -78,37 +78,31 @@ def test_m1_analytic_field_error_decreases_systematically_with_order(
     assert errors[-1] < 1.0e-3
 
 
-def test_low_order_m1_field_converges_at_expected_h_rate(m1_rows: dict[int, _Row]) -> None:
-    """The base-order-1 curl field reaches its expected first-order L2 h rate."""
-    coarse = m1_rows[1]
-    cylinder = PeriodicCylinder3D(geometry_order=2, refinements=1)
-    bundle = cylinder.build_mesh()
-    refined_result = build_reiman_greenside_discrete_field(
-        bundle._mesh,
-        ReimanGreensideField(epsilon_1=1.0e-3),
-        order=1,
-    )
-    coarse_volume = float(ng.Integrate(1.0, coarse.mesh, order=10))
-    refined_volume = float(ng.Integrate(1.0, bundle._mesh, order=10))
-    coarse_h = (coarse_volume / coarse.elements) ** (1.0 / 3.0)
-    refined_h = (refined_volume / bundle._mesh.ne) ** (1.0 / 3.0)
-    measured_rate = log(
-        coarse.result.analytic_field_relative_error / refined_result.analytic_field_relative_error
-    ) / log(coarse_h / refined_h)
+def test_low_order_m1_field_converges_at_expected_h_rate() -> None:
+    """An integrable base-order-1 curl field reaches its expected first-order L2 h rate."""
+    # The reference t1=0.38 field is deliberately retained in the p-scan above. Its
+    # coarse unstructured meshes are not yet in the h-asymptotic regime. This auxiliary
+    # nonzero-shear field keeps the same production path while isolating the expected
+    # HDiv(0) first-order refinement behavior.
+    model = ReimanGreensideField(t1=0.01)
+    measured: list[tuple[int, int, float, float]] = []
+    for refinements in (0, 1):
+        cylinder = PeriodicCylinder3D(geometry_order=2, refinements=refinements)
+        bundle = cylinder.build_mesh()
+        result = build_reiman_greenside_discrete_field(bundle._mesh, model, order=1)
+        volume = float(ng.Integrate(1.0, bundle._mesh, order=10))
+        h_eff = (volume / bundle._mesh.ne) ** (1.0 / 3.0)
+        measured.append((refinements, bundle._mesh.ne, h_eff, result.analytic_field_relative_error))
+    coarse, refined = measured
+    measured_rate = log(coarse[3] / refined[3]) / log(coarse[2] / refined[2])
     assert measured_rate > 0.8
 
     with _REFINEMENT_TABLE_PATH.open(newline="", encoding="utf-8") as stream:
         recorded = [row for row in csv.DictReader(stream) if row["platform"] == sys.platform]
-    assert len(recorded) == 2
+    assert len(recorded) == 2, f"missing {sys.platform} refinement rows: {measured!r}"
     actual_rows: tuple[tuple[int, int, float, float, float | None], ...] = (
-        (0, coarse.elements, coarse_h, coarse.result.analytic_field_relative_error, None),
-        (
-            1,
-            bundle._mesh.ne,
-            refined_h,
-            refined_result.analytic_field_relative_error,
-            measured_rate,
-        ),
+        (*coarse, None),
+        (*refined, measured_rate),
     )
     for row, actual in zip(recorded, actual_rows, strict=True):
         refinements, elements, h_eff, error, rate = actual
@@ -169,7 +163,21 @@ def test_m1_order_scan_matches_checked_in_table(m1_rows: dict[int, _Row]) -> Non
             for row in csv.DictReader(stream)
             if row["platform"] == sys.platform
         }
-    assert set(recorded) == set(m1_rows)
+    measured = {
+        order: (
+            actual.elements,
+            actual.hcurl_dofs,
+            actual.hdiv_dofs,
+            actual.result.curl_projection_relative_defect,
+            actual.result.divergence_relative_norm,
+            actual.result.analytic_field_relative_error,
+            actual.result.sampled_magnetic_magnitude_minimum,
+            actual.result.sampled_magnetic_magnitude_maximum,
+            actual.result.b_floor_relative_activity,
+        )
+        for order, actual in m1_rows.items()
+    }
+    assert set(recorded) == set(m1_rows), f"missing {sys.platform} M1 rows: {measured!r}"
     for order, actual in m1_rows.items():
         row = recorded[order]
         assert int(row["elements"]) == actual.elements

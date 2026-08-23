@@ -1,4 +1,4 @@
-"""NGSolve realization of the Reiman--Greenside (M1) field (milestone 6.2 stub)."""
+"""NGSolve realization of the Reiman--Greenside field for note equation (M1)."""
 
 from __future__ import annotations
 

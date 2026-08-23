@@ -56,6 +56,7 @@ def test_mesh_has_named_regions_and_exactly_one_periodic_identification() -> Non
     bundle = cylinder.build_mesh()
     assert bundle.boundary_names == ("wall", "periodic_lower", "periodic_upper")
     assert bundle.periodic_identification_count == 1
+    assert bundle._mesh.ngmesh.GetNrIdentifications() == 1
     assert set(bundle._mesh.GetBoundaries()) == set(bundle.boundary_names)
     assert bundle._mesh.ngmesh.GetIdentifications()
 

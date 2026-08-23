@@ -1,4 +1,4 @@
-"""Periodic circular-cylinder geometry (milestone 6.2 stub)."""
+"""Periodic circular-cylinder geometry selected by ADR 0009."""
 
 from __future__ import annotations
 
@@ -117,10 +117,16 @@ class PeriodicCylinder3D:
             raise RuntimeError(
                 f"periodic cylinder boundaries {actual_boundaries} do not match {expected_boundaries}"
             )
+        identification_count = int(mesh.ngmesh.GetNrIdentifications())
+        if identification_count != 1:
+            raise RuntimeError(
+                "periodic cylinder must contain exactly one Netgen identification, "
+                f"found {identification_count}"
+            )
         return _PeriodicCylinderMeshBundle(
             _mesh=mesh,
             boundary_names=("wall", "periodic_lower", "periodic_upper"),
-            periodic_identification_count=1,
+            periodic_identification_count=identification_count,
             _geometry_owner=(solid, geometry),
         )
 
