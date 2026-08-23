@@ -1,6 +1,6 @@
 # ADR 0008: SciPy dependency for field-line integration
 
-**Status:** Proposed
+**Status:** Accepted
 
 ## Context
 
@@ -12,11 +12,15 @@ O- and X-point locations, and island-width measurements. `DESIGN.md` Sections 8.
 
 SciPy is not currently declared in `pyproject.toml`, and it is not installed in the
 project's existing development environment. NGSolve and NumPy therefore do not provide
-an undeclared transitive SciPy installation that the tracer can safely assume. Adding
-SciPy to the base package is a new base-dependency decision under `AGENTS.md` Section
-"STOP conditions". The decision matters for wheel size and installation support on
-every platform, even though SciPy publishes binary wheels for the project's supported
-CPython versions and supplies the mature adaptive integrators required here.
+an undeclared transitive SciPy installation that the tracer can safely assume. This is
+packaging metadata catching up with an existing architectural decision:
+`DESIGN.md` Section 3.1 says remec **MUST** use NumPy/SciPy for diagnostics, while
+Section 19 requires the diagnostics package to provide a SciPy-ODE field-line tracer.
+Section 26 prohibits PETSc, MPI, JAX, DESC, and SIMSOPT as base dependencies but does
+not prohibit SciPy. Section 7 also anticipates `scipy.constants` in future core SI
+adapters. Declaring SciPy still matters for wheel size and installation support on every
+platform, so the `AGENTS.md` new-base-dependency STOP condition required explicit human
+sign-off.
 
 The numerical acceptance criteria and tolerances for milestone 6.1 are not at issue.
 
@@ -24,7 +28,7 @@ The numerical acceptance criteria and tolerances for milestone 6.1 are not at is
 
 1. **Declare SciPy as a base dependency.** Add a bounded SciPy requirement compatible
    with Python 3.10--3.14 and implement the production tracer with
-   `scipy.integrate.solve_ivp` (initially the explicit high-order `DOP853` method).
+   `scipy.integrate.solve_ivp`; select its method from milestone-6.1 tolerance evidence.
 2. **Make tracing an optional dependency.** Add a `poincare` extra containing SciPy;
    the diagnostics API remains importable without the extra and raises an actionable
    error when tracing is requested.
@@ -45,7 +49,9 @@ Option 2 keeps users who never trace field lines from paying that installation c
 It complicates the public diagnostics contract and permits a normal installation to
 lack a capability required by the Phase-6 plan. CI, examples, and downstream users
 would have to install the extra explicitly, and a missing extra could turn scientific
-coverage into a skip unless tests guard against that.
+coverage into a skip unless tests guard against that. It would also put Section 7's
+future core SI adapter behind a misleading `poincare` extra. Choosing this option would
+require amending the MUST requirements in Sections 3.1 and 19 in the same PR.
 
 Option 3 minimizes third-party dependencies but duplicates mature SciPy functionality.
 It creates extra work to demonstrate local-error control and event accuracy before the
@@ -57,7 +63,9 @@ implementation requirement unless `DESIGN.md` is changed at the same time.
 Choose Option 1. SciPy is a community-familiar scientific dependency consistent with
 ADR 0001, and the tracer is a standard Phase-6 diagnostic rather than an optional file
 format or accelerator. Pin a bounded range only after checking the available releases'
-Python support in the Linux/macOS CI matrix; do not vendor or silently fall back to a
-different integrator.
+Python support in the Linux/macOS CI matrix. The specifier must allow pip to select
+different SciPy minors on Python 3.10 and 3.14 rather than impose one minor that cannot
+support both interpreter endpoints. Do not vendor or silently fall back to a different
+integrator.
 
-DECISION: pending human sign-off
+DECISION: Option 1 approved by the user on 2026-08-22.
