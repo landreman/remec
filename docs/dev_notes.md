@@ -1,5 +1,20 @@
 # NGSolve API notes
 
+- Milestone 6.2 (Netgen/NGSolve 6.2.2606): build a periodic OCC cylinder by naming the
+  lateral face and classifying the two end faces by their axial centers, then call
+  `lower.Identify(upper, name, IdentificationType.PERIODIC,
+  Translation((0, 0, length)))` before `OCCGeometry.GenerateMesh`. `mesh.Curve(order)`
+  and uniform `mesh.Refine()` preserve the identification. `ngsolve.Periodic(base)`
+  retains the base space's `ndof`; the identified slave DOFs are instead removed by
+  `FreeDofs()`, and both sparse-Cholesky and UMFPACK inverses consume that wrapper.
+  Physical constant vectors are not automatically low-order functions of a curved
+  Piola-mapped HDiv space: on the measured geometry-order-3 cylinder, x/y constants
+  become exact at HDiv order 2, while the axial constant requires HDiv order 4 (L2
+  errors below 8e-14 there). Treat lower-order constant-flux defects as approximation
+  error, not a periodic-identification failure. A generic constant vector
+  `CoefficientFunction` still has no `derivname`; transcribe its zero divergence from
+  component `.Diff` calls when an analytic diagnostic needs it.
+
 > Entries for milestones 3.3–3.4 mention `PrescribedCurrentProfile` and the former
 > `u=F(p)+ũ` shift. After the 2026-08-15 model revision those entries remain accurate
 > descriptions of NGSolve expression behavior, but not of the production current-profile

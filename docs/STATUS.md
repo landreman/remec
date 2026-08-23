@@ -756,6 +756,23 @@ numbering.
   <br>ADR 0009 accepted (Option 2, 2026-08-23): curved circular wall with a measured
   geometry-error budget; if the curved de Rham/periodic demonstrations fail, the fallback
   is ADR 0009 Option 3 via an ADR amendment, not a silent switch.
+  <br>Measured (local macOS / CPython 3.12.2 / NGSolve 6.2.2606): geometry orders
+  1→2→4 reduce the coarse-mesh maximum error from 1.235e-1 → 1.550e-3 → 4.468e-5;
+  one refinement reduces the order-4 budget to 6.407e-6. Periodic H¹ direct solves pass
+  with sparse-Cholesky and UMFPACK; high-order periodic H(curl)/H(div) reproduce all
+  three physical constant fluxes below 8e-14. Across base orders 1→4, the relative
+  analytic-B errors are 1.980e-1, 4.013e-2, 8.660e-3, and 4.633e-4; the separate
+  base-order-1 h scan measures rate 0.853 (gate 0.8). The maximum curl-projection defect
+  is 4.62e-14 and maximum relative discrete divergence is 4.52e-13. Sampled |B| is
+  1.00000007–1.20520 with B_floor activity zero; the production H(div) tracer differs
+  from the analytic driven-field transform by 3.039e-4. See
+  `tests/verification/periodic_cylinder_geometry.csv`,
+  `tests/verification/reiman_greenside_m1.csv`, and `docs/verification.md`.
+  <br>Next: milestone 6.3 must compute the selected mesh's live
+  `maximum_relative_error` and enforce ADR 0009's geometry ≤ 0.1×physics-tolerance rule;
+  the current coarse/refined order-4 budgets are 4.468e-5/6.407e-6. Use the public
+  `make_hdiv_field_evaluator` wrap-length gate and the production
+  `ReimanGreensideField`, rather than copying milestone 6.1's private oracle.
 - [ ] **6.3** Frozen-field 3D island benchmark: (M4a)–(M4b) at large anisotropy — `DESIGN.md` §8.6, §12.3, §22 · note: §4.3, §8
   <br>**Phase gate.** Acceptance: solve *only* (M4a)–(M4b) — no (M1), no (M2)–(M3b), no
   Picard — on the 6.2 field with a single m=2 island chain (ε₂=0), and produce all of:
