@@ -10,6 +10,7 @@ from time import perf_counter
 from typing import Any
 
 import numpy as np
+from numpy.typing import NDArray
 
 from remec.common.threads import configure_threads
 from remec.fem._reiman_greenside import reiman_greenside_coefficient_functions
@@ -332,7 +333,7 @@ def _solve_m4(
 
 def _ray_pressure(
     row: _M4Row, config: FrozenFieldIslandConfig, *, angle: float
-) -> tuple[np.ndarray, np.ndarray]:
+) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
     """Sample transplanted ``(M4b)`` pressure along one ``Phi=0`` radial ray."""
     radii = np.linspace(0.0, 0.995, config.ray_samples)
     x = radii * np.cos(angle)
@@ -345,9 +346,9 @@ def _ray_pressure(
 
 
 def _flattening_width(
-    radii: np.ndarray,
-    pressure: np.ndarray,
-    control_pressure: np.ndarray,
+    radii: NDArray[np.float64],
+    pressure: NDArray[np.float64],
+    control_pressure: NDArray[np.float64],
     *,
     resonance_radius: float,
     search_width: float,
@@ -373,7 +374,10 @@ def _flattening_width(
 
 
 def _pressure_drop(
-    radii: np.ndarray, pressure: np.ndarray, resonance_radius: float, island_width: float
+    radii: NDArray[np.float64],
+    pressure: NDArray[np.float64],
+    resonance_radius: float,
+    island_width: float,
 ) -> float:
     """Return the (M4b) pressure drop across the exact island separatrix extrema."""
     lower = max(0.0, resonance_radius - 0.5 * island_width)
