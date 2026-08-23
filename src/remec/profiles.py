@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Protocol, cast
+from typing import TYPE_CHECKING, Literal, Protocol, cast
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
@@ -440,23 +440,64 @@ class TransplantedProfile:
         )
 
 
+def _level_set_normal_metric_sizes(
+    jacobians: NDArray[np.float64],
+    gradients: NDArray[np.float64],
+    determinant_sizes: NDArray[np.float64],
+) -> tuple[NDArray[np.float64], int]:
+    r"""Return ADR-0012 normal widths ``h_n=1/||J^-1 n||``.
+
+    ``J`` maps reference coordinates to physical coordinates and
+    ``n=grad(chi)/|grad(chi)|``. At critical samples, where the normal is undefined,
+    the pre-existing ``|det J|^(1/d)`` width is retained and counted explicitly.
+    """
+    if jacobians.ndim != 3 or jacobians.shape[1] != jacobians.shape[2]:
+        raise ValueError("jacobians must have shape (samples, dimension, dimension)")
+    if gradients.shape != jacobians.shape[:2]:
+        raise ValueError("gradients must have shape (samples, dimension)")
+    if determinant_sizes.shape != (jacobians.shape[0],):
+        raise ValueError("determinant_sizes must have one value per sample")
+    gradient_norms = np.linalg.norm(gradients, axis=1)
+    critical_gate = max(
+        np.finfo(float).tiny,
+        64.0 * np.finfo(float).eps * float(np.max(gradient_norms, initial=0.0)),
+    )
+    regular = gradient_norms > critical_gate
+    sizes = np.asarray(determinant_sizes, dtype=np.float64).copy()
+    if np.any(regular):
+        normals = gradients[regular] / gradient_norms[regular, np.newaxis]
+        reference_normals = np.linalg.solve(jacobians[regular], normals[..., np.newaxis])
+        inverse_scales = np.linalg.norm(reference_normals[..., 0], axis=1)
+        sizes[regular] = 1.0 / inverse_scales
+    if not np.all(np.isfinite(sizes)) or np.any(sizes <= 0.0):
+        raise ValueError("normal metric produced a non-finite or non-positive width")
+    return sizes, int(np.count_nonzero(~regular))
+
+
 def extract_ngsolve_quadrature(
     mesh: ng.Mesh,
     chi: ng.CoefficientFunction,
     gradient: ng.CoefficientFunction,
     *,
     integration_order: int,
+    element_size_mode: Literal["isotropic-determinant", "level-set-normal"] = (
+        "isotropic-determinant"
+    ),
 ) -> QuadratureLevelSetData:
     """Extract FEM quadrature data for ``(mollified_V)`` from an NGSolve mesh.
 
     Each sample uses ``w_i=weight(ip_i)*|det J_i|`` and
-    ``h_i=|det J_i|**(1/d)``. Curved-element geometry is therefore retained rather
-    than replaced by a nodal or element-volume histogram.
+    By default ``h_i=|det J_i|**(1/d)``. ADR 0012's ``level-set-normal`` mode instead
+    uses ``h_n=1/||J^-1 n||`` with ``n=grad(chi)/|grad(chi)|`` and retains the
+    determinant width only at explicitly counted critical samples. Curved-element
+    geometry is retained rather than replaced by a nodal or element-volume histogram.
     """
     import ngsolve as ng
 
     if integration_order < 1:
         raise ValueError("integration_order must be positive")
+    if element_size_mode not in ("isotropic-determinant", "level-set-normal"):
+        raise ValueError("element_size_mode must be isotropic-determinant or level-set-normal")
     weights: list[float] = []
     sizes: list[float] = []
     element_types = {element.type for element in mesh.Elements(ng.VOL)}
@@ -474,16 +515,28 @@ def extract_ngsolve_quadrature(
             sizes.append(measure ** (1.0 / mesh.dim))
     mapped_points = mesh.MapToAllElements(rules, ng.VOL)
     values = np.asarray(chi(mapped_points), dtype=float).reshape(-1)
-    gradients = np.linalg.norm(np.asarray(gradient(mapped_points), dtype=float), axis=1)
+    gradient_vectors = np.asarray(gradient(mapped_points), dtype=float).reshape(-1, mesh.dim)
+    gradients = np.linalg.norm(gradient_vectors, axis=1)
     if len(values) != len(weights):
         raise RuntimeError(
             "NGSolve mapped quadrature ordering does not match element integration rules"
+        )
+    element_sizes = np.asarray(sizes, dtype=float)
+    fallback_count = 0
+    if element_size_mode == "level-set-normal":
+        jacobians = np.asarray(
+            ng.specialcf.JacobianMatrix(mesh.dim)(mapped_points), dtype=float
+        ).reshape(-1, mesh.dim, mesh.dim)
+        element_sizes, fallback_count = _level_set_normal_metric_sizes(
+            jacobians, gradient_vectors, element_sizes
         )
     return QuadratureLevelSetData(
         values=values,
         gradient_magnitudes=gradients,
         weights=np.asarray(weights, dtype=float),
-        element_sizes=np.asarray(sizes, dtype=float),
+        element_sizes=element_sizes,
+        element_size_mode=element_size_mode,
+        critical_metric_fallback_count=fallback_count,
     )
 
 

@@ -37,6 +37,8 @@ class QuadratureLevelSetData:
     gradient_magnitudes: NDArray[np.float64]
     weights: NDArray[np.float64]
     element_sizes: NDArray[np.float64]
+    element_size_mode: str = "isotropic-determinant"
+    critical_metric_fallback_count: int = 0
 
     @property
     def total_volume(self) -> float:
@@ -151,6 +153,8 @@ class MollifiedVolumeMap:
         spatial_width_cells: float,
         minimum_gradient_fraction: float,
         floored_sample_count: int,
+        element_size_mode: str,
+        critical_metric_fallback_count: int,
     ) -> None:
         self._values = values
         self._widths = widths
@@ -164,6 +168,8 @@ class MollifiedVolumeMap:
         self.spatial_width_cells = spatial_width_cells
         self.minimum_gradient_fraction = minimum_gradient_fraction
         self._floored_sample_count = floored_sample_count
+        self.element_size_mode = element_size_mode
+        self.critical_metric_fallback_count = critical_metric_fallback_count
         self._volume_interpolant = _MonotonePchip.build(levels, volumes)
         self._inverse_interpolant = _MonotonePchip.build(volumes[::-1], levels[::-1])
 
@@ -216,6 +222,8 @@ class MollifiedVolumeMap:
             spatial_width_cells=spatial_width_cells,
             minimum_gradient_fraction=minimum_gradient_fraction,
             floored_sample_count=floored_sample_count,
+            element_size_mode=data.element_size_mode,
+            critical_metric_fallback_count=data.critical_metric_fallback_count,
         )
         coarea_error = volume_map.diagnostics()["coarea_spot_relative_error"]
         if coarea_error > coarea_consistency_tolerance:
