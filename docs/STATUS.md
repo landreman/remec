@@ -866,7 +866,9 @@ numbering.
   spike/volume-plateau ratios are 1.226/1.281 with zero critical-safeguard activations.
   `frozen_field_island_benchmark.py` exclusively regenerates the cost/aspect CSVs and
   Poincare/isobar overlay. Local `make check` is green (366 fast tests in 110.52 s) and
-  the touched slow aspect scan is green (55.69 s);
+  the touched slow aspect scan is green (55.69 s); its coarse H1-AMG row takes 43
+  iterations on macOS and 44 with the canonical Linux wheel, while the exact
+  within-platform refinement trend remains decreasing;
   the required complete branch `exhaustive.yml` run is pending before `[x]`. To retain
   the two-minute fast budget, the existing M3 gradient-comparison fast sentinel now
   computes only its central `D_u=0.02` pair (same 24-by-16 resolution and recorded

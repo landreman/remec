@@ -405,3 +405,9 @@
   evaluation. Reshape it to `(samples, dim, dim)` before computing
   `h_n=1/||J^{-1} n||`. The production extractor retains determinant widths only at
   counted samples where the level-set gradient is too small to define `n`.
+
+- Milestone 6.3 H1-AMG portability (NGSolve 6.2.2606): the identical graded-mesh
+  aspect row converged in 43 CG steps with the macOS wheel and 44 with the canonical
+  Linux wheel. Treat the checked-in iteration count as a one-step reproducibility
+  reference while retaining the exact within-platform monotone aspect-scan gate;
+  iteration equality across platform-specific AMG coarsenings is not stable.
