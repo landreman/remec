@@ -515,7 +515,9 @@ def extract_ngsolve_quadrature(
             sizes.append(measure ** (1.0 / mesh.dim))
     mapped_points = mesh.MapToAllElements(rules, ng.VOL)
     values = np.asarray(chi(mapped_points), dtype=float).reshape(-1)
-    gradient_vectors = np.asarray(gradient(mapped_points), dtype=float).reshape(-1, mesh.dim)
+    gradient_vectors = np.asarray(gradient(mapped_points), dtype=float)
+    if gradient_vectors.ndim != 2:
+        raise RuntimeError("NGSolve gradient evaluation must return a sample-by-component array")
     gradients = np.linalg.norm(gradient_vectors, axis=1)
     if len(values) != len(weights):
         raise RuntimeError(
@@ -524,6 +526,10 @@ def extract_ngsolve_quadrature(
     element_sizes = np.asarray(sizes, dtype=float)
     fallback_count = 0
     if element_size_mode == "level-set-normal":
+        if gradient_vectors.shape[1] != mesh.dim:
+            raise ValueError(
+                "level-set-normal widths require a physical gradient with mesh.dim components"
+            )
         jacobians = np.asarray(
             ng.specialcf.JacobianMatrix(mesh.dim)(mapped_points), dtype=float
         ).reshape(-1, mesh.dim, mesh.dim)

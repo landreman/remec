@@ -24,15 +24,27 @@ class FrozenFieldIslandConfig:
     b_floor: float = 1.0e-8
     volume_levels: int = 65
     ray_samples: int = 257
+    angular_cells: int = 12
+    axial_cells: int = 2
+    background_radial_width: float = 0.125
+    direct_dof_threshold: int = 20_000
+    pollution_direct_dof_threshold: int = 100_000
+    flattening_gradient_fraction: float = 0.97
 
     def __post_init__(self) -> None:
         for name, value in (
             ("epsilon_kappa", self.epsilon_kappa),
             ("max_element_size", self.max_element_size),
             ("b_floor", self.b_floor),
+            ("background_radial_width", self.background_radial_width),
         ):
             if not isfinite(value) or value <= 0.0:
                 raise ValueError(f"{name} must be finite and positive")
+        if (
+            not isfinite(self.flattening_gradient_fraction)
+            or not 0.0 < self.flattening_gradient_fraction < 1.0
+        ):
+            raise ValueError("flattening_gradient_fraction must be finite and in (0, 1)")
         if not isfinite(self.epsilon_1) or self.epsilon_1 < 0.0:
             raise ValueError("epsilon_1 must be finite and non-negative")
         if self.epsilon_1 >= (1.0 - 2.0 * 0.29) / 4.0:
@@ -44,6 +56,10 @@ class FrozenFieldIslandConfig:
             ("min_layer_cells", self.min_layer_cells, 1),
             ("volume_levels", self.volume_levels, 17),
             ("ray_samples", self.ray_samples, 65),
+            ("angular_cells", self.angular_cells, 8),
+            ("axial_cells", self.axial_cells, 2),
+            ("direct_dof_threshold", self.direct_dof_threshold, 1),
+            ("pollution_direct_dof_threshold", self.pollution_direct_dof_threshold, 1),
         ):
             if isinstance(value, bool) or not isinstance(value, int):
                 raise TypeError(f"{name} must be an integer")
@@ -51,6 +67,8 @@ class FrozenFieldIslandConfig:
                 raise ValueError(f"{name} must be at least {minimum}")
         if self.geometry_order > 4:
             raise ValueError("geometry_order must not exceed the verified order four")
+        if self.angular_cells % 2:
+            raise ValueError("angular_cells must be even")
 
 
 @dataclass(frozen=True, slots=True)

@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-from remec.solvers.frozen_field_island import critical_layer_width, exact_island_width
+from remec.solvers.frozen_field_island import (
+    FrozenFieldIslandConfig,
+    critical_layer_width,
+    exact_island_width,
+)
 
 
 def test_reiman_greenside_widths_are_derived_from_the_hamiltonian_balance() -> None:
@@ -26,3 +30,10 @@ def test_width_formulas_reject_nonphysical_inputs() -> None:
         exact_island_width(epsilon_1=-1.0)
     with pytest.raises(ValueError):
         critical_layer_width(epsilon_kappa=0.0, resonance_radius=0.7)
+
+
+@pytest.mark.parametrize("fraction", [0.0, 1.0, float("nan")])
+def test_flattening_fraction_must_be_a_strict_finite_ratio(fraction: float) -> None:
+    """The stated pressure-gradient flattening criterion cannot become vacuous."""
+    with pytest.raises(ValueError, match="flattening_gradient_fraction"):
+        FrozenFieldIslandConfig(epsilon_kappa=1.0e-4, flattening_gradient_fraction=fraction)

@@ -232,6 +232,19 @@ def test_normal_metric_quadrature_extraction_reports_critical_point_fallback() -
     assert np.all(critical.element_sizes > 0.0)
 
 
+def test_isotropic_quadrature_extraction_retains_embedded_gradient_components() -> None:
+    """A 2D mesh may carry the three-component gradients used by the M3 geometry."""
+    mesh = MakeStructured2DMesh(quads=False, nx=2, ny=2)
+    data = extract_ngsolve_quadrature(
+        mesh,
+        ng.x + ng.y,
+        ng.CoefficientFunction((1.0, 1.0, 0.0)),
+        integration_order=2,
+    )
+    assert data.values.size == data.gradient_magnitudes.size == data.element_sizes.size
+    np.testing.assert_allclose(data.gradient_magnitudes, np.sqrt(2.0))
+
+
 def test_circle_transplant_matches_exact_layer_cake_moment() -> None:
     """A radial (M4b) transplant has the analytic first layer-cake moment."""
     nodes, weights_1d = np.polynomial.legendre.leggauss(128)

@@ -246,7 +246,10 @@ class MollifiedVolumeMap:
         )
         values, gradients, weights, sizes = arrays
         if not values.size or len({array.size for array in arrays}) != 1:
-            raise ValueError("quadrature arrays must be non-empty and have equal length")
+            raise ValueError(
+                "quadrature arrays must be non-empty and have equal length; got "
+                f"{tuple(array.size for array in arrays)}"
+            )
         if not all(np.all(np.isfinite(array)) for array in arrays):
             raise ValueError("quadrature arrays must be finite")
         if np.any(gradients < 0.0) or np.any(weights <= 0.0) or np.any(sizes <= 0.0):
