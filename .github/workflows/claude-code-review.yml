@@ -2,7 +2,10 @@ name: Claude Code Review
 
 on:
   pull_request:
-    types: [opened, synchronize, ready_for_review, reopened]
+    # Deliberately excludes "opened" (fires even for draft PRs) and "synchronize"
+    # (fires on every push). Open PRs as draft and call `gh pr ready` only when a
+    # review pass is actually wanted; see .agents/skills/milestone/SKILL.md.
+    types: [ready_for_review, reopened]
     # Optional: Only run on specific file changes
     # paths:
     #   - "src/**/*.ts"

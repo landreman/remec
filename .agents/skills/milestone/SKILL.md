@@ -109,7 +109,16 @@ Append any NGSolve API discoveries to `docs/dev_notes.md`. Update
 ## 8. Open the PR
 
 ```bash
-gh pr create --fill
+gh pr create --fill --draft
+```
+
+Open it as a **draft**. `claude-code-review.yml` triggers only on `ready_for_review`
+(and `reopened`) — not on `opened` or on every push — so a draft PR, and any commits you
+push while it stays draft, does not consume a review. Mark it ready only when you want a
+Claude Code review pass (step 9):
+
+```bash
+gh pr ready <number>
 ```
 
 PR body must contain, in this order:
@@ -128,9 +137,36 @@ PR body must contain, in this order:
 
 ## 9. Fix serious issues raised by Claude review
 
-Periodically check for the `claude-review` workflow run. For everything that it flags as `blocking` or `should-fix`, fix it, push, and iterate until the review is satisfied. For items flagged as `note`, it is up to your judgement whether to address them or not. If you disagree with a finding, write an ADR and mark it in the PR body.
+The review only runs when the PR transitions to ready-for-review, so trigger it
+explicitly once the PR is in the state you want reviewed:
 
-Once the `claude-review` workflow produces no `blocking` or `should-fix` findings, then stop. Do not merge. Do not start the next milestone.
+```bash
+gh pr ready <number>
+```
+
+Periodically check for the `claude-review` workflow run. For everything that it flags as
+`blocking` or `should-fix`, fix it. Before pushing more commits that you don't want
+reviewed immediately (e.g. you're still iterating on the same round of fixes), convert
+the PR back to draft so the pushes don't get seen as "ready" by anyone watching the PR
+state:
+
+```bash
+gh pr ready <number> --undo
+```
+
+Push your fixes, then mark it ready again to trigger the next review pass:
+
+```bash
+gh pr ready <number>
+```
+
+Iterate until the review is satisfied. For items flagged as `note`, it is up to your
+judgement whether to address them or not. If you disagree with a finding, write an ADR
+and mark it in the PR body.
+
+Once the `claude-review` workflow produces no `blocking` or `should-fix` findings, then
+stop, leaving the PR marked ready for review. Do not merge. Do not start the next
+milestone.
 
 ## If you hit a STOP condition
 
