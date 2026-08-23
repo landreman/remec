@@ -76,8 +76,30 @@ class PeriodicCylinder3D:
         """Return the identified axial length ``2*pi*R0``."""
         return 2.0 * pi * self.major_radius
 
-    def build_mesh(self) -> _PeriodicCylinderMeshBundle:
-        """Build the curved periodic tetrahedral mesh selected by ADR 0009."""
+    def build_mesh(
+        self,
+        *,
+        local_refinement_radius: float | None = None,
+        local_refinement_half_width: float | None = None,
+    ) -> _PeriodicCylinderMeshBundle:
+        """Build the curved periodic tetrahedral mesh selected by ADR 0009.
+
+        When a radius and half-width are supplied, ``refinements`` marks only elements
+        intersecting that annulus before each refinement pass.  Milestone 6.3 uses this
+        shell grading to resolve ``w_c`` without uniformly refining the long cylinder.
+        """
+        if (local_refinement_radius is None) != (local_refinement_half_width is None):
+            raise ValueError("local refinement requires both radius and half-width")
+        if local_refinement_radius is not None and (
+            not isfinite(local_refinement_radius)
+            or local_refinement_radius < 0.0
+            or local_refinement_radius > self.radius
+        ):
+            raise ValueError("local refinement radius must lie in the cylinder")
+        if local_refinement_half_width is not None and (
+            not isfinite(local_refinement_half_width) or local_refinement_half_width <= 0.0
+        ):
+            raise ValueError("local refinement half-width must be finite and positive")
         import ngsolve as ng  # type: ignore[import-untyped]
         from netgen.occ import (  # type: ignore[import-untyped]
             Cylinder,
@@ -117,6 +139,17 @@ class PeriodicCylinder3D:
         # Refine the straight mesh before curving: curving first leaves newly refined
         # children with order-one geometry and destroys the ADR-0009 refinement scan.
         for _ in range(self.refinements):
+            if local_refinement_radius is not None:
+                assert local_refinement_half_width is not None
+                lower = max(0.0, local_refinement_radius - local_refinement_half_width)
+                upper = min(self.radius, local_refinement_radius + local_refinement_half_width)
+                for element in mesh.Elements(ng.VOL):
+                    radii = [
+                        (mesh[vertex].point[0] ** 2 + mesh[vertex].point[1] ** 2) ** 0.5
+                        for vertex in element.vertices
+                    ]
+                    intersects_shell = min(radii) <= upper and max(radii) >= lower
+                    mesh.SetRefinementFlag(ng.ElementId(ng.VOL, element.nr), intersects_shell)
             mesh.Refine()
         mesh.Curve(self.geometry_order)
         actual_boundaries = set(mesh.GetBoundaries())
