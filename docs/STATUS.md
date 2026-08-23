@@ -762,12 +762,18 @@ numbering.
   with sparse-Cholesky and UMFPACK; high-order periodic H(curl)/H(div) reproduce all
   three physical constant fluxes below 8e-14. Across base orders 1→4, the relative
   analytic-B errors are 1.980e-1, 4.013e-2, 8.660e-3, and 4.633e-4; the separate
-  periodic H¹(3) manufactured h scan measures L² rate 4.022 (gate 3.5). The maximum curl-projection defect
-  is 4.62e-14 and maximum relative discrete divergence is 4.52e-13. Sampled |B| is
+  periodic H¹(3) manufactured h scan measures L² rates 4.022 on macOS and 3.747 on
+  Linux (gate 3.5). The maximum curl-projection defect is 4.62e-14 and maximum relative
+  discrete divergence is 4.52e-13. Sampled |B| is
   1.00000007–1.20520 with B_floor activity zero; the production H(div) tracer differs
-  from the analytic driven-field transform by 3.039e-4. See
+  from the analytic driven-field transform by 3.039e-4. Final local `make check`: 353
+  tests in 103.89 s; slowest test 19.92 s. See
   `tests/verification/periodic_cylinder_geometry.csv`,
   `tests/verification/reiman_greenside_m1.csv`, and `docs/verification.md`.
+  <br>Blocked: ADR 0010 records that NGSolve's periodic curved-HCurl `GridFunction.Set`
+  path preserves the discrete de Rham identities but does not deliver the expected
+  reference-field h rate; a human must choose a global commuting projection, a mixed
+  reconstruction, or an explicit amendment of the convergence-evidence contract.
   <br>Next: milestone 6.3 must compute the selected mesh's live
   `maximum_relative_error` and enforce ADR 0009's geometry ≤ 0.1×physics-tolerance rule;
   the current coarse/refined order-4 budgets are 4.468e-5/6.407e-6. Use the public
