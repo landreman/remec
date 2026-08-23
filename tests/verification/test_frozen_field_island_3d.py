@@ -30,6 +30,8 @@ def test_fast_frozen_field_island_row_runs_the_production_m4_path() -> None:
             geometry_order=4,
             angular_cells=12,
             axial_cells=2,
+            volume_levels=25,
+            ray_samples=97,
         )
     )
 
@@ -44,10 +46,13 @@ def test_fast_frozen_field_island_row_runs_the_production_m4_path() -> None:
     assert result.diagnostics["mesh_family"] == "graded-extruded-tetrahedral"
     assert result.diagnostics["mollifier_element_size_mode"] == "level-set-normal"
     assert result.diagnostics["layer_cells"] >= 6.0
-    assert result.diagnostics["island_flattening_width"] <= result.critical_width
-    assert result.diagnostics["integrable_flattening_width"] <= result.critical_width
-    assert result.diagnostics["isotropic_flattening_width"] <= result.critical_width
-    assert result.diagnostics["subcritical_flattening_width"] <= result.critical_width
+    assert result.diagnostics["island_flattening_width"] == 0.0
+    assert result.diagnostics["integrable_flattening_width"] == 0.0
+    assert result.diagnostics["isotropic_flattening_width"] == 0.0
+    assert result.diagnostics["subcritical_flattening_width"] == 0.0
+    assert result.diagnostics["conservative_flux_relative_correction"] < 1.0
+    assert result.diagnostics["conservative_flux_divergence_relative_error"] < 0.2
+    assert result.diagnostics["volume_averaged_dp_ds"] == pytest.approx(-1.0, abs=1.0e-12)
     assert (
         abs(
             result.diagnostics["island_pressure_drop"]
@@ -151,6 +156,7 @@ def test_frozen_field_cost_table_has_required_provenance_and_live_gates() -> Non
     with _COST_TABLE_PATH.open(newline="", encoding="utf-8") as stream:
         rows = list(csv.DictReader(stream))
     required = {
+        "source_commit",
         "elements",
         "h1_dofs",
         "polynomial_order",
@@ -159,8 +165,12 @@ def test_frozen_field_cost_table_has_required_provenance_and_live_gates() -> Non
         "peak_memory_megabytes",
         "linear_solver_path",
         "iteration_count",
+        "conservative_flux_relative_correction",
+        "conservative_flux_divergence_relative_error",
+        "volume_averaged_dp_ds",
     }
     assert required <= set(rows[0])
+    assert len({row["source_commit"] for row in rows}) == 1
     assert [
         (float(row["epsilon_kappa"]), int(row["angular_cells"]), int(row["axial_cells"]))
         for row in rows
@@ -170,6 +180,7 @@ def test_frozen_field_cost_table_has_required_provenance_and_live_gates() -> Non
         (1.0e-4, 24, 4),
         (1.0e-4, 36, 6),
         (1.0e-4, 48, 8),
+        (1.0e-5, 36, 4),
     ]
     assert {row["linear_solver_path"] for row in rows} == {
         "direct:sparsecholesky",
@@ -193,25 +204,36 @@ def test_graded_mesh_aspect_scan_controls_pollution_and_iterations() -> None:
                 polynomial_order=2,
                 angular_cells=angular_cells,
                 axial_cells=axial_cells,
+                axial_spacing_amplitude=amplitude,
                 direct_dof_threshold=1,
             )
         )
-        for angular_cells, axial_cells in ((12, 2), (24, 4))
+        for angular_cells, axial_cells, amplitude in ((24, 4, 0.0), (24, 4, 0.5))
     ]
     aspects = [float(row.diagnostics["maximum_target_aspect_ratio"]) for row in rows]
     pollution = [float(row.diagnostics["pollution_ratio"]) for row in rows]
     iterations = [int(row.diagnostics["iteration_count"]) for row in rows]
 
-    assert aspects[0] > 1.9 * aspects[1]
-    assert pollution[1] < pollution[0] < 0.1
-    assert 0 < iterations[1] <= iterations[0]
+    assert aspects[1] > 1.1 * aspects[0]
+    assert max(pollution) < 0.1
+    assert abs(pollution[1] - pollution[0]) / pollution[0] < 0.01
+    assert 0 < iterations[0] <= iterations[1]
+    assert rows[0].diagnostics["elements"] == rows[1].diagnostics["elements"]
+    assert rows[0].diagnostics["h1_dofs"] == rows[1].diagnostics["h1_dofs"]
     assert all(row.diagnostics["linear_solver_path"] == "iterative:cg-h1amg" for row in rows)
 
     with _ASPECT_TABLE_PATH.open(newline="", encoding="utf-8") as stream:
         recorded = list(csv.DictReader(stream))
-    assert [(int(row["angular_cells"]), int(row["axial_cells"])) for row in recorded] == [
-        (12, 2),
-        (24, 4),
+    assert [
+        (
+            int(row["angular_cells"]),
+            int(row["axial_cells"]),
+            float(row["axial_spacing_amplitude"]),
+        )
+        for row in recorded
+    ] == [
+        (24, 4, 0.0),
+        (24, 4, 0.5),
     ]
     for actual, expected in zip(rows, recorded, strict=True):
         assert actual.diagnostics["elements"] == int(expected["elements"])
@@ -228,47 +250,73 @@ def test_graded_mesh_aspect_scan_controls_pollution_and_iterations() -> None:
         assert abs(actual.diagnostics["iteration_count"] - int(expected["iteration_count"])) <= 1
 
 
+def _exhaustive_row(epsilon_kappa: float, angular_cells: int, axial_cells: int):
+    return FrozenFieldIslandSolver().solve(
+        FrozenFieldIslandConfig(
+            epsilon_kappa=epsilon_kappa,
+            epsilon_1=1.0e-3,
+            polynomial_order=2,
+            geometry_order=4,
+            angular_cells=angular_cells,
+            axial_cells=axial_cells,
+        )
+    )
+
+
 @pytest.mark.exhaustive
 @pytest.mark.sentinel("frozen_field_island_3d")
-def test_full_frozen_field_island_ladder_recomputes_every_diagnostic() -> None:
-    """The remote ladder crosses the max(w_island,w_c) threshold with live solves."""
-    rows = [
-        FrozenFieldIslandSolver().solve(
-            FrozenFieldIslandConfig(
-                epsilon_kappa=epsilon_kappa,
-                epsilon_1=1.0e-3,
-                polynomial_order=2,
-                geometry_order=4,
-                angular_cells=angular_cells,
-                axial_cells=axial_cells,
-            )
+@pytest.mark.parametrize(
+    ("epsilon_kappa", "angular_cells", "axial_cells"),
+    ((1.0e-2, 12, 2), (1.0e-3, 24, 4), (1.0e-4, 24, 4)),
+)
+def test_independent_frozen_field_rows_recompute_live_gates(
+    epsilon_kappa: float, angular_cells: int, axial_cells: int
+) -> None:
+    """Independent ladder rows are separate remote-shardable pytest nodes."""
+    row = _exhaustive_row(epsilon_kappa, angular_cells, axial_cells)
+    assert row.diagnostics["pollution_ratio"] < 0.1
+    assert row.diagnostics["layer_cells"] >= 6.0
+    assert row.diagnostics["total_power_relative_error"] < 5.0e-2
+    assert row.diagnostics["integrable_flattening_width"] == 0.0
+    assert row.diagnostics["isotropic_flattening_width"] == 0.0
+    assert row.diagnostics["subcritical_flattening_width"] == 0.0
+    assert row.diagnostics["volume_averaged_dp_ds"] == pytest.approx(-1.0, abs=1.0e-12)
+    if epsilon_kappa == 1.0e-3:
+        assert row.diagnostics["island_flattening_width"] == 0.0
+    if epsilon_kappa == 1.0e-4:
+        assert row.diagnostics["island_pressure_drop"] < (
+            0.98 * row.diagnostics["integrable_pressure_drop"]
         )
-        for epsilon_kappa, angular_cells, axial_cells in (
-            (1.0e-2, 12, 2),
-            (1.0e-3, 24, 4),
-            (1.0e-4, 24, 4),
-            (1.0e-4, 36, 6),
-            (1.0e-4, 48, 8),
-        )
-    ]
 
-    assert all(row.diagnostics["pollution_ratio"] < 0.1 for row in rows)
-    assert all(row.diagnostics["layer_cells"] >= 6.0 for row in rows)
-    assert all(row.diagnostics["total_power_relative_error"] < 5.0e-2 for row in rows)
-    assert rows[1].diagnostics["island_flattening_width"] == 0.0
-    assert rows[-1].diagnostics["island_flattening_width"] == pytest.approx(
-        rows[-1].island_width, rel=0.2
+
+@pytest.mark.exhaustive
+@pytest.mark.sentinel("frozen_field_island_3d")
+def test_frozen_field_refinement_pair_converges_and_localizes_vchi() -> None:
+    """The only coupled rows gate refinement motion and island-local Vchi structure."""
+    coarse = _exhaustive_row(1.0e-4, 36, 6)
+    fine = _exhaustive_row(1.0e-4, 48, 8)
+    assert fine.diagnostics["island_flattening_width"] == pytest.approx(
+        coarse.diagnostics["island_flattening_width"], rel=0.1
     )
-    assert rows[-1].diagnostics["island_flattening_width"] == pytest.approx(
-        rows[-2].diagnostics["island_flattening_width"], rel=0.1
+    assert fine.diagnostics["coarea_spike_ratio"] > 1.15
+    assert fine.diagnostics["volume_plateau_ratio"] > 1.1
+    assert fine.diagnostics["island_level_mollifier_width"] > 0.0
+    assert (
+        fine.diagnostics["conservative_flux_relative_correction"]
+        < coarse.diagnostics["conservative_flux_relative_correction"]
     )
-    assert rows[2].diagnostics["island_pressure_drop"] < (
-        0.98 * rows[2].diagnostics["integrable_pressure_drop"]
-    )
-    for row in rows:
-        assert row.diagnostics["integrable_flattening_width"] == 0.0
-        assert row.diagnostics["isotropic_flattening_width"] == 0.0
-        assert row.diagnostics["subcritical_flattening_width"] == 0.0
-    assert rows[-1].diagnostics["coarea_spike_ratio"] > 1.15
-    assert rows[-1].diagnostics["volume_plateau_ratio"] > 1.1
-    assert rows[-1].diagnostics["critical_safeguard_samples"] >= 0
+
+
+@pytest.mark.exhaustive
+@pytest.mark.sentinel("frozen_field_island_3d")
+def test_lower_decade_flattening_is_threshold_robust() -> None:
+    """At epsilon_kappa=1e-5 saturation is not tuned to the 0.97 definition."""
+    row = _exhaustive_row(1.0e-5, 36, 4)
+    assert row.diagnostics["pollution_ratio"] < 0.1
+    assert row.diagnostics["layer_cells"] >= 6.0
+    for key in (
+        "island_flattening_width_fraction_095",
+        "island_flattening_width_fraction_097",
+        "island_flattening_width_fraction_099",
+    ):
+        assert row.diagnostics[key] == pytest.approx(row.island_width, rel=0.15)

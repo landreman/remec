@@ -209,6 +209,7 @@ class PeriodicCylinder3D:
         angular_cells: int,
         axial_cells: int,
         background_radial_width: float = 0.125,
+        axial_spacing_amplitude: float = 0.0,
     ) -> _PeriodicCylinderMeshBundle:
         """Build the accepted ADR-0011 extrude-then-split graded tetrahedral mesh.
 
@@ -237,6 +238,8 @@ class PeriodicCylinder3D:
             raise ValueError("angular_cells must be even for the periodic tetrahedral split")
         if not isfinite(background_radial_width) or background_radial_width <= 0.0:
             raise ValueError("background_radial_width must be finite and positive")
+        if not isfinite(axial_spacing_amplitude) or not 0.0 <= axial_spacing_amplitude < 1.0:
+            raise ValueError("axial_spacing_amplitude must be finite and in [0, 1)")
 
         from math import ceil, cos, dist, sin, tau
 
@@ -325,7 +328,10 @@ class PeriodicCylinder3D:
         point_ids: dict[tuple[int, int, int], Any] = {}
         coordinates: dict[tuple[int, int, int], tuple[float, float, float]] = {}
         for axial_index in range(axial_cells + 1):
-            axial_coordinate = self.periodic_length * axial_index / axial_cells
+            axial_fraction = axial_index / axial_cells
+            axial_coordinate = self.periodic_length * (
+                axial_fraction + axial_spacing_amplitude * sin(tau * axial_fraction) / tau
+            )
             key = (axial_index, 0, 0)
             coordinates[key] = (0.0, 0.0, axial_coordinate)
             point_ids[key] = netgen_mesh.Add(MeshPoint(MeshPointCoordinate(*coordinates[key])))

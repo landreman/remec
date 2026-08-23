@@ -374,7 +374,10 @@ def _flattening_width(
             upper += 1
         widest = max(widest, float(radii[upper] - radii[lower]))
         lower = upper + 1
-    return widest
+    # Short islands occur from centered-difference/ray interpolation noise on the p=1
+    # sentinel. Require five sample intervals before reporting a physical width.
+    sampling_floor = 5.0 * float(radii[1] - radii[0])
+    return 0.0 if widest < sampling_floor else widest
 
 
 def _pressure_drop(
@@ -429,6 +432,7 @@ def run_frozen_field_island(
         angular_cells=config.angular_cells,
         axial_cells=config.axial_cells,
         background_radial_width=config.background_radial_width,
+        axial_spacing_amplitude=config.axial_spacing_amplitude,
     )
     geometry = cylinder.measure_geometry(bundle)
     if geometry.minimum_mapped_jacobian_ratio <= 0.02:
@@ -485,6 +489,17 @@ def run_frozen_field_island(
         search_width=search_width,
         gradient_fraction=config.flattening_gradient_fraction,
     )
+    flattening_sensitivity = {
+        fraction: _flattening_width(
+            radii,
+            o_pressure,
+            integrable_pressure,
+            resonance_radius=resonance,
+            search_width=search_width,
+            gradient_fraction=fraction,
+        )
+        for fraction in (0.95, 0.97, 0.99)
+    }
     integrable_flattening = _flattening_width(
         radii,
         integrable_pressure,
@@ -509,21 +524,47 @@ def run_frozen_field_island(
         search_width=search_width,
         gradient_fraction=config.flattening_gradient_fraction,
     )
-    densities = np.asarray(
-        [main.volume_map.coarea_density(float(level)) for level in main.volume_map.levels[1:-1]]
+    island_level = float(main.field(main.mesh(0.0, resonance, 0.0)))
+    island_volume_coordinate = float(main.volume_map.evaluate_volume_coordinate(island_level))
+    control_island_level = float(integrable.volume_map.inverse_level(island_volume_coordinate))
+    coarea_spike_ratio = main.volume_map.coarea_density(island_level) / max(
+        integrable.volume_map.coarea_density(control_island_level), np.finfo(float).tiny
     )
-    positive_densities = densities[densities > 0.0]
-    coarea_spike_ratio = float(
-        np.max(positive_densities) / max(np.median(positive_densities), np.finfo(float).tiny)
+    volume_step = min(0.02, island_volume_coordinate, 1.0 - island_volume_coordinate)
+    if volume_step <= 0.0:
+        raise RuntimeError("island level lies at a level-set-volume endpoint")
+    main_level_span = abs(
+        float(main.volume_map.inverse_level(island_volume_coordinate - volume_step))
+        - float(main.volume_map.inverse_level(island_volume_coordinate + volume_step))
+    )
+    control_level_span = abs(
+        float(integrable.volume_map.inverse_level(island_volume_coordinate - volume_step))
+        - float(integrable.volume_map.inverse_level(island_volume_coordinate + volume_step))
+    )
+    volume_plateau_ratio = control_level_span / max(main_level_span, np.finfo(float).tiny)
+    sample_s = main.volume_map.quadrature_normalized_volume
+    closest = np.argpartition(
+        np.abs(sample_s - island_volume_coordinate), min(31, len(sample_s) - 1)
+    )[: min(32, len(sample_s))]
+    island_level_mollifier_width = float(
+        np.median(main.volume_map.quadrature_normalized_mollifier_widths[closest])
     )
     volume_diagnostics = main.volume_map.diagnostics()
-    level_spacings = np.diff(main.volume_map.levels)
-    volume_plateau_ratio = float(np.max(level_spacings) / np.median(level_spacings))
     numerical_perpendicular = _measure_rank_one_pollution(
         bundle._mesh, integrable_model, config, profile
     )
     pollution_ratio = numerical_perpendicular / config.epsilon_kappa
     resonant_radial_width = bundle.maximum_target_radial_projection
+    volume_weights = main.volume_map.quadrature_weights
+    volume_averaged_dp_ds = float(
+        np.sum(
+            np.asarray(
+                profile.derivative(main.volume_map.quadrature_normalized_volume), dtype=float
+            )
+            * volume_weights
+        )
+        / np.sum(volume_weights)
+    )
 
     diagnostics: dict[str, float | int | str | bool] = {
         "equations": "M4a-M4b",
@@ -549,6 +590,7 @@ def run_frozen_field_island(
         ),
         "pressure_minimum": main.pressure_minimum,
         "pressure_maximum": main.pressure_maximum,
+        "volume_averaged_dp_ds": volume_averaged_dp_ds,
         "local_resonant_element_width": resonant_radial_width,
         "layer_cells": critical_width / resonant_radial_width,
         "layer_is_resolved": critical_width / resonant_radial_width >= config.min_layer_cells,
@@ -560,6 +602,9 @@ def run_frozen_field_island(
         "subcritical_flattening_width": subcritical_flattening,
         "subcritical_island_width": subcritical_width,
         "flattening_gradient_fraction": config.flattening_gradient_fraction,
+        "island_flattening_width_fraction_095": flattening_sensitivity[0.95],
+        "island_flattening_width_fraction_097": flattening_sensitivity[0.97],
+        "island_flattening_width_fraction_099": flattening_sensitivity[0.99],
         "island_pressure_drop": _pressure_drop(radii, o_pressure, resonance, island_width),
         "x_ray_pressure_drop": _pressure_drop(radii, x_pressure, resonance, island_width),
         "integrable_pressure_drop": _pressure_drop(
@@ -570,6 +615,8 @@ def run_frozen_field_island(
         ),
         "coarea_spike_ratio": coarea_spike_ratio,
         "volume_plateau_ratio": volume_plateau_ratio,
+        "island_level_volume_coordinate": island_volume_coordinate,
+        "island_level_mollifier_width": island_level_mollifier_width,
         "critical_safeguard_samples": int(volume_diagnostics["floored_sample_count"]),
         "minimum_mollifier_width": volume_diagnostics["minimum_mollifier_width"],
         "maximum_mollifier_width": volume_diagnostics["maximum_mollifier_width"],

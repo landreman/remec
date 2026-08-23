@@ -29,7 +29,7 @@ test-full:
 # Complete remote verification, including exhaustive 3D ladders and benchmarks.
 # This has no normative laptop wall-clock cap; use .github/workflows/exhaustive.yml.
 test-exhaustive:
-	python -m pytest -n $(EXHAUSTIVE_WORKERS) --durations=40 $(PYTEST_ARGS)
+	python -m pytest -n $(EXHAUSTIVE_WORKERS) --dist=load --durations=40 $(PYTEST_ARGS)
 
 # Formatting, linting, types
 lint:

@@ -1,6 +1,6 @@
 # ADR 0012: Anisotropic mollifier width for M4b
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Date:** 2026-08-23
 

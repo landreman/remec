@@ -8,9 +8,12 @@ from __future__ import annotations
 
 import argparse
 import csv
+import multiprocessing as mp
 import os
+import subprocess
 import tempfile
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -32,13 +35,14 @@ ASPECT_TABLE = VERIFICATION / "frozen_field_island_aspect_scan.csv"
 COST_TABLE = VERIFICATION / "frozen_field_island_cost.csv"
 OVERLAY = VERIFICATION / "frozen_field_island_overlay.png"
 
-ASPECT_CONFIGS = ((12, 2), (24, 4))
+ASPECT_CONFIGS = ((24, 4, 0.0), (24, 4, 0.5))
 LADDER_CONFIGS = (
     (1.0e-2, 12, 2),
     (1.0e-3, 24, 4),
     (1.0e-4, 24, 4),
     (1.0e-4, 36, 6),
     (1.0e-4, 48, 8),
+    (1.0e-5, 36, 4),
 )
 
 
@@ -56,11 +60,19 @@ def _solve(epsilon_kappa: float, angular_cells: int, axial_cells: int, *, force_
     )
 
 
+def _solve_cost_row(index: int, queue: Any) -> None:
+    """Solve one cost row in a fresh process so peak RSS is row-local."""
+    epsilon_kappa, angular_cells, axial_cells = LADDER_CONFIGS[index]
+    result = _solve(epsilon_kappa, angular_cells, axial_cells, force_cg=False)
+    queue.put(dict(result.diagnostics))
+
+
 def regenerate_aspect_scan() -> None:
     """Write the ADR-0011 aspect/pollution/iteration scan from live solves."""
     fields = (
         "angular_cells",
         "axial_cells",
+        "axial_spacing_amplitude",
         "elements",
         "h1_dofs",
         "maximum_target_aspect_ratio",
@@ -69,15 +81,26 @@ def regenerate_aspect_scan() -> None:
         "iteration_count",
     )
     with ASPECT_TABLE.open("w", newline="", encoding="utf-8") as stream:
-        writer = csv.DictWriter(stream, fieldnames=fields)
+        writer = csv.DictWriter(stream, fieldnames=fields, lineterminator="\n")
         writer.writeheader()
-        for angular_cells, axial_cells in ASPECT_CONFIGS:
-            result = _solve(1.0e-2, angular_cells, axial_cells, force_cg=True)
+        for angular_cells, axial_cells, amplitude in ASPECT_CONFIGS:
+            result = FrozenFieldIslandSolver().solve(
+                FrozenFieldIslandConfig(
+                    epsilon_kappa=1.0e-2,
+                    epsilon_1=1.0e-3,
+                    polynomial_order=2,
+                    angular_cells=angular_cells,
+                    axial_cells=axial_cells,
+                    axial_spacing_amplitude=amplitude,
+                    direct_dof_threshold=1,
+                )
+            )
             diagnostics = result.diagnostics
             writer.writerow(
                 {
                     "angular_cells": angular_cells,
                     "axial_cells": axial_cells,
+                    "axial_spacing_amplitude": amplitude,
                     "elements": diagnostics["elements"],
                     "h1_dofs": diagnostics["h1_dofs"],
                     "maximum_target_aspect_ratio": (
@@ -107,7 +130,13 @@ def regenerate_cost_ladder(selected_indices: tuple[int, ...] | None = None) -> N
         "pollution_ratio",
         "layer_cells",
         "total_power_relative_error",
+        "conservative_flux_relative_correction",
+        "conservative_flux_divergence_relative_error",
+        "volume_averaged_dp_ds",
         "island_flattening_width",
+        "island_flattening_width_fraction_095",
+        "island_flattening_width_fraction_097",
+        "island_flattening_width_fraction_099",
         "integrable_flattening_width",
         "isotropic_flattening_width",
         "subcritical_flattening_width",
@@ -115,11 +144,16 @@ def regenerate_cost_ladder(selected_indices: tuple[int, ...] | None = None) -> N
         "integrable_pressure_drop",
         "coarea_spike_ratio",
         "volume_plateau_ratio",
+        "island_level_volume_coordinate",
+        "island_level_mollifier_width",
         "critical_safeguard_samples",
         "minimum_mollifier_width",
         "maximum_mollifier_width",
     )
-    fields = ("epsilon_kappa", "angular_cells", "axial_cells", *required, *physics)
+    source_commit = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
+    ).strip()
+    fields = ("source_commit", "epsilon_kappa", "angular_cells", "axial_cells", *required, *physics)
     rows: dict[tuple[float, int, int], dict[str, object]] = {}
     if selected_indices is not None and COST_TABLE.exists():
         with COST_TABLE.open(newline="", encoding="utf-8") as stream:
@@ -129,12 +163,23 @@ def regenerate_cost_ladder(selected_indices: tuple[int, ...] | None = None) -> N
                     int(existing["angular_cells"]),
                     int(existing["axial_cells"]),
                 )
+                if existing.get("source_commit") != source_commit:
+                    raise RuntimeError(
+                        "existing cost rows have different provenance; regenerate the whole ladder"
+                    )
                 rows[key] = dict(existing)
     for index, (epsilon_kappa, angular_cells, axial_cells) in enumerate(LADDER_CONFIGS):
         if selected_indices is None or index in selected_indices:
-            result = _solve(epsilon_kappa, angular_cells, axial_cells, force_cg=False)
-            diagnostics = result.diagnostics
+            context = mp.get_context("spawn")
+            queue = context.Queue()
+            process = context.Process(target=_solve_cost_row, args=(index, queue))
+            process.start()
+            diagnostics = queue.get()
+            process.join()
+            if process.exitcode != 0:
+                raise RuntimeError(f"cost-row process {index} exited with {process.exitcode}")
             row: dict[str, object] = {
+                "source_commit": source_commit,
                 "epsilon_kappa": f"{epsilon_kappa:.16e}",
                 "angular_cells": angular_cells,
                 "axial_cells": axial_cells,
@@ -150,7 +195,7 @@ def regenerate_cost_ladder(selected_indices: tuple[int, ...] | None = None) -> N
     if missing:
         raise RuntimeError(f"cost table is missing configurations: {missing}")
     with COST_TABLE.open("w", newline="", encoding="utf-8") as stream:
-        writer = csv.DictWriter(stream, fieldnames=fields)
+        writer = csv.DictWriter(stream, fieldnames=fields, lineterminator="\n")
         writer.writeheader()
         for configuration in LADDER_CONFIGS:
             writer.writerow(rows[configuration])

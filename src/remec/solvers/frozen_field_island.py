@@ -30,6 +30,7 @@ class FrozenFieldIslandConfig:
     direct_dof_threshold: int = 20_000
     pollution_direct_dof_threshold: int = 100_000
     flattening_gradient_fraction: float = 0.97
+    axial_spacing_amplitude: float = 0.0
 
     def __post_init__(self) -> None:
         for name, value in (
@@ -45,6 +46,11 @@ class FrozenFieldIslandConfig:
             or not 0.0 < self.flattening_gradient_fraction < 1.0
         ):
             raise ValueError("flattening_gradient_fraction must be finite and in (0, 1)")
+        if (
+            not isfinite(self.axial_spacing_amplitude)
+            or not 0.0 <= self.axial_spacing_amplitude < 1.0
+        ):
+            raise ValueError("axial_spacing_amplitude must be finite and in [0, 1)")
         if not isfinite(self.epsilon_1) or self.epsilon_1 < 0.0:
             raise ValueError("epsilon_1 must be finite and non-negative")
         if self.epsilon_1 >= (1.0 - 2.0 * 0.29) / 4.0:

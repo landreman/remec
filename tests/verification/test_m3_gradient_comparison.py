@@ -448,6 +448,13 @@ def test_fixed_state_variants_are_o_epsilon_j_but_target_is_not_admissible(
             ("full", full_result),
         ):
             expected = recorded[variant, diffusivity]
+            width, turns, noise = _resonant_layer_observables(
+                resonant_scan[diffusivity][variant][0]
+            )
+            assert width * 24.0 >= 6.0
+            assert width == pytest.approx(expected["layer_fwhm"], rel=5.0e-3)
+            assert turns == int(expected["radial_turning_points"])
+            assert noise == pytest.approx(expected["parallel_noise_transfer"], rel=5.0e-3)
             assert epsilon_j == pytest.approx(expected["epsilon_j"], abs=1.0e-14)
             assert epsilon_kappa_over_epsilon_j == pytest.approx(
                 expected["epsilon_kappa_over_epsilon_j"],
