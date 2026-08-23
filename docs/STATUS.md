@@ -700,7 +700,7 @@ geometry before curved geometry, and Poincaré tracing before the island study t
 it. See the 2026-08-22 reorganization note at the top of this file for the old→new
 numbering.
 
-- [ ] **6.1** Poincaré sections and field-line tracing — `DESIGN.md` §19, §8.6 · note: §4.3
+- [~] **6.1** Poincaré sections and field-line tracing — `DESIGN.md` §19, §8.6 · note: §4.3
   <br>Acceptance: field-line tracer (SciPy ODE) running on both a prescribed analytic
   **B** and an H(div) **B**; trace data saved and reloaded with a versioned record;
   plotting entry points. Verified against the §8.6 analytic fields, not against a picture:
@@ -713,6 +713,9 @@ numbering.
   that width in the implementation from the conserved
   K = (2t₀−1)Ψ_t + 2t₁Ψ_t² − 4ε₁Ψ_t cos(2Θ−Φ); do not hard-code the reduced formula as
   both the prediction and the reference.
+  <br>Blocked before implementation: `DESIGN.md` requires a SciPy ODE tracer, but SciPy
+  is not a declared dependency. ADR 0008 records the base-vs-optional dependency choice
+  and awaits human sign-off; no tracer code or acceptance tolerance has been chosen.
   <br>Placed first so that 6.3 has an independent measurement of where the island is,
   rather than inferring island position from the pressure solution it is trying to test.
 - [ ] **6.2** `PeriodicCylinder3D` + Reiman–Greenside analytic field — `DESIGN.md` §16.2, §8.6 · note: §6 (M1)
