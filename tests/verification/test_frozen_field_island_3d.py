@@ -28,6 +28,8 @@ def test_fast_frozen_field_island_row_runs_the_production_m4_path() -> None:
             polynomial_order=1,
             max_element_size=0.45,
             geometry_order=4,
+            angular_cells=8,
+            axial_cells=2,
         )
     )
 
