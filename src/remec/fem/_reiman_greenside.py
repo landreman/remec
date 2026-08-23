@@ -45,16 +45,19 @@ def build_reiman_greenside_discrete_field(
     axial_flux: float,
     b_floor: float = 1.0e-8,
 ) -> ReimanGreensideDiscreteField:
-    r"""Interpolate ``A``, form ``B_h=curl(A_h)``, and diagnose note equation (M1).
+    r"""Reconstruct ``A_h``, form ``B_h=curl(A_h)``, and diagnose note equation (M1).
 
     Implements the Section-8.6 formulas
 
     ``A = Psi_t grad(Theta) - Psi_p grad(Phi)`` and
     ``B = curl(A) = grad(Psi_t) x grad(Theta) + grad(Phi) x grad(Psi_p)``.
 
-    ``A_h`` is interpolated into periodic HCurl and its curl is mass-projected into
-    the paired periodic HDiv space. The returned projection and strong-divergence
-    defects independently demonstrate the mapped de Rham identity
+    Per accepted ADR 0010 Option 2, the analytic ``B`` is projected into periodic
+    H(div) subject to the paired divergence constraint and requested axial flux.
+    The Section-7.3 periodic gauge-fixed curl solve, augmented by the normalized
+    harmonic constraint from milestone 4.3, then reconstructs ``A_h``. Its curl is
+    represented in the paired periodic H(div) space as ``B_h``. The returned curl
+    and strong-divergence defects demonstrate
     ``div(B_h)=div(curl(A_h))=0`` required by note equation (M1).
     """
     if getattr(mesh, "dim", None) != 3:
@@ -167,16 +170,16 @@ def build_reiman_greenside_discrete_field(
     bz_l2_error = float(
         ng.sqrt(ng.Integrate((magnetic_field[2] - 1.0) ** 2, mesh, order=integration_order))
     )
-    analytic_magnitude = ng.sqrt(ng.InnerProduct(magnetic_field, magnetic_field))
+    magnetic_magnitude = ng.sqrt(ng.InnerProduct(magnetic_field, magnetic_field))
     sampled_minimum, sampled_maximum = _quadrature_extrema(
         mesh,
-        analytic_magnitude,
+        magnetic_magnitude,
         integration_order=integration_order,
     )
-    safe_magnitude = ng.sqrt(analytic_magnitude**2 + b_floor**2)
+    safe_magnitude = ng.sqrt(magnetic_magnitude**2 + b_floor**2)
     _, floor_activity = _quadrature_extrema(
         mesh,
-        (safe_magnitude - analytic_magnitude) / analytic_magnitude,
+        (safe_magnitude - magnetic_magnitude) / magnetic_magnitude,
         integration_order=integration_order,
     )
     return ReimanGreensideDiscreteField(
