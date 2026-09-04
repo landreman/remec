@@ -18,15 +18,17 @@ def compact_moment_matched_heaviside(
     argument: NDArray[np.float64],
 ) -> NDArray[np.float64]:
     """Evaluate the shared compact ``H_epsilon`` kernel from ``(mollified_V)``."""
-    return np.where(
-        argument <= -1.0,
-        0.0,
-        np.where(
-            argument >= 1.0,
-            1.0,
-            0.5 * (1.0 + argument + np.sin(np.pi * argument) / np.pi),
-        ),
+    result = np.empty_like(argument, dtype=np.float64)
+    below = argument <= -1.0
+    above = argument >= 1.0
+    transition = ~(below | above)
+    result[below] = 0.0
+    result[above] = 1.0
+    transition_argument = argument[transition]
+    result[transition] = 0.5 * (
+        1.0 + transition_argument + np.sin(np.pi * transition_argument) / np.pi
     )
+    return result
 
 
 @dataclass(frozen=True, slots=True)

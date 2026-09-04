@@ -37,3 +37,16 @@ def test_flattening_fraction_must_be_a_strict_finite_ratio(fraction: float) -> N
     """The stated pressure-gradient flattening criterion cannot become vacuous."""
     with pytest.raises(ValueError, match="flattening_gradient_fraction"):
         FrozenFieldIslandConfig(epsilon_kappa=1.0e-4, flattening_gradient_fraction=fraction)
+
+
+def test_thread_count_is_explicit_and_defaults_to_ci_safe_single_thread() -> None:
+    """Interactive callers may opt in to parallelism without changing test defaults."""
+    default = FrozenFieldIslandConfig(epsilon_kappa=1.0e-4)
+    parallel = FrozenFieldIslandConfig(epsilon_kappa=1.0e-4, threads=4)
+
+    assert default.threads == 1
+    assert parallel.threads == 4
+
+    for invalid in (0, -1, True, 1.5):
+        with pytest.raises((TypeError, ValueError), match="threads"):
+            FrozenFieldIslandConfig(epsilon_kappa=1.0e-4, threads=invalid)  # type: ignore[arg-type]

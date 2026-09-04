@@ -31,6 +31,7 @@ class FrozenFieldIslandConfig:
     pollution_direct_dof_threshold: int = 100_000
     flattening_gradient_fraction: float = 0.97
     axial_spacing_amplitude: float = 0.0
+    threads: int = 1
 
     def __post_init__(self) -> None:
         for name, value in (
@@ -66,6 +67,7 @@ class FrozenFieldIslandConfig:
             ("axial_cells", self.axial_cells, 2),
             ("direct_dof_threshold", self.direct_dof_threshold, 1),
             ("pollution_direct_dof_threshold", self.pollution_direct_dof_threshold, 1),
+            ("threads", self.threads, 1),
         ):
             if isinstance(value, bool) or not isinstance(value, int):
                 raise TypeError(f"{name} must be an integer")

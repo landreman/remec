@@ -172,6 +172,42 @@ def test_ngsolve_quadrature_extraction_and_bspline_composition() -> None:
     )
 
 
+def test_ngsolve_quadrature_extracts_geometry_in_one_batched_evaluation() -> None:
+    """The (mollified_V) extraction avoids a Python transformation per sample."""
+    mesh = MakeStructured3DMesh(hexes=False, nx=2, ny=2, nz=2)
+
+    class TrafoCountingMesh:
+        def __init__(self, wrapped: ng.Mesh) -> None:
+            self.wrapped = wrapped
+            self.dim = wrapped.dim
+            self.get_trafo_calls = 0
+
+        def Elements(self, *args: object) -> object:
+            return self.wrapped.Elements(*args)
+
+        def GetTrafo(self, *args: object) -> object:
+            self.get_trafo_calls += 1
+            return self.wrapped.GetTrafo(*args)
+
+        def MapToAllElements(self, *args: object) -> object:
+            return self.wrapped.MapToAllElements(*args)
+
+    counting_mesh = TrafoCountingMesh(mesh)
+    data = extract_ngsolve_quadrature(
+        counting_mesh,  # type: ignore[arg-type]
+        ng.x + 2.0 * ng.y + 3.0 * ng.z,
+        ng.CoefficientFunction((1.0, 2.0, 3.0)),
+        integration_order=3,
+        element_size_mode="level-set-normal",
+    )
+
+    assert counting_mesh.get_trafo_calls == 0
+    assert data.total_volume == pytest.approx(1.0)
+    assert float(np.dot(data.weights, data.values)) == pytest.approx(3.0)
+    np.testing.assert_allclose(data.gradient_magnitudes, np.sqrt(14.0))
+    assert np.all(data.element_sizes > 0.0)
+
+
 def test_level_set_normal_metric_width_tracks_only_the_normal_mesh_scale() -> None:
     """ADR 0012 width is rotation invariant and ignores tangential elongation."""
     jacobians = np.asarray(
@@ -204,6 +240,23 @@ def test_level_set_normal_metric_width_tracks_only_the_normal_mesh_scale() -> No
         fallback,
     )
     np.testing.assert_allclose(rotated_sizes, sizes, rtol=2.0e-14)
+
+
+@pytest.mark.parametrize("dimension", (1, 2, 3))
+def test_batched_jacobian_measures_match_numpy_determinants(dimension: int) -> None:
+    """Batched quadrature geometry retains ``|det J|`` including orientation."""
+    generator = np.random.default_rng(20260904 + dimension)
+    jacobians = generator.normal(size=(31, dimension, dimension))
+    jacobians[::2, 0, :] *= -1.0
+
+    measures = profiles._absolute_jacobian_determinants(jacobians)
+
+    np.testing.assert_allclose(
+        measures,
+        np.abs(np.linalg.det(jacobians)),
+        rtol=8.0 * np.finfo(float).eps,
+        atol=8.0 * np.finfo(float).eps,
+    )
 
 
 def test_normal_metric_quadrature_extraction_reports_critical_point_fallback() -> None:

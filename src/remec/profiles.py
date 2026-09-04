@@ -440,6 +440,33 @@ class TransplantedProfile:
         )
 
 
+def _absolute_jacobian_determinants(
+    jacobians: NDArray[np.float64],
+) -> NDArray[np.float64]:
+    """Return vectorized ``|det J|`` measures for physical dimensions one to three."""
+    if jacobians.ndim != 3 or jacobians.shape[1] != jacobians.shape[2]:
+        raise ValueError("jacobians must have shape (samples, dimension, dimension)")
+    dimension = jacobians.shape[1]
+    if dimension == 1:
+        determinants = jacobians[:, 0, 0].copy()
+    elif dimension == 2:
+        determinants = (
+            jacobians[:, 0, 0] * jacobians[:, 1, 1] - jacobians[:, 0, 1] * jacobians[:, 1, 0]
+        )
+    elif dimension == 3:
+        determinants = (
+            jacobians[:, 0, 0]
+            * (jacobians[:, 1, 1] * jacobians[:, 2, 2] - jacobians[:, 1, 2] * jacobians[:, 2, 1])
+            - jacobians[:, 0, 1]
+            * (jacobians[:, 1, 0] * jacobians[:, 2, 2] - jacobians[:, 1, 2] * jacobians[:, 2, 0])
+            + jacobians[:, 0, 2]
+            * (jacobians[:, 1, 0] * jacobians[:, 2, 1] - jacobians[:, 1, 1] * jacobians[:, 2, 0])
+        )
+    else:
+        raise ValueError("jacobians must have physical dimension one, two, or three")
+    return cast(NDArray[np.float64], np.abs(determinants))
+
+
 def _level_set_normal_metric_sizes(
     jacobians: NDArray[np.float64],
     gradients: NDArray[np.float64],
@@ -498,48 +525,54 @@ def extract_ngsolve_quadrature(
         raise ValueError("integration_order must be positive")
     if element_size_mode not in ("isotropic-determinant", "level-set-normal"):
         raise ValueError("element_size_mode must be isotropic-determinant or level-set-normal")
-    weights: list[float] = []
-    sizes: list[float] = []
-    element_types = {element.type for element in mesh.Elements(ng.VOL)}
+    elements = list(mesh.Elements(ng.VOL))
+    element_types = {element.type for element in elements}
     rules = {
         element_type: ng.IntegrationRule(element_type, integration_order)
         for element_type in element_types
     }
-    for element in mesh.Elements(ng.VOL):
-        rule = rules[element.type]
-        transformation = mesh.GetTrafo(element)
-        for point in rule:
-            mapped_point = transformation(point)
-            measure = float(mapped_point.measure)
-            weights.append(float(point.weight) * measure)
-            sizes.append(measure ** (1.0 / mesh.dim))
+    rule_weights = {
+        element_type: np.fromiter(
+            (float(point.weight) for point in rule), dtype=np.float64, count=len(rule)
+        )
+        for element_type, rule in rules.items()
+    }
+    if len(element_types) == 1:
+        element_type = next(iter(element_types))
+        reference_weights = np.tile(rule_weights[element_type], len(elements))
+    else:
+        reference_weights = np.concatenate(
+            tuple(rule_weights[element.type] for element in elements)
+        )
     mapped_points = mesh.MapToAllElements(rules, ng.VOL)
     values = np.asarray(chi(mapped_points), dtype=float).reshape(-1)
     gradient_vectors = np.asarray(gradient(mapped_points), dtype=float)
     if gradient_vectors.ndim != 2:
         raise RuntimeError("NGSolve gradient evaluation must return a sample-by-component array")
     gradients = np.linalg.norm(gradient_vectors, axis=1)
-    if len(values) != len(weights):
+    jacobians = np.asarray(
+        ng.specialcf.JacobianMatrix(mesh.dim)(mapped_points), dtype=float
+    ).reshape(-1, mesh.dim, mesh.dim)
+    measures = _absolute_jacobian_determinants(jacobians)
+    if len(values) != len(reference_weights) or len(values) != len(measures):
         raise RuntimeError(
             "NGSolve mapped quadrature ordering does not match element integration rules"
         )
-    element_sizes = np.asarray(sizes, dtype=float)
+    weights = reference_weights * measures
+    element_sizes = measures ** (1.0 / mesh.dim)
     fallback_count = 0
     if element_size_mode == "level-set-normal":
         if gradient_vectors.shape[1] != mesh.dim:
             raise ValueError(
                 "level-set-normal widths require a physical gradient with mesh.dim components"
             )
-        jacobians = np.asarray(
-            ng.specialcf.JacobianMatrix(mesh.dim)(mapped_points), dtype=float
-        ).reshape(-1, mesh.dim, mesh.dim)
         element_sizes, fallback_count = _level_set_normal_metric_sizes(
             jacobians, gradient_vectors, element_sizes
         )
     return QuadratureLevelSetData(
         values=values,
         gradient_magnitudes=gradients,
-        weights=np.asarray(weights, dtype=float),
+        weights=weights,
         element_sizes=element_sizes,
         element_size_mode=element_size_mode,
         critical_metric_fallback_count=fallback_count,

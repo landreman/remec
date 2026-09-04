@@ -175,7 +175,9 @@ def _solve_m4(
     linear = ng.LinearForm(space)
     linear += test * quadrature
 
-    configure_threads(1)
+    # Keep the benchmark/test default deterministic at one worker while allowing
+    # explicitly parallel interactive or production callers.
+    configure_threads(config.threads)
     iterative = space.ndof > config.direct_dof_threshold
     preconditioner = ng.Preconditioner(bilinear, "h1amg") if iterative else None
     assembly_start = perf_counter()
@@ -224,7 +226,8 @@ def _solve_m4(
             perpendicular_conductivity * gradient
             + (1.0 - perpendicular_conductivity) * direction * parallel_gradient
         )
-    total_power = float(ng.Integrate(1.0, mesh, order=2 * config.polynomial_order + 8))
+    with ng.TaskManager():
+        total_power = float(ng.Integrate(1.0, mesh, order=2 * config.polynomial_order + 8))
     total_power_relative_error = 0.0
     periodic_boundary_power_relative_error = 0.0
     divergence_theorem_relative_error = 0.0
@@ -265,13 +268,14 @@ def _solve_m4(
             ng.Integrate(ng.div(conservative_flux), mesh, order=2 * config.polynomial_order + 8)
         )
         divergence_theorem_relative_error = abs(boundary_power - divergence_power) / total_power
-    floor_activity = float(
-        ng.Integrate(
-            ((safe_magnitude - magnetic_magnitude) / magnetic_magnitude) ** 2,
-            mesh,
-            order=2 * config.polynomial_order + 8,
+    with ng.TaskManager():
+        floor_activity = float(
+            ng.Integrate(
+                ((safe_magnitude - magnetic_magnitude) / magnetic_magnitude) ** 2,
+                mesh,
+                order=2 * config.polynomial_order + 8,
+            )
         )
-    )
 
     integration_order = 2 * config.polynomial_order + 4
     data = extract_ngsolve_quadrature(

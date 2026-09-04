@@ -404,7 +404,18 @@
   `(samples, dim*dim)` array in the same element/quadrature ordering as coefficient
   evaluation. Reshape it to `(samples, dim, dim)` before computing
   `h_n=1/||J^{-1} n||`. The production extractor retains determinant widths only at
-  counted samples where the level-set gradient is too small to define `n`.
+  counted samples where the level-set gradient is too small to define `n`. The same
+  batched Jacobians supply `|det J|` for physical quadrature weights; on a curved
+  third-order sphere this agrees with pointwise `GetTrafo(element)(ip).measure` to
+  3.6e-15 relative while avoiding a Python transformation call at every quadrature
+  point.
+
+- Milestone 6.3 parallel integration (NGSolve 6.2.2606): `ng.Integrate` does not use
+  the configured worker pool unless it runs inside `ng.TaskManager()`. On the
+  24-by-4 graded M4 mesh with eight configured workers, a representative order-12
+  volume integral fell from about 0.157 s outside the context to 0.039 s inside it.
+  Wrap expensive production integrations explicitly; setting `numthreads` alone is
+  insufficient.
 
 - Milestone 6.3 H1-AMG portability (NGSolve 6.2.2606): the identical graded-mesh
   aspect row converged in 43 CG steps with the macOS wheel and 44 with the canonical
