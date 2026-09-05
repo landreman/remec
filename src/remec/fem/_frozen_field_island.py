@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import resource
 import sys
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from math import cos, isfinite, pi, sqrt
 from time import perf_counter
@@ -62,6 +64,20 @@ def _peak_memory_megabytes() -> float:
     """Return process peak RSS in MiB using the platform's ``getrusage`` units."""
     peak = float(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
     return peak / (1024.0 * 1024.0) if sys.platform == "darwin" else peak / 1024.0
+
+
+@contextmanager
+def _timed_step(label: str, *, verbose: bool) -> Iterator[None]:
+    """Optionally print the start and elapsed time of one M4 computational step."""
+    if not verbose:
+        yield
+        return
+    print(f"Starting {label}", flush=True)
+    start = perf_counter()
+    try:
+        yield
+    finally:
+        print(f"Finished {label} in {perf_counter() - start:.3f} s", flush=True)
 
 
 def _recover_conservative_flux(
@@ -141,6 +157,7 @@ def _solve_m4(
     perpendicular_conductivity: float,
     isotropic: bool = False,
     recover_flux: bool = False,
+    verbose: bool = False,
 ) -> _M4Row:
     r"""Solve ``(M4a)`` and transplant ``p=p0(V_chi(chi)/V_omega)`` from ``(M4b)``.
 
@@ -149,126 +166,135 @@ def _solve_m4(
     (b_safe.grad(chi))(b_safe.grad(v))] = int v S_ref`` with ``S_ref=1``.
     For the isotropic falsifiability control it becomes ``int grad(chi).grad(v)``.
     """
-    import ngsolve as ng
+    with _timed_step("preparing the M4a system", verbose=verbose):
+        import ngsolve as ng
 
-    _, magnetic_field = reiman_greenside_coefficient_functions(model)
-    magnetic_magnitude = ng.sqrt(ng.InnerProduct(magnetic_field, magnetic_field))
-    safe_magnitude = ng.sqrt(magnetic_magnitude**2 + config.b_floor**2)
-    direction = magnetic_field / safe_magnitude
-    base = ng.H1(mesh, order=config.polynomial_order, dirichlet="wall")
-    space = ng.Periodic(base)
-    trial, test = space.TnT()
-    gradient_trial = ng.grad(trial)
-    gradient_test = ng.grad(test)
-    quadrature = ng.dx(bonus_intorder=4)
-    if isotropic:
-        integrand = ng.InnerProduct(gradient_trial, gradient_test)
-    else:
-        contrast = 1.0 - perpendicular_conductivity
-        integrand = perpendicular_conductivity * ng.InnerProduct(
-            gradient_trial, gradient_test
-        ) + contrast * ng.InnerProduct(direction, gradient_trial) * ng.InnerProduct(
-            direction, gradient_test
-        )
-    bilinear = ng.BilinearForm(space)
-    bilinear += integrand.Compile() * quadrature
-    linear = ng.LinearForm(space)
-    linear += test * quadrature
-
-    # Keep the benchmark/test default deterministic at one worker while allowing
-    # explicitly parallel interactive or production callers.
-    configure_threads(config.threads)
-    iterative = space.ndof > config.direct_dof_threshold
-    preconditioner = ng.Preconditioner(bilinear, "h1amg") if iterative else None
-    assembly_start = perf_counter()
-    with ng.TaskManager():
-        bilinear.Assemble()
-        linear.Assemble()
-    assembly_seconds = perf_counter() - assembly_start
-    free_dofs = space.FreeDofs()
-    solution_start = perf_counter()
-    with ng.TaskManager():
-        field = ng.GridFunction(space)
-        iteration_count = 1
-        solver_path = "direct:sparsecholesky"
-        if iterative:
-            iterations: list[float] = []
-            assert preconditioner is not None
-            field.vec.data = ng.solvers.CG(
-                mat=bilinear.mat,
-                rhs=linear.vec,
-                pre=preconditioner.mat,
-                tol=1.0e-11,
-                maxsteps=2_000,
-                printrates=False,
-                callback=lambda _iteration, error: iterations.append(float(error)),
-            )
-            iteration_count = len(iterations)
-            solver_path = "iterative:cg-h1amg"
+        _, magnetic_field = reiman_greenside_coefficient_functions(model)
+        magnetic_magnitude = ng.sqrt(ng.InnerProduct(magnetic_field, magnetic_field))
+        safe_magnitude = ng.sqrt(magnetic_magnitude**2 + config.b_floor**2)
+        direction = magnetic_field / safe_magnitude
+        base = ng.H1(mesh, order=config.polynomial_order, dirichlet="wall")
+        space = ng.Periodic(base)
+        trial, test = space.TnT()
+        gradient_trial = ng.grad(trial)
+        gradient_test = ng.grad(test)
+        quadrature = ng.dx(bonus_intorder=4)
+        if isotropic:
+            integrand = ng.InnerProduct(gradient_trial, gradient_test)
         else:
-            inverse = bilinear.mat.Inverse(free_dofs, inverse="sparsecholesky")
-            field.vec.data = inverse * linear.vec
-    solve_seconds = perf_counter() - solution_start
-
-    residual = bilinear.mat * field.vec - linear.vec
-    free_residual = ng.Projector(free_dofs, True) * residual
-    free_rhs = ng.Projector(free_dofs, True) * linear.vec
-    relative_residual = float(ng.Norm(free_residual)) / max(1.0, float(ng.Norm(free_rhs)))
-    if not isfinite(relative_residual) or relative_residual > 1.0e-9:
-        raise RuntimeError(f"frozen island M4a solve residual {relative_residual:.3e} exceeds 1e-9")
-
-    gradient = ng.grad(field)
-    parallel_gradient = ng.InnerProduct(direction, gradient)
-    if isotropic:
-        heat_flux = -gradient
-    else:
-        heat_flux = -(
-            perpendicular_conductivity * gradient
-            + (1.0 - perpendicular_conductivity) * direction * parallel_gradient
-        )
-    with ng.TaskManager():
-        total_power = float(ng.Integrate(1.0, mesh, order=2 * config.polynomial_order + 8))
-    total_power_relative_error = 0.0
-    periodic_boundary_power_relative_error = 0.0
-    divergence_theorem_relative_error = 0.0
-    flux_correction = 0.0
-    flux_residual = 0.0
-    flux_divergence_error = 0.0
-    if recover_flux:
-        (
-            conservative_flux,
-            flux_correction,
-            flux_residual,
-            flux_divergence_error,
-        ) = _recover_conservative_flux(mesh, heat_flux, order=config.polynomial_order)
-        wall = mesh.Boundaries("wall")
-        normal = ng.specialcf.normal(3)
-        boundary_power = float(
-            ng.Integrate(
-                conservative_flux * normal,
-                mesh,
-                ng.BND,
-                definedon=wall,
-                order=2 * config.polynomial_order + 8,
+            contrast = 1.0 - perpendicular_conductivity
+            integrand = perpendicular_conductivity * ng.InnerProduct(
+                gradient_trial, gradient_test
+            ) + contrast * ng.InnerProduct(direction, gradient_trial) * ng.InnerProduct(
+                direction, gradient_test
             )
-        )
-        total_power_relative_error = abs(boundary_power - total_power) / total_power
-        periodic_ends = mesh.Boundaries("periodic_lower|periodic_upper")
-        periodic_power = float(
-            ng.Integrate(
-                conservative_flux * normal,
-                mesh,
-                ng.BND,
-                definedon=periodic_ends,
-                order=2 * config.polynomial_order + 8,
+        bilinear = ng.BilinearForm(space)
+        bilinear += integrand.Compile() * quadrature
+        linear = ng.LinearForm(space)
+        linear += test * quadrature
+
+        # Keep the benchmark/test default deterministic at one worker while allowing
+        # explicitly parallel interactive or production callers.
+        configure_threads(config.threads)
+        iterative = space.ndof > config.direct_dof_threshold
+        preconditioner = ng.Preconditioner(bilinear, "h1amg") if iterative else None
+
+    with _timed_step("assembling the M4a system", verbose=verbose):
+        assembly_start = perf_counter()
+        with ng.TaskManager():
+            bilinear.Assemble()
+            linear.Assemble()
+        assembly_seconds = perf_counter() - assembly_start
+    free_dofs = space.FreeDofs()
+    with _timed_step("solving the M4a system", verbose=verbose):
+        solution_start = perf_counter()
+        with ng.TaskManager():
+            field = ng.GridFunction(space)
+            iteration_count = 1
+            solver_path = "direct:sparsecholesky"
+            if iterative:
+                iterations: list[float] = []
+                assert preconditioner is not None
+                field.vec.data = ng.solvers.CG(
+                    mat=bilinear.mat,
+                    rhs=linear.vec,
+                    pre=preconditioner.mat,
+                    tol=1.0e-11,
+                    maxsteps=2_000,
+                    printrates=False,
+                    callback=lambda _iteration, error: iterations.append(float(error)),
+                )
+                iteration_count = len(iterations)
+                solver_path = "iterative:cg-h1amg"
+            else:
+                inverse = bilinear.mat.Inverse(free_dofs, inverse="sparsecholesky")
+                field.vec.data = inverse * linear.vec
+        solve_seconds = perf_counter() - solution_start
+
+    with _timed_step("checking the M4a residual", verbose=verbose):
+        residual = bilinear.mat * field.vec - linear.vec
+        free_residual = ng.Projector(free_dofs, True) * residual
+        free_rhs = ng.Projector(free_dofs, True) * linear.vec
+        relative_residual = float(ng.Norm(free_residual)) / max(1.0, float(ng.Norm(free_rhs)))
+        if not isfinite(relative_residual) or relative_residual > 1.0e-9:
+            raise RuntimeError(
+                f"frozen island M4a solve residual {relative_residual:.3e} exceeds 1e-9"
             )
-        )
-        periodic_boundary_power_relative_error = abs(periodic_power) / total_power
-        divergence_power = float(
-            ng.Integrate(ng.div(conservative_flux), mesh, order=2 * config.polynomial_order + 8)
-        )
-        divergence_theorem_relative_error = abs(boundary_power - divergence_power) / total_power
-    with ng.TaskManager():
+
+    with _timed_step("computing heat-flux diagnostics", verbose=verbose):
+        gradient = ng.grad(field)
+        parallel_gradient = ng.InnerProduct(direction, gradient)
+        if isotropic:
+            heat_flux = -gradient
+        else:
+            heat_flux = -(
+                perpendicular_conductivity * gradient
+                + (1.0 - perpendicular_conductivity) * direction * parallel_gradient
+            )
+        with ng.TaskManager():
+            total_power = float(ng.Integrate(1.0, mesh, order=2 * config.polynomial_order + 8))
+        total_power_relative_error = 0.0
+        periodic_boundary_power_relative_error = 0.0
+        divergence_theorem_relative_error = 0.0
+        flux_correction = 0.0
+        flux_residual = 0.0
+        flux_divergence_error = 0.0
+        if recover_flux:
+            (
+                conservative_flux,
+                flux_correction,
+                flux_residual,
+                flux_divergence_error,
+            ) = _recover_conservative_flux(mesh, heat_flux, order=config.polynomial_order)
+            wall = mesh.Boundaries("wall")
+            normal = ng.specialcf.normal(3)
+            boundary_power = float(
+                ng.Integrate(
+                    conservative_flux * normal,
+                    mesh,
+                    ng.BND,
+                    definedon=wall,
+                    order=2 * config.polynomial_order + 8,
+                )
+            )
+            total_power_relative_error = abs(boundary_power - total_power) / total_power
+            periodic_ends = mesh.Boundaries("periodic_lower|periodic_upper")
+            periodic_power = float(
+                ng.Integrate(
+                    conservative_flux * normal,
+                    mesh,
+                    ng.BND,
+                    definedon=periodic_ends,
+                    order=2 * config.polynomial_order + 8,
+                )
+            )
+            periodic_boundary_power_relative_error = abs(periodic_power) / total_power
+            divergence_power = float(
+                ng.Integrate(ng.div(conservative_flux), mesh, order=2 * config.polynomial_order + 8)
+            )
+            divergence_theorem_relative_error = abs(boundary_power - divergence_power) / total_power
+
+    with _timed_step("measuring B-floor activity", verbose=verbose), ng.TaskManager():
         floor_activity = float(
             ng.Integrate(
                 ((safe_magnitude - magnetic_magnitude) / magnetic_magnitude) ** 2,
@@ -278,38 +304,42 @@ def _solve_m4(
         )
 
     integration_order = 2 * config.polynomial_order + 4
-    data = extract_ngsolve_quadrature(
-        mesh,
-        field,
-        gradient,
-        integration_order=integration_order,
-        element_size_mode="level-set-normal",
-    )
-    volume_map = MollifiedVolumeMap.build(
-        data,
-        spatial_width_cells=0.5,
-        levels=config.volume_levels,
-        coarea_consistency_tolerance=0.2,
-    )
-    pressure_profile.validate(edge_value=0.0)
-    pressure_values = np.asarray(
-        pressure_profile.value(volume_map.quadrature_normalized_volume), dtype=float
-    )
+    with _timed_step("extracting level-set quadrature", verbose=verbose):
+        data = extract_ngsolve_quadrature(
+            mesh,
+            field,
+            gradient,
+            integration_order=integration_order,
+            element_size_mode="level-set-normal",
+        )
+    with _timed_step("building the chi -> normalized-volume map", verbose=verbose):
+        volume_map = MollifiedVolumeMap.build(
+            data,
+            spatial_width_cells=0.5,
+            levels=config.volume_levels,
+            coarea_consistency_tolerance=0.2,
+        )
+    with _timed_step("applying the chi -> p map", verbose=verbose):
+        pressure_profile.validate(edge_value=0.0)
+        pressure_values = np.asarray(
+            pressure_profile.value(volume_map.quadrature_normalized_volume), dtype=float
+        )
 
-    element_types = {element.type for element in mesh.Elements(ng.VOL)}
-    rules = {
-        element_type: ng.IntegrationRule(element_type, integration_order)
-        for element_type in element_types
-    }
-    mapped = mesh.MapToAllElements(rules, ng.VOL)
-    radii = np.sqrt(
-        np.asarray(ng.x(mapped), dtype=float).reshape(-1) ** 2
-        + np.asarray(ng.y(mapped), dtype=float).reshape(-1) ** 2
-    )
-    resonance = model.resonance_radius(0.5)
-    shell_distance = np.abs(radii - resonance)
-    selected = shell_distance <= max(np.quantile(shell_distance, 0.05), np.finfo(float).eps)
-    local_width = float(np.median(data.element_sizes[selected]))
+    with _timed_step("measuring the resonant element width", verbose=verbose):
+        element_types = {element.type for element in mesh.Elements(ng.VOL)}
+        rules = {
+            element_type: ng.IntegrationRule(element_type, integration_order)
+            for element_type in element_types
+        }
+        mapped = mesh.MapToAllElements(rules, ng.VOL)
+        radii = np.sqrt(
+            np.asarray(ng.x(mapped), dtype=float).reshape(-1) ** 2
+            + np.asarray(ng.y(mapped), dtype=float).reshape(-1) ** 2
+        )
+        resonance = model.resonance_radius(0.5)
+        shell_distance = np.abs(radii - resonance)
+        selected = shell_distance <= max(np.quantile(shell_distance, 0.05), np.finfo(float).eps)
+        local_width = float(np.median(data.element_sizes[selected]))
     return _M4Row(
         mesh=mesh,
         field=field,

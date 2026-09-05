@@ -2,13 +2,36 @@
 
 from __future__ import annotations
 
+import inspect
+
 import pytest
 
+from remec.fem import _frozen_field_island
 from remec.solvers.frozen_field_island import (
     FrozenFieldIslandConfig,
     critical_layer_width,
     exact_island_width,
 )
+
+
+def test_m4_verbose_timing_is_opt_in_and_reports_each_step(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The private M4 kernel stays quiet by default and can time named stages."""
+    verbose = inspect.signature(_frozen_field_island._solve_m4).parameters["verbose"]
+    assert verbose.default is False
+
+    with _frozen_field_island._timed_step("applying chi -> p map", verbose=False):
+        pass
+    assert capsys.readouterr().out == ""
+
+    clock = iter((10.0, 12.5))
+    monkeypatch.setattr(_frozen_field_island, "perf_counter", lambda: next(clock))
+    with _frozen_field_island._timed_step("applying chi -> p map", verbose=True):
+        pass
+    assert capsys.readouterr().out == (
+        "Starting applying chi -> p map\nFinished applying chi -> p map in 2.500 s\n"
+    )
 
 
 def test_reiman_greenside_widths_are_derived_from_the_hamiltonian_balance() -> None:
