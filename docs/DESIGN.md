@@ -444,6 +444,18 @@ field-split alternatives belong to the PETSc branch evaluation.)
 
 ### 8.6 Three-dimensional frozen-field island benchmark (Reiman–Greenside)
 
+> **Calibration review, 2026-09-05 — decision pending.**
+> [ADR 0014](adr/0014-island-flattening-calibration.md) identifies an unsupported
+> inference in item 4 below: the local quarter-power length was compared with a full
+> island width as if that established strong pressure flattening at ε₁=1e-3,
+> ε_κ=1e-4. The exact island-width formula and quarter-power scaling remain valid;
+> that numerical crossing and the affordability claim are not verified acceptance
+> evidence. A response-layer extent and a width meeting a substantial gradient
+> reduction must be distinguished. Item 5's forward-map plateau/co-area-spike wording
+> is also under review in [ADR 0013](adr/0013-separatrix-level-vchi-signature.md).
+> The original requirements below are retained pending sign-off, not silently
+> replaced by new parameters or thresholds. Milestone 6.3 remains incomplete.
+
 The Section 8.3 pollution regression and the Phase 1 island tests are two-dimensional.
 They do not answer the question that decides whether a 3D run is affordable: at a given
 anisotropy, how many elements and how much wall-clock time does a *three-dimensional*

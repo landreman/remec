@@ -4,6 +4,9 @@
 
 **Date:** 2026-08-23
 
+**Review update:** 2026-09-05; related parameter and M4b questions are recorded in
+[ADR 0014](0014-island-flattening-calibration.md). No option has been approved.
+
 ## Context
 
 Milestone 6.3 must make its level-set diagnostic local and falsifiable. `docs/DESIGN.md`
@@ -26,10 +29,18 @@ mesh and normalized volume. Fresh-process regeneration gives:
 | ε_κ=10⁻⁴, 48×8 | 1.0167 | 0.999879 |
 | ε_κ=10⁻⁵, 36×4 | 1.1065 | 1.000135 |
 
-The ε_κ=10⁻⁵ pressure result is independently threshold-robust: flattening widths at
+The ε_κ=10⁻⁵ pressure result is stable over the tested **weak-suppression** thresholds: widths at
 0.95/0.97/0.99 of the integrable gradient are 0.1516/0.1594/0.1632 versus exact island
-width 0.1451. Thus the ambiguity affects which Vχ claim is asserted, not whether the
-pressure-flattening branch exists.
+width 0.1451. These thresholds detect reductions exceeding only 5%/3%/1%. They do
+not independently establish a near-flat pressure interior or saturation of a width
+defined by substantial suppression. The earlier inference that the ambiguity affected
+only Vχ, while the strong-flattening branch was settled, is withdrawn.
+
+For ε₁=1e-3, the September diagnostic reference gives a local O-ray p-gradient
+ratio .790 and a full-island pressure-drop ratio .847 at ε_κ=1e-5. Moreover, the
+analytic magnetic X-point is not automatically a critical point of the finite-anisotropy
+χ field. The table above remains historical evidence of its stated measurements;
+the weak inverse-span signal alone cannot decide the appropriate physical gate.
 
 ## Option 1 — Literal Vχ plateau
 
@@ -62,11 +73,21 @@ but introduces a window definition that the current design does not specify.
 
 ## Recommendation
 
-Choose **Option 3**. It is the only reading that preserves both nouns in §8.6 without
-violating `−dV/dχ̂ = ρ(χ̂)`, and normalization by the local mollifier width makes the
-window mesh-aware. The ADR should bind the exact window statistic and minimum
-main/control margin after the current regenerated rows are scanned; no global
-max/median statistic should return.
+Recommend **Option 2's mathematical interpretation**: a co-area spike is a steep
+forward Vχ and a flat inverse χ̂(V). The former recommendation of Option 3 was based
+on preserving the erroneous word “plateau” for the forward map; that wording is not
+a mathematical reason to introduce a new statistic. Option 3 remains available as
+an explicitly chosen localized diagnostic, but is not required to resolve the
+derivative/inverse-derivative relationship.
+
+Before setting quantitative gates, resolve ADR 0014's pressure-strength and parameter
+calibration, verify whether χ has the claimed scalar critical structure, and select
+a reproducible localized statistic with independent refinement of its volume-map
+resolution. Do not assume that its maximum must occur at χ evaluated at the magnetic
+X-point. A pressure plateau cannot be inferred solely from a χ or co-area feature,
+because (M4b) preserves level sets but can amplify the remaining spatial gradient.
+No global max/median statistic should return, and no threshold should be selected
+merely to make the old weak-response rows pass.
 
 ## Decision
 

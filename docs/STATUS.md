@@ -796,6 +796,22 @@ numbering.
   `make_hdiv_field_evaluator` wrap-length gate and the production
   `ReimanGreensideField`, rather than copying milestone 6.1's private oracle.
 - [~] **6.3** Frozen-field 3D island benchmark: (M4a)–(M4b) at large anisotropy — `DESIGN.md` §8.6, §12.3, §22 · note: §4.3, §8
+  <br>**Calibration review, 2026-09-05 — blocked on ADR 0013/0014 sign-off.**
+  [ADR 0014](adr/0014-island-flattening-calibration.md) distinguishes exact full
+  island width from the local transport scale. The reference crossing and strong
+  flattening/saturation interpretation recorded below are not established by the
+  97%-gradient statistic. At ε₁=.001, independent helical-reference calculations
+  give local p-gradient ratios .919/.790 at ε_κ=1e-4/1e-5 and full-island pressure
+  drop ratios .936/.847; these are partial suppression, not a near-flat interior.
+  For ε₁=.005, ε_κ=1e-4, cubic 3D axial refinement 4→8 gives χ-gradient ratios
+  .532→.538, agreeing with the .537 helical reference; at ε_κ=1e-5 that reference
+  gives χ/p gradient ratios .0284/.224. The corresponding 339,781-DOF 3D row has
+  local derivative errors and a co-area consistency warning, so no new resolved
+  3D cost claim is made. Recommend ε₁=.005 as a principal calibration candidate,
+  retain the thin-island evidence, and select substantial suppression criteria
+  before regenerating acceptance artifacts. The proposed parameters are not yet
+  adopted. Historical measurements below remain records of their stated statistic;
+  their earlier green exhaustive run does not resolve these physics blockers.
   <br>**Phase gate.** Acceptance: solve *only* (M4a)–(M4b) — no (M1), no (M2)–(M3b), no
   Picard — on the 6.2 field with a single m=2 island chain (ε₂=0), and produce all of:
   (a) a machine-readable cost table over an ε_κ ladder recording elements, H¹ DOFs, order,
@@ -1029,3 +1045,5 @@ exhaustive; `EXHAUSTIVE_WORKERS` and `PYTEST_ARGS` plumbing was exercised end to
 | 0005 | 4.4 | Does the paired ordinary-L2 constraint coerce curved HDiv divergence pointwise to zero? | Option 1 approved |
 | 0006 | 5.5 | Should axisymmetric Ampère use a free-I flux constraint or mixed u--J closure? | Approved 2026-08-22: Option 1 (free-I trace + bordered Ψ_t constraint), with binding numeric escalation criteria to Option 2 |
 | 0007 | Cross-cutting, especially 6.3+ | How can long 3D verification coexist with fast development iteration? | Approved 2026-08-22: fast, developer-slow, and remote-exhaustive tiers |
+| 0013 | 6.3 | What localized forward/inverse Vχ signature is mathematically appropriate? | Proposed; inverse-plateau interpretation recommended after 2026-09-05 review |
+| 0014 | 6.3 | Which width convention, parameters, and pressure-suppression criterion establish a resolved island response? | Proposed; human sign-off and new calibration required |

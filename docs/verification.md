@@ -13,6 +13,14 @@
 
 ## Milestone 6.3 — frozen-field 3D island benchmark (M4a)–(M4b)
 
+> **Evidence qualification, 2026-09-05.** The records below are historical outputs of
+> the stated 97%-gradient and co-area statistics. They do not establish a strongly
+> flattened pressure interior or resolve the reopened milestone. See
+> [ADR 0014](adr/0014-island-flattening-calibration.md) for the width-convention,
+> parameter, and M4b calibration evidence, and
+> [ADR 0013](adr/0013-separatrix-level-vchi-signature.md) for the revised inverse-map
+> interpretation. No CSV has been hand-adjusted and no new acceptance run is claimed.
+
 The benchmark solves only
 
 \[
