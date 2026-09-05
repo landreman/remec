@@ -795,7 +795,23 @@ numbering.
   mesh must also clear the mapped-Jacobian ratio gate. Use the public
   `make_hdiv_field_evaluator` wrap-length gate and the production
   `ReimanGreensideField`, rather than copying milestone 6.1's private oracle.
-- [ ] **6.3** Frozen-field 3D island benchmark: (M4a)–(M4b) at large anisotropy — `DESIGN.md` §8.6, §12.3, §22 · note: §4.3, §8
+- [~] **6.3** Frozen-field 3D island benchmark: (M4a)–(M4b) at large anisotropy — `DESIGN.md` §8.6, §12.3, §22 · note: §4.3, §8
+  <br>**Calibration review, 2026-09-05 — blocked on ADR 0013/0014 sign-off.**
+  [ADR 0014](adr/0014-island-flattening-calibration.md) distinguishes exact full
+  island width from the local transport scale. The reference crossing and strong
+  flattening/saturation interpretation recorded below are not established by the
+  97%-gradient statistic. At ε₁=.001, independent helical-reference calculations
+  give local p-gradient ratios .919/.790 at ε_κ=1e-4/1e-5 and full-island pressure
+  drop ratios .936/.847; these are partial suppression, not a near-flat interior.
+  For ε₁=.005, ε_κ=1e-4, cubic 3D axial refinement 4→8 gives χ-gradient ratios
+  .532→.538, agreeing with the .537 helical reference; at ε_κ=1e-5 that reference
+  gives χ/p gradient ratios .0284/.224. The corresponding 339,781-DOF 3D row has
+  local derivative errors and a co-area consistency warning, so no new resolved
+  3D cost claim is made. Recommend ε₁=.005 as a principal calibration candidate,
+  retain the thin-island evidence, and select substantial suppression criteria
+  before regenerating acceptance artifacts. The proposed parameters are not yet
+  adopted. Historical measurements below remain records of their stated statistic;
+  their earlier green exhaustive run does not resolve these physics blockers.
   <br>**Phase gate.** Acceptance: solve *only* (M4a)–(M4b) — no (M1), no (M2)–(M3b), no
   Picard — on the 6.2 field with a single m=2 island chain (ε₂=0), and produce all of:
   (a) a machine-readable cost table over an ε_κ ladder recording elements, H¹ DOFs, order,
@@ -835,6 +851,52 @@ numbering.
   default, record it — it is a §8.5 preconditioner input and possibly an ADR. It is never
   grounds for lowering the anisotropy target, relaxing the pollution gate, or reducing
   `min_layer_cells`.
+  <br>ADR 0011 accepted (Option 1 + Option 2 solver companion, 2026-08-23): the
+  test-first exact-CAD prototype measured only 0.591 local element widths across w_c on
+  the 800-element p=1 fast row; a p=2, maxh=0.30 row clears the pollution gate at
+  epsilon_kappa=1e-4 (kappa_perp,num/kappa_perp=0.0499) but spans only 0.263 widths, one
+  uniform refinement reaches 20,032 elements, ratio 0.00295, and only 0.504 widths, and
+  annular isotropic marking (800 -> 6,387 -> 49,372 -> 325,651) still trends to
+  multi-million elements before six radial widths. The accepted remedy is a radially
+  graded periodic-cylinder mesh built extrude-then-split (graded 2D disk packed around a
+  parameterized target-annulus list, coarse axial extrusion, consistent prism-to-tet
+  split preserving the periodic pairing — no prism element contract), which MUST pass
+  the ADR 0009 geometry contract and the §16.2 periodic/de Rham gates before any
+  physics; an aspect-ratio-vs-pollution/iteration-count test chooses the stretch from
+  data; the pollution gate and falsifiability controls are re-established on the new
+  mesh family; grading targets the unperturbed annuli, never the perturbed field; the
+  direct solver is used below its threshold and native preconditioned CG above it, both
+  recorded in the cost table. See ADR 0011 for the six binding directives. The
+  resolution criterion is not relaxed; the milestone is unblocked.
+  <br>ADR 0012 Option 1 accepted (2026-08-23): M4b now uses the rotation-invariant
+  level-set-normal metric width `h_n=1/||J^-1 n||` on anisotropic cells, with the old
+  determinant width retained and counted only where the level-set normal is undefined.
+  The globally ordered Freudenthal split also closes the H(div) divergence theorem below
+  2e-10; its local-order test-first predecessor was nonconforming and gave a 75% false
+  power defect. The five-row p=2 table spans 1,944--44,928 tetrahedra and 3,305--64,481
+  H1 DOFs, records direct and CG-H1AMG paths (finest: 136 iterations), has pollution
+  ratios 4.269e-5--1.510e-3, at least 6.484 radial widths, and global-power errors below
+  1.12e-13. At epsilon_kappa=1e-3 the 97%-gradient flattening width is zero; at 1e-4 the
+  last two refinements both measure 0.167129 versus exact w_island=0.145095. Integrable,
+  axisymmetric-b, isotropic-K, and sub-w_c controls all measure zero. The finest co-area
+  spike/volume-plateau ratios are 1.226/1.281 with zero critical-safeguard activations.
+  `frozen_field_island_benchmark.py` exclusively regenerates the cost/aspect CSVs and
+  Poincare/isobar overlay. Local `make check` is green (366 fast tests in 102.14 s) and
+  the touched slow aspect scan is green (52.93 s); its coarse H1-AMG row takes 43
+  iterations on macOS and 44 with the canonical Linux wheel, while the exact
+  within-platform refinement trend remains decreasing;
+  complete branch `exhaustive.yml` run
+  https://github.com/landreman/remec/actions/runs/32664081198 passed all 392 tests. To retain
+  the two-minute fast budget, the existing M3 gradient-comparison fast sentinel now
+  computes only its central `D_u=0.02` pair (same 24-by-16 resolution and recorded
+  assertions); its setup fell from 26.1 s to 7.1 s, while the unchanged three-row ladder
+  remains developer-slow and passed in 61.3 s.
+  <br>Review reopening (2026-08-23): the adversarial PR review measured only 2.67--5.81
+  true per-cell radial projections across `w_c`, exposing that the reported 6.484 used
+  ring spacing rather than ADR 0011's intersecting-cell projection. It also found the
+  1e-4 flattening width sensitive to the unscanned 0.97 gradient threshold and no lower
+  epsilon_kappa decade. Milestone 6.3 remains `[~]` until both blockers and the review's
+  should-fix evidence defects are corrected and a new complete exhaustive run passes.
 - [ ] **6.4** Periodic-cylinder end-to-end coupled benchmark — `DESIGN.md` §16.2 · note: §6, §9
   <br>Acceptance: full (M1)–(M4b) Picard on the 6.2 geometry, initialized from the 6.3
   frozen state and the closed-form **A**; all §5 invariants active. This was the old 6.1;
@@ -983,3 +1045,5 @@ exhaustive; `EXHAUSTIVE_WORKERS` and `PYTEST_ARGS` plumbing was exercised end to
 | 0005 | 4.4 | Does the paired ordinary-L2 constraint coerce curved HDiv divergence pointwise to zero? | Option 1 approved |
 | 0006 | 5.5 | Should axisymmetric Ampère use a free-I flux constraint or mixed u--J closure? | Approved 2026-08-22: Option 1 (free-I trace + bordered Ψ_t constraint), with binding numeric escalation criteria to Option 2 |
 | 0007 | Cross-cutting, especially 6.3+ | How can long 3D verification coexist with fast development iteration? | Approved 2026-08-22: fast, developer-slow, and remote-exhaustive tiers |
+| 0013 | 6.3 | What localized forward/inverse Vχ signature is mathematically appropriate? | Proposed; inverse-plateau interpretation recommended after 2026-09-05 review |
+| 0014 | 6.3 | Which width convention, parameters, and pressure-suppression criterion establish a resolved island response? | Proposed; human sign-off and new calibration required |

@@ -11,6 +11,81 @@
 > numbers remain valid. Milestone 3.5 migrated the public contract and layer-cake
 > oracle to p₀(s) and the factor V_Ω∫₀¹·ds.
 
+## Milestone 6.3 — frozen-field 3D island benchmark (M4a)–(M4b)
+
+> **Evidence qualification, 2026-09-05.** The records below are historical outputs of
+> the stated 97%-gradient and co-area statistics. They do not establish a strongly
+> flattened pressure interior or resolve the reopened milestone. See
+> [ADR 0014](adr/0014-island-flattening-calibration.md) for the width-convention,
+> parameter, and M4b calibration evidence, and
+> [ADR 0013](adr/0013-separatrix-level-vchi-signature.md) for the revised inverse-map
+> interpretation. No CSV has been hand-adjusted and no new acceptance run is claimed.
+
+The benchmark solves only
+
+\[
+-\nabla\cdot[\epsilon_\kappa\nabla\chi
++(1-\epsilon_\kappa)\mathbf b(\mathbf b\cdot\nabla\chi)]=1,
+\qquad p=p_0(V_\chi(\chi)/V_\Omega),
+\]
+
+on the periodic Reiman–Greenside cylinder with `epsilon_1=1e-3`, `epsilon_2=0`, and
+`p0(s)=1-s`. No M1, M2–M3b, or Picard block runs here. ADR 0011 supplies a
+parameterized radially packed disk, coarse axial extrusion, and globally ordered
+Freudenthal prism split. The global ordering is load-bearing: the test-first local-order
+split violated the H(div) divergence theorem, while the accepted split closes the live
+volume/boundary identity below 2e-10 and the M4 source-to-wall power balance near 1e-14.
+The curved graded mesh also retains one exact periodic identification, tetrahedra only,
+the ADR-0009 geometry/Jacobian gates, scalar periodic traces, and curved
+`div(curl(A_h))` at the established order-scaled roundoff gate.
+
+ADR 0012 replaces `|det J|^(1/3)` by the level-set-normal metric width
+`h_n=1/||J^-1 n||` only for this anisotropic quadrature extraction. Uniform scaling and
+physical rotation are automated tests; determinant width is retained and counted only
+where `grad(chi)` cannot define `n`. No such critical fallback was needed on the final
+ladder. The pressure flattening estimator reports the widest interval near the
+resonance on which `|dp/dr|` is below the stated **97%** of the same-mesh integrable
+control.
+
+The ADR-0011 aspect scan is generated exclusively by
+`scripts/frozen_field_island_benchmark.py` and recorded in
+`tests/verification/frozen_field_island_aspect_scan.csv`:
+
+| angular × axial cells | target aspect ratio | pollution ratio | CG iterations |
+| ---: | ---: | ---: | ---: |
+| 12 × 2 | 71.21 | 4.269e-5 | 43 |
+| 24 × 4 | 35.61 | 5.543e-6 | 34 |
+
+Thus reducing tangential stretch improves both pollution and native H1-AMG iteration
+count. The same script is the only source of
+`tests/verification/frozen_field_island_cost.csv` and the required
+`tests/verification/frozen_field_island_overlay.png`:
+
+| epsilon_kappa | angular × axial | elements | H1 DOFs | path (iterations) | assembly / solve (s) | peak MiB | pollution | layers across wc | flattening width |
+| ---: | ---: | ---: | ---: | --- | ---: | ---: | ---: | ---: | ---: |
+| 1e-2 | 12 × 2 | 1,944 | 3,305 | direct (1) | 0.073 / 0.031 | 185 | 4.269e-5 | 6.667 | 0 |
+| 1e-3 | 24 × 4 | 8,928 | 13,617 | direct (1) | 0.220 / 0.384 | 547 | 1.677e-4 | 6.667 | 0 |
+| 1e-4 | 24 × 4 | 11,232 | 17,073 | direct (1) | 0.309 / 0.965 | 662 | 1.510e-3 | 6.484 | 0.14770 |
+| 1e-4 | 36 × 6 | 25,272 | 36,985 | CG-H1AMG (102) | 1.471 / 3.514 | 1,201 | 5.902e-4 | 6.484 | 0.16713 |
+| 1e-4 | 48 × 8 | 44,928 | 64,481 | CG-H1AMG (136) | 3.126 / 16.912 | 1,081 | 3.238e-4 | 6.484 | 0.16713 |
+
+Every row clears `kappa_perp,num < 0.1 kappa_perp`, six local radial widths, the 5%
+global-power gate, positive pressure, and inactive B-floor. The ε_kappa=1e-3 row has no
+flattening because `wc=0.1673` exceeds the exact island width 0.14510. At 1e-4,
+`wc=0.09407` is smaller and the width saturates: the last two refinements both measure
+0.16713 (0% movement, within 15.2% of the exact island width). On the finest row the
+island pressure drop is 0.20152 versus 0.21585 for the integrable control. The
+integrable, axisymmetric-b (the same M4 operator as the zero-perturbation control),
+isotropic-K, and deliberately sub-wc island controls all measure zero flattening.
+
+The finest level-set diagnostics report co-area spike ratio 1.226, volume-level plateau
+ratio 1.281, zero critical-safeguard activations, and the recorded normal-metric
+mollifier-width range. The script-generated overlay places the computed isobars on the
+same Phi=0 Poincare section and includes an O-point zoom; the deformation is tied to
+the traced m=2 island rather than a mesh annulus. The complete five-row ladder is an
+`exhaustive` test with a same-family fast sentinel and bounded developer-slow aspect
+scan.
+
 ## Milestone 6.2 — curved periodic cylinder and Reiman--Greenside (M1) field
 
 ADR 0009 selects an OCC circular cylinder with one translated axial identification and

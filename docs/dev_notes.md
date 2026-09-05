@@ -1,5 +1,18 @@
 # NGSolve API notes
 
+- Milestone 6.3 prototype (NGSolve 6.2.2606): for a periodic H1 GridFunction with an
+  essential `wall` trace, both the field and `grad(field)` evaluate as zero in a direct
+  boundary integral, so `Integrate((-K*grad(field))*normal, BND, definedon=wall)` cannot
+  measure the (M4a) boundary heat flux. Recover the raw heat flux into a periodic H(div)
+  field with the paired L2 constraint `div(q_h)=S_ref`; its normal trace gives the global
+  power balance at roundoff and its relative correction must be reported. Local OCC-mesh
+  refinement uses `mesh.SetRefinementFlag(ng.ElementId(ng.VOL, element.nr), flag)` before
+  `mesh.Refine()` and before `mesh.Curve(order)`. Marking a resonant annulus on the coarse
+  isotropic tetrahedral cylinder still refines most elements because their radial spans
+  intersect the annulus; measured counts 800 -> 6,387 -> 49,372 -> 325,651 demonstrate
+  why ADR 0011 (since accepted, 2026-08-23) replaces it with a radially graded mesh built
+  extrude-then-split.
+
 - Milestone 6.2 (Netgen/NGSolve 6.2.2606): build a periodic OCC cylinder by naming the
   lateral face and classifying the two end faces by their axial centers, then call
   `lower.Identify(upper, name, IdentificationType.PERIODIC,
@@ -365,3 +378,47 @@
   `Curve(order)`. On the same 3560-tetrahedron Linux mesh, refine-then-curve gave
   relative volume error 7.10e-8 while curve-then-refine left the children effectively
   order one at 1.28e-2. This ordering is load-bearing for the ADR-0009 scan.
+
+- Milestone 6.3 extrude-then-split topology (Netgen/NGSolve 6.2.2606): applying the
+  usual three-tetrahedron prism split to each disk triangle in its local vertex order
+  does **not** give a conforming mesh; neighboring prisms can choose opposite diagonals
+  on their shared vertical quadrilateral. Netgen accepts that topology, H1 solves look
+  plausible, and integral OCC geometry metrics remain accurate, but a projected H(div)
+  field violated the physical divergence theorem by 13.7 in absolute flux (75% in the
+  M4 power diagnostic). Sort every disk triangle by one global vertex rank before the
+  Freudenthal split and use the same global diagonal on wall quads. The resulting live
+  H(div) volume/boundary identity closes below 2e-10 in the sentinel and M4 global power
+  closes near 1e-14. Always put a divergence-theorem test on a manual tetrahedral split;
+  element-type and positive-Jacobian checks cannot detect this defect.
+
+- Milestone 6.3 rank-one pollution solve (NGSolve 6.2.2606): `h1amg` cannot be built
+  for the kappa-perp=0 diagnostic operator because its element blocks retain the exact
+  parallel-operator nullspace (`Inverse matrix: Matrix singular`). The physical finite-
+  kappa M4a operator uses native H1-AMG above its configured direct threshold; the
+  separate pollution diagnostic uses UMFPACK below its own threshold and the `local`
+  preconditioner above it. This is a property of the deliberately rank-one diagnostic,
+  not evidence against H1-AMG for the uniformly elliptic production operator.
+
+- ADR 0012 normal metric (NGSolve 6.2.2606): evaluating
+  `specialcf.JacobianMatrix(dim)` on `MapToAllElements` returns a flattened
+  `(samples, dim*dim)` array in the same element/quadrature ordering as coefficient
+  evaluation. Reshape it to `(samples, dim, dim)` before computing
+  `h_n=1/||J^{-1} n||`. The production extractor retains determinant widths only at
+  counted samples where the level-set gradient is too small to define `n`. The same
+  batched Jacobians supply `|det J|` for physical quadrature weights; on a curved
+  third-order sphere this agrees with pointwise `GetTrafo(element)(ip).measure` to
+  3.6e-15 relative while avoiding a Python transformation call at every quadrature
+  point.
+
+- Milestone 6.3 parallel integration (NGSolve 6.2.2606): `ng.Integrate` does not use
+  the configured worker pool unless it runs inside `ng.TaskManager()`. On the
+  24-by-4 graded M4 mesh with eight configured workers, a representative order-12
+  volume integral fell from about 0.157 s outside the context to 0.039 s inside it.
+  Wrap expensive production integrations explicitly; setting `numthreads` alone is
+  insufficient.
+
+- Milestone 6.3 H1-AMG portability (NGSolve 6.2.2606): the identical graded-mesh
+  aspect row converged in 43 CG steps with the macOS wheel and 44 with the canonical
+  Linux wheel. Treat the checked-in iteration count as a one-step reproducibility
+  reference while retaining the exact within-platform monotone aspect-scan gate;
+  iteration equality across platform-specific AMG coarsenings is not stable.

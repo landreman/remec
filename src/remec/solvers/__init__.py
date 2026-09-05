@@ -40,6 +40,13 @@ from remec.solvers.current_continuity import (
     UnresolvedCurrentLayerError,
     UnresolvedCurrentLayerWarning,
 )
+from remec.solvers.frozen_field_island import (
+    FrozenFieldIslandConfig,
+    FrozenFieldIslandResult,
+    FrozenFieldIslandSolver,
+    critical_layer_width,
+    exact_island_width,
+)
 from remec.solvers.picard import DampedPicardSolver, PicardOptions
 
 __all__ = [
@@ -69,6 +76,9 @@ __all__ = [
     "FloorSensitivityWarning",
     "FrozenCurrentConstraintGeometry",
     "FrozenCurrentContinuityCoefficients",
+    "FrozenFieldIslandConfig",
+    "FrozenFieldIslandResult",
+    "FrozenFieldIslandSolver",
     "PicardOptions",
     "PollutionSafetyDiagnostic",
     "SpatialAnisotropicConductivity",
@@ -77,4 +87,6 @@ __all__ = [
     "StagedContinuationSolver",
     "UnresolvedCurrentLayerError",
     "UnresolvedCurrentLayerWarning",
+    "critical_layer_width",
+    "exact_island_width",
 ]

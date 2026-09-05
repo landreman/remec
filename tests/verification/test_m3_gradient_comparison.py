@@ -324,19 +324,40 @@ def _resonant_layer_observables(
 
 
 @pytest.fixture(scope="module")
-def resonant_scan() -> dict[float, dict[str, tuple[ConstrainedCurrentContinuitySolver, Any]]]:
-    """Cache the fixed-frozen-state ``D_u`` scan shared by the acceptance tests."""
+def resonant_fast_scan() -> dict[float, dict[str, tuple[ConstrainedCurrentContinuitySolver, Any]]]:
+    """Keep the central mutation-sensitive layer/noise row in every fast run."""
     return {
-        diffusivity: {
+        0.02: {
             variant: _solve_case(
-                _resonant_comparison_case(diffusivity),
+                _resonant_comparison_case(0.02),
                 variant,
                 subdivisions=(24, 16),
-                diagnostic_detail="full" if diffusivity == 0.02 else "core",
+                diagnostic_detail="full",
             )
             for variant in ("perpendicular", "full")
         }
-        for diffusivity in (0.04, 0.02, 0.01)
+    }
+
+
+@pytest.fixture(scope="module")
+def resonant_scan(
+    resonant_fast_scan: dict[float, dict[str, tuple[ConstrainedCurrentContinuitySolver, Any]]],
+) -> dict[float, dict[str, tuple[ConstrainedCurrentContinuitySolver, Any]]]:
+    """Extend the central fast row to the developer-slow ``D_u`` ladder."""
+    return {
+        **resonant_fast_scan,
+        **{
+            diffusivity: {
+                variant: _solve_case(
+                    _resonant_comparison_case(diffusivity),
+                    variant,
+                    subdivisions=(24, 16),
+                    diagnostic_detail="core",
+                )
+                for variant in ("perpendicular", "full")
+            }
+            for diffusivity in (0.04, 0.01)
+        },
     }
 
 
@@ -427,6 +448,13 @@ def test_fixed_state_variants_are_o_epsilon_j_but_target_is_not_admissible(
             ("full", full_result),
         ):
             expected = recorded[variant, diffusivity]
+            width, turns, noise = _resonant_layer_observables(
+                resonant_scan[diffusivity][variant][0]
+            )
+            assert width * 24.0 >= 6.0
+            assert width == pytest.approx(expected["layer_fwhm"], rel=5.0e-3)
+            assert turns == int(expected["radial_turning_points"])
+            assert noise == pytest.approx(expected["parallel_noise_transfer"], rel=5.0e-3)
             assert epsilon_j == pytest.approx(expected["epsilon_j"], abs=1.0e-14)
             assert epsilon_kappa_over_epsilon_j == pytest.approx(
                 expected["epsilon_kappa_over_epsilon_j"],
@@ -491,13 +519,12 @@ def test_fixed_state_variants_are_o_epsilon_j_but_target_is_not_admissible(
 
 
 def test_resonant_layer_records_smearing_oscillation_and_parallel_noise(
-    resonant_scan: dict[float, dict[str, tuple[ConstrainedCurrentContinuitySolver, Any]]],
+    resonant_fast_scan: dict[float, dict[str, tuple[ConstrainedCurrentContinuitySolver, Any]]],
 ) -> None:
-    r"""Both variants resolve one monotone layer; full grad damps the injected noise."""
+    r"""The central fast row resolves one layer; full grad damps injected noise."""
     recorded = _recorded_du_rows()
     observables = {
-        (variant, diffusivity): _resonant_layer_observables(resonant_scan[diffusivity][variant][0])
-        for diffusivity in (0.04, 0.02, 0.01)
+        (variant, 0.02): _resonant_layer_observables(resonant_fast_scan[0.02][variant][0])
         for variant in ("perpendicular", "full")
     }
     perpendicular_width, perpendicular_turns, perpendicular_noise = observables[
