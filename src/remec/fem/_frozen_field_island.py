@@ -9,7 +9,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from math import cos, isfinite, pi, sqrt
 from time import perf_counter
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -158,6 +158,7 @@ def _solve_m4(
     isotropic: bool = False,
     recover_flux: bool = False,
     verbose: bool = False,
+    linear_solver: Literal["auto", "direct", "cg-h1amg", "cg-bddc"] = "auto",
 ) -> _M4Row:
     r"""Solve ``(M4a)`` and transplant ``p=p0(V_chi(chi)/V_omega)`` from ``(M4b)``.
 
@@ -165,7 +166,14 @@ def _solve_m4(
     ``int [epsilon_kappa grad(chi).grad(v) + (1-epsilon_kappa)
     (b_safe.grad(chi))(b_safe.grad(v))] = int v S_ref`` with ``S_ref=1``.
     For the isotropic falsifiability control it becomes ``int grad(chi).grad(v)``.
+
+    ``auto`` retains the configured direct threshold and H1-AMG default. Explicit
+    solver choices support same-operator cost comparisons; CG uses relative
+    preconditioned-residual tolerance 1e-11 and every path must pass the independent
+    free-DOF residual gate below. BDDC uses its native direct wirebasket solver.
     """
+    if linear_solver not in ("auto", "direct", "cg-h1amg", "cg-bddc"):
+        raise ValueError("linear_solver must be auto, direct, cg-h1amg, or cg-bddc")
     with _timed_step("preparing the M4a system", verbose=verbose):
         import ngsolve as ng
 
@@ -196,8 +204,11 @@ def _solve_m4(
         # Keep the benchmark/test default deterministic at one worker while allowing
         # explicitly parallel interactive or production callers.
         configure_threads(config.threads)
-        iterative = space.ndof > config.direct_dof_threshold
-        preconditioner = ng.Preconditioner(bilinear, "h1amg") if iterative else None
+        iterative = linear_solver.startswith("cg-") or (
+            linear_solver == "auto" and space.ndof > config.direct_dof_threshold
+        )
+        preconditioner_type = "bddc" if linear_solver == "cg-bddc" else "h1amg"
+        preconditioner = ng.Preconditioner(bilinear, preconditioner_type) if iterative else None
 
     with _timed_step("assembling the M4a system", verbose=verbose):
         assembly_start = perf_counter()
@@ -225,7 +236,7 @@ def _solve_m4(
                     callback=lambda _iteration, error: iterations.append(float(error)),
                 )
                 iteration_count = len(iterations)
-                solver_path = "iterative:cg-h1amg"
+                solver_path = f"iterative:cg-{preconditioner_type}"
             else:
                 inverse = bilinear.mat.Inverse(free_dofs, inverse="sparsecholesky")
                 field.vec.data = inverse * linear.vec

@@ -422,3 +422,23 @@
   Linux wheel. Treat the checked-in iteration count as a one-step reproducibility
   reference while retaining the exact within-platform monotone aspect-scan gate;
   iteration equality across platform-specific AMG coarsenings is not stable.
+
+- Short-radius M4 cost investigation (NGSolve 6.2.2606, macOS, 2026-09-05):
+  `H1AMG` can have expensive coarse-level block smoothers on the thin-ring graded
+  cylinder. For epsilon_1=0.005, epsilon_kappa=1e-4, R0=0.5, H1 order 3, 24 angular
+  and 4 axial cells (375,349 DOFs), a native stack sample placed the stalled CG
+  inside recursive `H1AMG_Matrix::Mult` / block Gauss-Seidel applications; the run
+  was stopped after more than 300 seconds of solving. On the identical operator,
+  explicit sparse Cholesky took 1.08 s assembly + 15.50 s factorization/solve;
+  `Preconditioner(a, "bddc")` with its default direct wirebasket solver took
+  4.29 + 33.80 s (616 CG updates). Their coefficient vectors agreed to 1.62e-10
+  relative and both passed the unchanged 1e-9 free-DOF residual gate. Increasing
+  angular cells to 36 reduces DOFs to 242,905 because the radial-spacing cap is
+  `w_c/6 - r_outer*(1-cos(pi/Ntheta))`; direct then took 1.01 + 11.95 s.
+  `bddc` with `coarsetype="h1amg"` was slower and reached the iteration cap in
+  that comparison. Increasing H1-AMG `maxcoarse` to 1000, requesting unsmoothed
+  prolongation, or symmetric bilinear-form storage did not remove the slowdown.
+  `_solve_m4(linear_solver=...)` now supports explicit direct/H1-AMG/BDDC
+  comparisons without changing the `auto` threshold, operator, or CG tolerance.
+  These are interactive-size cost measurements, not large-scale solver or
+  spatial-convergence claims; calibration ADRs 0013/0014 remain pending.

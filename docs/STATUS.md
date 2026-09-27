@@ -796,6 +796,26 @@ numbering.
   `make_hdiv_field_evaluator` wrap-length gate and the production
   `ReimanGreensideField`, rather than copying milestone 6.1's private oracle.
 - [~] **6.3** Frozen-field 3D island benchmark: (M4a)–(M4b) at large anisotropy — `DESIGN.md` §8.6, §12.3, §22 · note: §4.3, §8
+  <br>Short-radius cost investigation (2026-09-05): at ε₁=.005, ε_κ=1e-4,
+  R₀=.5, p=3, 24 angular / 4 axial cells, the graded mesh has 375,349 DOFs.
+  H1-AMG was stopped after >300 s in CG; explicit sparse Cholesky took
+  16.58 s including assembly and BDDC/direct-coarse CG took 38.09 s, agreeing
+  within 1.62e-10 relative coefficient norm. Increasing angular cells to 36
+  reduces DOFs to 242,905 and direct assembly + solve to 12.96 s without
+  relaxing the six-cell layer criterion. The ring-spacing cap subtracts angular
+  chord depth from w_c/6, explaining the rapid mesh growth as R₀ decreases.
+  Opt-in private M4 solver overrides retain the original `auto` policy and
+  tolerances; a short-cylinder regression checks direct/CG field, M4b-map,
+  and periodic-trace agreement. See `docs/dev_notes.md`. These timings do not
+  resolve the calibration blockers or establish new pressure-resolution claims.
+  Validation: lint/mypy and the two new solver tests pass; `make check` ran
+  380 fast tests in 75.79 s (378 passed, two baseline failures). Both failures
+  reproduce with the original HEAD package: the untracked toy-source test
+  references missing `scratch/m4ab_2d_disk_gaussian_toy.py`, and the existing
+  curved graded-mesh de Rham test measures relative divergence about 1.55e-10
+  against its 1.82e-12 gate. The latter geometry/compatible-space follow-up must
+  be resolved before claiming milestone verification; no gate was relaxed.
+  The touched developer-slow graded-mesh aspect/CG scan passes in 45.32 s.
   <br>**Calibration review, 2026-09-05 — blocked on ADR 0013/0014 sign-off.**
   [ADR 0014](adr/0014-island-flattening-calibration.md) distinguishes exact full
   island width from the local transport scale. The reference crossing and strong
