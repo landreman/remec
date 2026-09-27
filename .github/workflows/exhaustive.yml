@@ -35,7 +35,7 @@ jobs:
       - run: python -m pip install -e ".[dev]"
       # The exhaustive tier claims to cover the optional ngsxfem tests (DESIGN.md §23);
       # without this extra they would `importorskip` away silently.
-      - run: python -m pip install -e ".[cutcell]"
+      - run: python -m pip install --build-constraint .github/xfem-build-constraints.txt -e ".[cutcell]"
       - name: Record the selection used by this run
         env:
           EXTRA_ARGS: ${{ inputs.pytest_args }}
