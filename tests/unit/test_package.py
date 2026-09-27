@@ -73,7 +73,25 @@ def test_ci_uses_pip_and_covers_the_supported_python_floor() -> None:
 
     assert 'python: ["3.10", "3.14"]' in workflow
     assert 'python -m pip install -e ".[dev]"' in workflow
-    assert 'python -m pip install -e ".[cutcell]"' in workflow
+    assert (
+        "python -m pip install --build-constraint .github/xfem-build-constraints.txt "
+        '-e ".[cutcell]"' in workflow
+    )
     assert "if: matrix.os != 'ubuntu-latest' || matrix.python != '3.10'" in workflow
     assert "setup-uv" not in workflow
     assert "uv " not in workflow
+
+
+def test_verification_workflows_constrain_xfem_build() -> None:
+    """The isolated xfem build uses the NGSolve version required by xfem 2.1.2606."""
+    root = Path(__file__).parents[2]
+    assert (root / ".github/xfem-build-constraints.txt").read_text().splitlines()[-1] == (
+        "ngsolve==6.2.2606"
+    )
+
+    for name in ("ci.yml", "nightly.yml", "exhaustive.yml"):
+        workflow = (root / ".github/workflows" / name).read_text()
+        assert (
+            "python -m pip install --build-constraint .github/xfem-build-constraints.txt "
+            '-e ".[cutcell]"' in workflow
+        ), name
