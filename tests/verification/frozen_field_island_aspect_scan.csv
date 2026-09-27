@@ -1,0 +1,3 @@
+angular_cells,axial_cells,axial_spacing_amplitude,elements,h1_dofs,maximum_target_aspect_ratio,pollution_ratio,linear_solver_path,iteration_count
+24,4,0.0,8352,12753,4.0063607813663381e+01,5.5075101878207741e-06,iterative:cg-h1amg,34
+24,4,0.5,8352,12753,5.2558453334226698e+01,5.4964914411945114e-06,iterative:cg-h1amg,38

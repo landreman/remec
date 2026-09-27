@@ -3,8 +3,34 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from itertools import pairwise
 from math import isfinite, pi
 from typing import Any
+
+
+@dataclass(frozen=True, slots=True)
+class GradedAnnulus:
+    """One annulus with an ADR-0011 cap on intersecting-cell radial projection."""
+
+    radius: float
+    half_width: float
+    maximum_radial_width: float
+    measurement_half_width: float | None = None
+
+    def __post_init__(self) -> None:
+        if not isfinite(self.radius) or self.radius <= 0.0:
+            raise ValueError("annulus radius must be finite and positive")
+        if not isfinite(self.half_width) or self.half_width <= 0.0:
+            raise ValueError("annulus half_width must be finite and positive")
+        if not isfinite(self.maximum_radial_width) or self.maximum_radial_width <= 0.0:
+            raise ValueError("annulus maximum_radial_width must be finite and positive")
+        if self.measurement_half_width is not None and (
+            not isfinite(self.measurement_half_width)
+            or not 0.0 < self.measurement_half_width <= self.half_width
+        ):
+            raise ValueError(
+                "measurement_half_width must be positive and no larger than half_width"
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,6 +67,11 @@ class _PeriodicCylinderMeshBundle:
     boundary_names: tuple[str, ...]
     periodic_identification_count: int
     _geometry_owner: Any = None
+    radial_coordinates: tuple[float, ...] = ()
+    element_types: tuple[str, ...] = ()
+    maximum_aspect_ratio: float = 1.0
+    maximum_target_aspect_ratio: float = 1.0
+    maximum_target_radial_projection: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,8 +107,30 @@ class PeriodicCylinder3D:
         """Return the identified axial length ``2*pi*R0``."""
         return 2.0 * pi * self.major_radius
 
-    def build_mesh(self) -> _PeriodicCylinderMeshBundle:
-        """Build the curved periodic tetrahedral mesh selected by ADR 0009."""
+    def build_mesh(
+        self,
+        *,
+        local_refinement_radius: float | None = None,
+        local_refinement_half_width: float | None = None,
+    ) -> _PeriodicCylinderMeshBundle:
+        """Build the curved periodic tetrahedral mesh selected by ADR 0009.
+
+        When a radius and half-width are supplied, ``refinements`` marks only elements
+        intersecting that annulus before each refinement pass.  Milestone 6.3 uses this
+        shell grading to resolve ``w_c`` without uniformly refining the long cylinder.
+        """
+        if (local_refinement_radius is None) != (local_refinement_half_width is None):
+            raise ValueError("local refinement requires both radius and half-width")
+        if local_refinement_radius is not None and (
+            not isfinite(local_refinement_radius)
+            or local_refinement_radius < 0.0
+            or local_refinement_radius > self.radius
+        ):
+            raise ValueError("local refinement radius must lie in the cylinder")
+        if local_refinement_half_width is not None and (
+            not isfinite(local_refinement_half_width) or local_refinement_half_width <= 0.0
+        ):
+            raise ValueError("local refinement half-width must be finite and positive")
         import ngsolve as ng  # type: ignore[import-untyped]
         from netgen.occ import (  # type: ignore[import-untyped]
             Cylinder,
@@ -117,6 +170,17 @@ class PeriodicCylinder3D:
         # Refine the straight mesh before curving: curving first leaves newly refined
         # children with order-one geometry and destroys the ADR-0009 refinement scan.
         for _ in range(self.refinements):
+            if local_refinement_radius is not None:
+                assert local_refinement_half_width is not None
+                lower = max(0.0, local_refinement_radius - local_refinement_half_width)
+                upper = min(self.radius, local_refinement_radius + local_refinement_half_width)
+                for element in mesh.Elements(ng.VOL):
+                    radii = [
+                        (mesh[vertex].point[0] ** 2 + mesh[vertex].point[1] ** 2) ** 0.5
+                        for vertex in element.vertices
+                    ]
+                    intersects_shell = min(radii) <= upper and max(radii) >= lower
+                    mesh.SetRefinementFlag(ng.ElementId(ng.VOL, element.nr), intersects_shell)
             mesh.Refine()
         mesh.Curve(self.geometry_order)
         actual_boundaries = set(mesh.GetBoundaries())
@@ -136,6 +200,365 @@ class PeriodicCylinder3D:
             boundary_names=("wall", "periodic_lower", "periodic_upper"),
             periodic_identification_count=identification_count,
             _geometry_owner=(solid, geometry),
+        )
+
+    def build_graded_mesh(
+        self,
+        target_annuli: tuple[GradedAnnulus, ...],
+        *,
+        angular_cells: int,
+        axial_cells: int,
+        background_radial_width: float = 0.125,
+        axial_spacing_amplitude: float = 0.0,
+    ) -> _PeriodicCylinderMeshBundle:
+        """Build the accepted ADR-0011 extrude-then-split graded tetrahedral mesh.
+
+        A parameterized polar disk is packed around every unperturbed target annulus,
+        extruded through the periodic length, and each triangular prism is split into
+        three consistently oriented tetrahedra. The exact OCC cylinder remains attached
+        to the manual mesh so ``Curve(geometry_order)`` projects the wall to the same
+        analytic circle used by ADR 0009.
+        """
+        if not target_annuli:
+            raise ValueError("target_annuli must not be empty")
+        if not all(isinstance(target, GradedAnnulus) for target in target_annuli):
+            raise TypeError("target_annuli must contain GradedAnnulus values")
+        for target in target_annuli:
+            if target.radius + target.half_width >= self.radius:
+                raise ValueError("target annulus must lie strictly inside the cylinder")
+        for name, value, minimum in (
+            ("angular_cells", angular_cells, 8),
+            ("axial_cells", axial_cells, 2),
+        ):
+            if isinstance(value, bool) or not isinstance(value, int):
+                raise TypeError(f"{name} must be an integer")
+            if value < minimum:
+                raise ValueError(f"{name} must be at least {minimum}")
+        if angular_cells % 2:
+            raise ValueError("angular_cells must be even for the periodic tetrahedral split")
+        if not isfinite(background_radial_width) or background_radial_width <= 0.0:
+            raise ValueError("background_radial_width must be finite and positive")
+        if not isfinite(axial_spacing_amplitude) or not 0.0 <= axial_spacing_amplitude < 1.0:
+            raise ValueError("axial_spacing_amplitude must be finite and in [0, 1)")
+
+        from math import ceil, cos, dist, sin, tau
+
+        import ngsolve as ng
+        from netgen.csg import Pnt as MeshPointCoordinate  # type: ignore[import-untyped]
+        from netgen.meshing import (  # type: ignore[import-untyped]
+            Element2D,
+            Element3D,
+            FaceDescriptor,
+            IdentificationType,
+            Mesh,
+            MeshPoint,
+        )
+        from netgen.occ import Cylinder, OCCGeometry, Pnt, Z
+
+        background_points = {
+            self.radius * index / ceil(self.radius / background_radial_width)
+            for index in range(ceil(self.radius / background_radial_width) + 1)
+        }
+        radial_points = {
+            point
+            for point in background_points
+            if not any(
+                target.radius - target.half_width < point < target.radius + target.half_width
+                for target in target_annuli
+            )
+        }
+        for target in target_annuli:
+            lower = target.radius - target.half_width
+            upper = target.radius + target.half_width
+            chord_depth = upper * (1.0 - cos(pi / angular_cells))
+            maximum_ring_width = target.maximum_radial_width - chord_depth
+            if maximum_ring_width <= 0.0:
+                raise ValueError(
+                    "angular_cells is too small for the requested intersecting-cell "
+                    "radial projection"
+                )
+            intervals = ceil((upper - lower) / maximum_ring_width)
+            radial_points.update(
+                lower + (upper - lower) * index / intervals for index in range(intervals + 1)
+            )
+        radial_coordinates = tuple(sorted(radial_points))
+        maximum_target_radial_projection = max(
+            upper - lower * cos(pi / angular_cells)
+            for lower, upper in pairwise(radial_coordinates)
+            if any(
+                lower * cos(pi / angular_cells)
+                < target.radius + (target.measurement_half_width or target.half_width)
+                and upper > target.radius - (target.measurement_half_width or target.half_width)
+                for target in target_annuli
+            )
+        )
+
+        solid = Cylinder(Pnt(0.0, 0.0, 0.0), Z, self.radius, self.periodic_length)
+        geometry = OCCGeometry(solid)
+        wall_surface = 0
+        upper_surface = 0
+        lower_surface = 0
+        tolerance = 64.0 * 2.220446049250313e-16 * self.periodic_length
+        for surface_number, face in enumerate(solid.faces, start=1):
+            axial_coordinate = float(face.center.z)
+            if abs(axial_coordinate) <= tolerance:
+                lower_surface = surface_number
+            elif abs(axial_coordinate - self.periodic_length) <= tolerance:
+                upper_surface = surface_number
+            else:
+                wall_surface = surface_number
+        if not wall_surface or not lower_surface or not upper_surface:
+            raise RuntimeError("OCC cylinder did not expose the expected three surfaces")
+
+        netgen_mesh = Mesh(dim=3)
+        netgen_mesh.SetGeometry(geometry)
+        netgen_mesh.SetMaterial(1, "domain")
+        wall_descriptor = netgen_mesh.Add(
+            FaceDescriptor(surfnr=wall_surface, domin=1, domout=0, bc=1)
+        )
+        upper_descriptor = netgen_mesh.Add(
+            FaceDescriptor(surfnr=upper_surface, domin=1, domout=0, bc=2)
+        )
+        lower_descriptor = netgen_mesh.Add(
+            FaceDescriptor(surfnr=lower_surface, domin=1, domout=0, bc=3)
+        )
+        for index, name in enumerate(("wall", "periodic_upper", "periodic_lower")):
+            netgen_mesh.SetBCName(index, name)
+
+        point_ids: dict[tuple[int, int, int], Any] = {}
+        coordinates: dict[tuple[int, int, int], tuple[float, float, float]] = {}
+        for axial_index in range(axial_cells + 1):
+            axial_fraction = axial_index / axial_cells
+            axial_coordinate = self.periodic_length * (
+                axial_fraction + axial_spacing_amplitude * sin(tau * axial_fraction) / tau
+            )
+            key = (axial_index, 0, 0)
+            coordinates[key] = (0.0, 0.0, axial_coordinate)
+            point_ids[key] = netgen_mesh.Add(MeshPoint(MeshPointCoordinate(*coordinates[key])))
+            for radial_index, radius in enumerate(radial_coordinates[1:], start=1):
+                for angular_index in range(angular_cells):
+                    angle = tau * angular_index / angular_cells
+                    key = (axial_index, radial_index, angular_index)
+                    coordinates[key] = (
+                        radius * cos(angle),
+                        radius * sin(angle),
+                        axial_coordinate,
+                    )
+                    point_ids[key] = netgen_mesh.Add(
+                        MeshPoint(MeshPointCoordinate(*coordinates[key]))
+                    )
+
+        disk_triangles: list[tuple[tuple[int, int], tuple[int, int], tuple[int, int]]] = []
+        for angular_index in range(angular_cells):
+            disk_triangles.append(
+                ((0, 0), (1, angular_index), (1, (angular_index + 1) % angular_cells))
+            )
+        for radial_index in range(1, len(radial_coordinates) - 1):
+            for angular_index in range(angular_cells):
+                next_angle = (angular_index + 1) % angular_cells
+                disk_triangles.extend(
+                    (
+                        (
+                            (radial_index, angular_index),
+                            (radial_index + 1, angular_index),
+                            (radial_index + 1, next_angle),
+                        ),
+                        (
+                            (radial_index, angular_index),
+                            (radial_index + 1, next_angle),
+                            (radial_index, next_angle),
+                        ),
+                    )
+                )
+
+        maximum_aspect_ratio = 1.0
+        maximum_target_aspect_ratio = 1.0
+
+        def disk_vertex_rank(vertex: tuple[int, int]) -> int:
+            radial_index, angular_index = vertex
+            return (
+                0 if radial_index == 0 else 1 + (radial_index - 1) * angular_cells + angular_index
+            )
+
+        for axial_index in range(axial_cells):
+            for triangle in disk_triangles:
+                ordered_triangle = tuple(sorted(triangle, key=disk_vertex_rank))
+                bottom = [point_ids[(axial_index,) + vertex] for vertex in ordered_triangle]
+                top = [point_ids[(axial_index + 1,) + vertex] for vertex in ordered_triangle]
+                tetrahedra = (
+                    (bottom[0], bottom[1], bottom[2], top[2]),
+                    (bottom[0], bottom[1], top[1], top[2]),
+                    (bottom[0], top[0], top[1], top[2]),
+                )
+                coordinate_keys = (
+                    (
+                        (axial_index, *ordered_triangle[0]),
+                        (axial_index, *ordered_triangle[1]),
+                        (axial_index, *ordered_triangle[2]),
+                        (axial_index + 1, *ordered_triangle[2]),
+                    ),
+                    (
+                        (axial_index, *ordered_triangle[0]),
+                        (axial_index, *ordered_triangle[1]),
+                        (axial_index + 1, *ordered_triangle[1]),
+                        (axial_index + 1, *ordered_triangle[2]),
+                    ),
+                    (
+                        (axial_index, *ordered_triangle[0]),
+                        (axial_index + 1, *ordered_triangle[0]),
+                        (axial_index + 1, *ordered_triangle[1]),
+                        (axial_index + 1, *ordered_triangle[2]),
+                    ),
+                )
+                for tetrahedron, keys in zip(tetrahedra, coordinate_keys, strict=True):
+                    oriented_tetrahedron = list(tetrahedron)
+                    oriented_keys = list(keys)
+                    origin, first, second, third = (coordinates[key] for key in oriented_keys)
+                    first_vector = tuple(first[index] - origin[index] for index in range(3))
+                    second_vector = tuple(second[index] - origin[index] for index in range(3))
+                    third_vector = tuple(third[index] - origin[index] for index in range(3))
+                    cross_product = (
+                        second_vector[1] * third_vector[2] - second_vector[2] * third_vector[1],
+                        second_vector[2] * third_vector[0] - second_vector[0] * third_vector[2],
+                        second_vector[0] * third_vector[1] - second_vector[1] * third_vector[0],
+                    )
+                    signed_jacobian = sum(
+                        first_vector[index] * cross_product[index] for index in range(3)
+                    )
+                    # Netgen's tetrahedral reference orientation has the opposite sign
+                    # of the Cartesian determinant above.
+                    if signed_jacobian > 0.0:
+                        oriented_tetrahedron[0], oriented_tetrahedron[1] = (
+                            oriented_tetrahedron[1],
+                            oriented_tetrahedron[0],
+                        )
+                        oriented_keys[0], oriented_keys[1] = oriented_keys[1], oriented_keys[0]
+                    netgen_mesh.Add(Element3D(1, oriented_tetrahedron))
+                    edge_lengths = [
+                        dist(
+                            coordinates[oriented_keys[left]],
+                            coordinates[oriented_keys[right]],
+                        )
+                        for left in range(4)
+                        for right in range(left + 1, 4)
+                    ]
+                    maximum_aspect_ratio = max(
+                        maximum_aspect_ratio, max(edge_lengths) / min(edge_lengths)
+                    )
+                    centroid_radius = (
+                        sum(coordinates[key][0] for key in oriented_keys) / 4.0
+                    ) ** 2 + (sum(coordinates[key][1] for key in oriented_keys) / 4.0) ** 2
+                    centroid_radius = centroid_radius**0.5
+                    if any(
+                        abs(centroid_radius - target.radius) <= target.half_width
+                        for target in target_annuli
+                    ):
+                        maximum_target_aspect_ratio = max(
+                            maximum_target_aspect_ratio,
+                            max(edge_lengths) / min(edge_lengths),
+                        )
+
+        for triangle in disk_triangles:
+            bottom = [point_ids[(0,) + vertex] for vertex in triangle]
+            top = [point_ids[(axial_cells,) + vertex] for vertex in triangle]
+            bottom_uv = [coordinates[(0,) + vertex][:2] for vertex in triangle]
+            top_uv = [coordinates[(axial_cells,) + vertex][:2] for vertex in triangle]
+            netgen_mesh.Add(
+                Element2D(
+                    lower_descriptor,
+                    (bottom[0], bottom[2], bottom[1]),
+                    uv=(bottom_uv[0], bottom_uv[2], bottom_uv[1]),
+                )
+            )
+            netgen_mesh.Add(Element2D(upper_descriptor, top, uv=top_uv))
+
+        wall_radial_index = len(radial_coordinates) - 1
+        for axial_index in range(axial_cells):
+            lower_z = self.periodic_length * axial_index / axial_cells
+            upper_z = self.periodic_length * (axial_index + 1) / axial_cells
+            for angular_index in range(angular_cells):
+                next_angle = (angular_index + 1) % angular_cells
+                lower_angle = tau * angular_index / angular_cells
+                upper_angle = tau * (angular_index + 1) / angular_cells
+                lower_left = point_ids[axial_index, wall_radial_index, angular_index]
+                lower_right = point_ids[axial_index, wall_radial_index, next_angle]
+                upper_left = point_ids[axial_index + 1, wall_radial_index, angular_index]
+                upper_right = point_ids[axial_index + 1, wall_radial_index, next_angle]
+                if angular_index < next_angle:
+                    wall_triangles = (
+                        (
+                            (lower_left, lower_right, upper_right),
+                            (
+                                (lower_angle, lower_z),
+                                (upper_angle, lower_z),
+                                (upper_angle, upper_z),
+                            ),
+                        ),
+                        (
+                            (lower_left, upper_right, upper_left),
+                            (
+                                (lower_angle, lower_z),
+                                (upper_angle, upper_z),
+                                (lower_angle, upper_z),
+                            ),
+                        ),
+                    )
+                else:
+                    wall_triangles = (
+                        (
+                            (lower_left, lower_right, upper_left),
+                            (
+                                (lower_angle, lower_z),
+                                (upper_angle, lower_z),
+                                (lower_angle, upper_z),
+                            ),
+                        ),
+                        (
+                            (lower_right, upper_right, upper_left),
+                            (
+                                (upper_angle, lower_z),
+                                (upper_angle, upper_z),
+                                (lower_angle, upper_z),
+                            ),
+                        ),
+                    )
+                for vertices, uv in wall_triangles:
+                    netgen_mesh.Add(Element2D(wall_descriptor, vertices, uv=uv))
+
+        for radial_index in range(len(radial_coordinates)):
+            angular_indices = (0,) if radial_index == 0 else range(angular_cells)
+            for angular_index in angular_indices:
+                netgen_mesh.AddPointIdentification(
+                    point_ids[0, radial_index, angular_index],
+                    point_ids[axial_cells, radial_index, angular_index],
+                    1,
+                    IdentificationType.PERIODIC,
+                )
+        netgen_mesh.Compress()
+        mesh = ng.Mesh(netgen_mesh)
+        mesh.Curve(self.geometry_order)
+        boundaries = tuple(mesh.GetBoundaries())
+        expected = {"wall", "periodic_lower", "periodic_upper"}
+        if set(boundaries) != expected:
+            raise RuntimeError(
+                f"graded cylinder boundaries {set(boundaries)} do not match {expected}"
+            )
+        identification_count = int(mesh.ngmesh.GetNrIdentifications())
+        if identification_count != 1:
+            raise RuntimeError("graded cylinder must contain exactly one periodic identification")
+        element_types = tuple(sorted({element.type.name for element in mesh.Elements(ng.VOL)}))
+        if element_types != ("TET",):
+            raise RuntimeError(f"graded cylinder split produced {element_types}, expected TET")
+        return _PeriodicCylinderMeshBundle(
+            _mesh=mesh,
+            boundary_names=("wall", "periodic_lower", "periodic_upper"),
+            periodic_identification_count=identification_count,
+            _geometry_owner=(solid, geometry, netgen_mesh),
+            radial_coordinates=radial_coordinates,
+            element_types=element_types,
+            maximum_aspect_ratio=maximum_aspect_ratio,
+            maximum_target_aspect_ratio=maximum_target_aspect_ratio,
+            maximum_target_radial_projection=maximum_target_radial_projection,
         )
 
     def boundary_regions(self) -> dict[str, str]:
@@ -225,6 +648,19 @@ class PeriodicCylinder3D:
         ).reshape(-1)
         minimum_mapped_jacobian_determinant = float(np.min(mapped_jacobian_determinants))
         maximum_mapped_jacobian_determinant = float(np.max(mapped_jacobian_determinants))
+        mapped_jacobian_ratio = (
+            minimum_mapped_jacobian_determinant / maximum_mapped_jacobian_determinant
+        )
+        if mesh_bundle.radial_coordinates:
+            local_ratios: list[float] = []
+            for element in mesh.Elements(ng.VOL):
+                transformation = mesh.GetTrafo(element)
+                measures = [
+                    float(transformation(point).measure)
+                    for point in integration_rules[element.type]
+                ]
+                local_ratios.append(min(measures) / max(measures))
+            mapped_jacobian_ratio = min(local_ratios)
         return PeriodicCylinderGeometryMetrics(
             geometry_order=self.geometry_order,
             refinements=self.refinements,
@@ -235,9 +671,7 @@ class PeriodicCylinder3D:
             boundary_flux_relative_error=boundary_flux_error,
             minimum_mapped_jacobian_determinant=minimum_mapped_jacobian_determinant,
             maximum_mapped_jacobian_determinant=maximum_mapped_jacobian_determinant,
-            minimum_mapped_jacobian_ratio=(
-                minimum_mapped_jacobian_determinant / maximum_mapped_jacobian_determinant
-            ),
+            minimum_mapped_jacobian_ratio=mapped_jacobian_ratio,
         )
 
     def metadata(self) -> dict[str, object]:

@@ -36,6 +36,51 @@ class ReimanGreensideDiscreteField:
     harmonic_constraint_relative_residual: float
 
 
+def reiman_greenside_coefficient_functions(model: ReimanGreensideField) -> tuple[Any, Any]:
+    r"""Return the exact Section-8.6 ``(A, B=curl(A))`` coefficient functions.
+
+    This is the single NGSolve transcription of
+    ``A=Psi_t grad(Theta)-Psi_p grad(Phi)`` and
+    ``B=grad(Psi_t) x grad(Theta)+grad(Phi) x grad(Psi_p)``.  Both the milestone-6.2
+    compatible reconstruction and the milestone-6.3 frozen (M4a) operator consume it.
+    """
+    if not isinstance(model, ReimanGreensideField):
+        raise TypeError("model must be a ReimanGreensideField")
+    import ngsolve as ng  # type: ignore[import-untyped]
+
+    phi = ng.z / model.major_radius
+    cosine = ng.cos(phi)
+    sine = ng.sin(phi)
+    radius_squared = ng.x**2 + ng.y**2
+    harmonic_2 = (ng.x**2 - ng.y**2) * cosine + 2.0 * ng.x * ng.y * sine
+    harmonic_3 = (ng.x**3 - 3.0 * ng.x * ng.y**2) * cosine + (3.0 * ng.x**2 * ng.y - ng.y**3) * sine
+    psi_p = (
+        0.5 * model.t0 * radius_squared
+        + 0.25 * model.t1 * radius_squared**2
+        - model.epsilon_1 * harmonic_2
+        - model.epsilon_2 * harmonic_3
+    )
+    psi_x = (
+        model.t0 * ng.x
+        + model.t1 * radius_squared * ng.x
+        - model.epsilon_1 * (2.0 * ng.x * cosine + 2.0 * ng.y * sine)
+        - model.epsilon_2 * (3.0 * (ng.x**2 - ng.y**2) * cosine + 6.0 * ng.x * ng.y * sine)
+    )
+    psi_y = (
+        model.t0 * ng.y
+        + model.t1 * radius_squared * ng.y
+        - model.epsilon_1 * (-2.0 * ng.y * cosine + 2.0 * ng.x * sine)
+        - model.epsilon_2 * (-6.0 * ng.x * ng.y * cosine + 3.0 * (ng.x**2 - ng.y**2) * sine)
+    )
+    vector_potential = ng.CoefficientFunction(
+        (-0.5 * ng.y, 0.5 * ng.x, -psi_p / model.major_radius)
+    )
+    magnetic_field = ng.CoefficientFunction(
+        (-psi_y / model.major_radius, psi_x / model.major_radius, 1.0)
+    )
+    return vector_potential, magnetic_field
+
+
 def build_reiman_greenside_discrete_field(
     mesh: Any,
     model: ReimanGreensideField,
@@ -66,37 +111,10 @@ def build_reiman_greenside_discrete_field(
         raise TypeError("model must be a ReimanGreensideField")
     if not isfinite(b_floor) or b_floor <= 0.0:
         raise ValueError("b_floor must be finite and positive")
-    import ngsolve as ng  # type: ignore[import-untyped]
+    import ngsolve as ng
 
-    phi = ng.z / model.major_radius
-    cosine = ng.cos(phi)
-    sine = ng.sin(phi)
-    radius_squared = ng.x**2 + ng.y**2
-    harmonic_2 = (ng.x**2 - ng.y**2) * cosine + 2.0 * ng.x * ng.y * sine
-    harmonic_3 = (ng.x**3 - 3.0 * ng.x * ng.y**2) * cosine + (3.0 * ng.x**2 * ng.y - ng.y**3) * sine
-    psi_p = (
-        0.5 * model.t0 * radius_squared
-        + 0.25 * model.t1 * radius_squared**2
-        - model.epsilon_1 * harmonic_2
-        - model.epsilon_2 * harmonic_3
-    )
-    psi_x = (
-        model.t0 * ng.x
-        + model.t1 * radius_squared * ng.x
-        - model.epsilon_1 * (2.0 * ng.x * cosine + 2.0 * ng.y * sine)
-        - model.epsilon_2 * (3.0 * (ng.x**2 - ng.y**2) * cosine + 6.0 * ng.x * ng.y * sine)
-    )
-    psi_y = (
-        model.t0 * ng.y
-        + model.t1 * radius_squared * ng.y
-        - model.epsilon_1 * (-2.0 * ng.y * cosine + 2.0 * ng.x * sine)
-        - model.epsilon_2 * (-6.0 * ng.x * ng.y * cosine + 3.0 * (ng.x**2 - ng.y**2) * sine)
-    )
-    analytic_vector_potential = ng.CoefficientFunction(
-        (-0.5 * ng.y, 0.5 * ng.x, -psi_p / model.major_radius)
-    )
-    analytic_magnetic_field = ng.CoefficientFunction(
-        (-psi_y / model.major_radius, psi_x / model.major_radius, 1.0)
+    analytic_vector_potential, analytic_magnetic_field = reiman_greenside_coefficient_functions(
+        model
     )
 
     reconstruction = reconstruct_periodic_magnetic_potential(
