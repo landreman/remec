@@ -1,0 +1,4 @@
+# xfem 2.1.2606 has no Python 3.14 Linux wheel, so pip builds it from source.
+# Its isolated build asks for ngsolve>=6.2.2606, but xfem requires the exact
+# NGSolve version used at build time. NGSolve 6.2.2607 breaks that build.
+ngsolve==6.2.2606
