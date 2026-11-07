@@ -630,9 +630,9 @@ def test_picard_protocol_executes_milestone_51_closure_and_grad_shafranov_block(
     assert result.converged
     assert adapter.magnetic_solves == result.iterations
     assert adapter.closure_evaluations == 3 * result.iterations
-    assert adapter.coefficient_history == pytest.approx(
-        [(-0.2, 0.2 + 0.2 * pi)] * result.iterations
-    )
+    assert len(adapter.coefficient_history) == result.iterations
+    for coefficients in adapter.coefficient_history:
+        assert coefficients == pytest.approx((-0.2, 0.2 + 0.2 * pi))
     assert result.history[-1].m1_relative_residual < 1.0e-10
     assert result.history[-1].pressure_profile_error < 1.0e-10
     assert result.history[-1].current_profile_error < 1.0e-10

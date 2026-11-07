@@ -1,0 +1,4 @@
+# The checked-in geometry and verification tables use this numerical stack.
+# Upgrade together with regenerated and reviewed benchmark results.
+ngsolve==6.2.2606
+xfem==2.1.2606

@@ -11,7 +11,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-24.04, macos-latest]
         python: ["3.10", "3.14"]
     steps:
       - uses: actions/checkout@v7
@@ -19,9 +19,9 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - run: python -m pip install --upgrade pip
-      - run: python -m pip install -e ".[dev]"
-      - run: python -m pip install --build-constraint .github/xfem-build-constraints.txt -e ".[cutcell]"
-        if: matrix.os != 'ubuntu-latest' || matrix.python != '3.10'
+      - run: python -m pip install -c .github/verification-constraints.txt -e ".[dev]"
+      - run: python -m pip install -c .github/verification-constraints.txt --build-constraint .github/xfem-build-constraints.txt -e ".[cutcell]"
+        if: matrix.os != 'ubuntu-24.04' || matrix.python != '3.10'
       - run: make check
       - run: make smoke
       - run: make wheel-smoke
