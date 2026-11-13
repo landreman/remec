@@ -18,15 +18,17 @@ def compact_moment_matched_heaviside(
     argument: NDArray[np.float64],
 ) -> NDArray[np.float64]:
     """Evaluate the shared compact ``H_epsilon`` kernel from ``(mollified_V)``."""
-    return np.where(
-        argument <= -1.0,
-        0.0,
-        np.where(
-            argument >= 1.0,
-            1.0,
-            0.5 * (1.0 + argument + np.sin(np.pi * argument) / np.pi),
-        ),
+    result = np.empty_like(argument, dtype=np.float64)
+    below = argument <= -1.0
+    above = argument >= 1.0
+    transition = ~(below | above)
+    result[below] = 0.0
+    result[above] = 1.0
+    transition_argument = argument[transition]
+    result[transition] = 0.5 * (
+        1.0 + transition_argument + np.sin(np.pi * transition_argument) / np.pi
     )
+    return result
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,6 +39,8 @@ class QuadratureLevelSetData:
     gradient_magnitudes: NDArray[np.float64]
     weights: NDArray[np.float64]
     element_sizes: NDArray[np.float64]
+    element_size_mode: str = "isotropic-determinant"
+    critical_metric_fallback_count: int = 0
 
     @property
     def total_volume(self) -> float:
@@ -151,6 +155,8 @@ class MollifiedVolumeMap:
         spatial_width_cells: float,
         minimum_gradient_fraction: float,
         floored_sample_count: int,
+        element_size_mode: str,
+        critical_metric_fallback_count: int,
     ) -> None:
         self._values = values
         self._widths = widths
@@ -164,6 +170,8 @@ class MollifiedVolumeMap:
         self.spatial_width_cells = spatial_width_cells
         self.minimum_gradient_fraction = minimum_gradient_fraction
         self._floored_sample_count = floored_sample_count
+        self.element_size_mode = element_size_mode
+        self.critical_metric_fallback_count = critical_metric_fallback_count
         self._volume_interpolant = _MonotonePchip.build(levels, volumes)
         self._inverse_interpolant = _MonotonePchip.build(volumes[::-1], levels[::-1])
 
@@ -216,6 +224,8 @@ class MollifiedVolumeMap:
             spatial_width_cells=spatial_width_cells,
             minimum_gradient_fraction=minimum_gradient_fraction,
             floored_sample_count=floored_sample_count,
+            element_size_mode=data.element_size_mode,
+            critical_metric_fallback_count=data.critical_metric_fallback_count,
         )
         coarea_error = volume_map.diagnostics()["coarea_spot_relative_error"]
         if coarea_error > coarea_consistency_tolerance:
@@ -238,7 +248,10 @@ class MollifiedVolumeMap:
         )
         values, gradients, weights, sizes = arrays
         if not values.size or len({array.size for array in arrays}) != 1:
-            raise ValueError("quadrature arrays must be non-empty and have equal length")
+            raise ValueError(
+                "quadrature arrays must be non-empty and have equal length; got "
+                f"{tuple(array.size for array in arrays)}"
+            )
         if not all(np.all(np.isfinite(array)) for array in arrays):
             raise ValueError("quadrature arrays must be finite")
         if np.any(gradients < 0.0) or np.any(weights <= 0.0) or np.any(sizes <= 0.0):

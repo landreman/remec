@@ -9,6 +9,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from remec import level_set
 from remec.level_set import (
     MollifiedVolumeMap,
     QuadratureLevelSetData,
@@ -16,6 +17,28 @@ from remec.level_set import (
 )
 
 _MANUFACTURED_DIRECTORY = Path(__file__).parents[1] / "verification"
+
+
+def test_compact_heaviside_only_evaluates_the_transition_branch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The compact kernel avoids transcendental work outside ``[-1, 1]``."""
+    arguments = np.asarray((-1.0e6, -1.0, -0.5, 0.0, 0.5, 1.0, 1.0e6))
+    original_sin = np.sin
+    sine_arguments: list[np.ndarray] = []
+
+    def recording_sin(values: np.ndarray) -> np.ndarray:
+        sine_arguments.append(np.asarray(values).copy())
+        return original_sin(values)
+
+    monkeypatch.setattr(level_set.np, "sin", recording_sin)
+    result = level_set.compact_moment_matched_heaviside(arguments)
+
+    np.testing.assert_array_equal(result[[0, 1]], 0.0)
+    np.testing.assert_array_equal(result[[-2, -1]], 1.0)
+    np.testing.assert_allclose(result[2:5], (0.09084505690810465, 0.5, 0.9091549430918954))
+    assert len(sine_arguments) == 1
+    np.testing.assert_array_equal(sine_arguments[0], np.pi * arguments[2:5])
 
 
 def _tensor_product_data(
